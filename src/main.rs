@@ -1,5 +1,4 @@
 use poise::serenity_prelude as serenity;
-use rand::prelude::*;
 
 mod common;
 use crate::common::Data;

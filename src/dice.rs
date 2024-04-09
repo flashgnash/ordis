@@ -1,12 +1,12 @@
-use poise::serenity_prelude as serenity;
+
 use rand::prelude::*;
 
-use crate::common::Data;
+
 use crate::common::Error;
 use crate::common::Context;
 
 use crate::common::safe_to_number;
-use crate::common::strip_non_numerical;
+
 use crate::common::join_to_string;
 use crate::common::sum_array;
 
@@ -63,7 +63,6 @@ pub async fn roll(
             ctx.say("Too much D (you had more than one of the letter d in one of your rolls)").await?;
         }
 
-        let instance_number = safe_to_number(instance);
 
 
         if number_of_dice == 0 {
