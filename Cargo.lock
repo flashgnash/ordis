@@ -718,6 +718,7 @@ name = "ordis"
 version = "0.1.0"
 dependencies = [
  "poise",
+ "rand",
  "sqlite",
  "tokio",
 ]

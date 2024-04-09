@@ -9,3 +9,4 @@ edition = "2021"
 sqlite = "0.34.0"
 tokio = { version = "1.37.0", features = ["full"] }
 poise = "=0.5.7"
+rand = "0.8.5"
