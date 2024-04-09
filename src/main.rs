@@ -132,10 +132,10 @@ async fn roll(
         let all_roles = join_to_string(&dice_rolls,",");
         let total: i32 = sum_array(dice_rolls);
 
-        let mut message = format!("{} D{}s: **({})**\n[{}]",number_of_dice,faces_of_die,total,all_roles);
+        let mut message = format!("- {} D{}s: **({})**      [{}]",number_of_dice,faces_of_die,total,all_roles);
      
         if number_of_dice == 1  {
-           message = format!("A D{} **({})**",faces_of_die, total);
+           message = format!("- A D{}: **({})**",faces_of_die, total);
         }    
         
         result.push(message);
@@ -143,10 +143,10 @@ async fn roll(
     }
 
 
-    let message = result.join("\n\n");
+    let message = result.join("\n");
     
 
-    ctx.say(format!("- Rolling...\n\n{}",message)).await?;
+    ctx.say(format!("Rolling...\n{}",message)).await?;
         
     Ok(())
 }
