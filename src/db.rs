@@ -1,25 +1,37 @@
 use sqlite;
 use sqlite::State;
+use std::path::Path;
 
 
 
+pub fn get_database() -> sqlite::Connection {
+    let dbPath = "testing.db";
+    
 
-pub fn create_database(){
-    let connection = sqlite::open("testing.db").unwrap();
+    if !Path::new(dbPath).exists() {
+    
+        let connection = sqlite::open(dbPath).unwrap();
 
-    let query = "
-        CREATE TABLE users (name TEXT, age INTEGER);
-        INSERT INTO users VALUES ('Alice', 42);
-        INSERT INTO users VALUES ('Bob', 69);
-    ";
-    connection.execute(query).unwrap();
-   
+        let query = "
+            CREATE TABLE users (id INTEGER);
+            CREATE TABLE userStats (userId INTEGER, statName TEXT, statValue INTEGER, statAction TEXT);
+        ";
+        connection.execute(query).unwrap();
+        
+        return connection;
+    }
+    else {
+        
+        return sqlite::open(dbPath).unwrap();
+
+    }
 
 }
 
 pub fn test(){
 
-    let connection = sqlite::open("testing.db").unwrap();
+    let connection = get_database();  
+
    
     let query = "SELECT * FROM users;";
     
