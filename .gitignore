@@ -1,2 +1,7 @@
 /target
 .env
+*.db
+*.txt
+
+.direnv
+.direnv/*

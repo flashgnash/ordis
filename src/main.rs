@@ -8,30 +8,17 @@ use crate::common::Context;
 mod dice;
 use dice::roll;
 
-
-/// Displays your or another user's account creation date
-#[poise::command(slash_command, prefix_command)]
-async fn age(
-    ctx: Context<'_>,
-    #[description = "Selected user"] user: Option<serenity::User>,
-) -> Result<(), Error> {
-    let u = user.as_ref().unwrap_or_else(|| ctx.author());
-    let response = format!("{}'s account was created at {}", u.name, u.created_at());
-    ctx.say(response).await?;
-    Ok(())
-}
-
-
-
-
-
-
+mod db;
+use db::test;
 
 
 #[poise::command(slash_command, prefix_command)]
 async fn ping(ctx: Context<'_>) -> Result<(),Error> {
 
-    ctx.say("Testing").await?;
+    ctx.say(format!("Testing {}",ctx.author().id)).await?;
+
+    test();
+
     Ok(())
     
 }
@@ -40,7 +27,7 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
 async fn main() {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![age(),ping(),roll()],
+            commands: vec![ping(),roll()],
             ..Default::default()
         })
         .token(std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN"))
