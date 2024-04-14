@@ -15,9 +15,19 @@ use db::test;
 #[poise::command(slash_command, prefix_command)]
 async fn ping(ctx: Context<'_>) -> Result<(),Error> {
 
-    ctx.say(format!("Testing {}",ctx.author().id)).await?;
 
-    test();
+    let author = &ctx.author();
+
+    let user = db::User {
+       id: author.id.0,
+       username: author.name.clone(),
+       count: None
+
+    };
+
+    let user_deets = test(user)?;
+    
+    ctx.say(format!("{}",user_deets)).await;
 
     Ok(())
     
@@ -25,6 +35,7 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
 
 #[tokio::main]
 async fn main() {
+
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![ping(),roll()],
@@ -39,5 +50,7 @@ async fn main() {
             })
         });
 
+    println!("Starting framework...");
     framework.run().await.unwrap();
+
 }
