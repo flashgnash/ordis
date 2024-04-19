@@ -40,8 +40,7 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
     };
 
     let user_deets = test(user)?;
-    let evaluation = eval("3+65")?;
-    let _ = ctx.say(format!("{}\n{}",user_deets,evaluation)).await?;
+    let _ = ctx.say(format!("{}",user_deets)).await?;
 
     Ok(())
     
