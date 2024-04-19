@@ -1,4 +1,6 @@
 use poise::serenity_prelude as serenity;
+use evalexpr::*;
+
 
 mod common;
 use crate::common::Data;
@@ -10,6 +12,18 @@ use dice::roll;
 
 mod db;
 use db::test;
+
+#[poise::command(slash_command, prefix_command)]
+async fn calc(ctx: Context<'_>, formula: String) -> Result<(),Error> {
+
+
+    let evaluation = eval(&formula)?;
+    
+    let _ = ctx.say(format!("{} = {}",formula,evaluation)).await?;
+
+    Ok(())
+    
+}
 
 
 #[poise::command(slash_command, prefix_command)]
@@ -26,8 +40,8 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
     };
 
     let user_deets = test(user)?;
-    
-    ctx.say(format!("{}",user_deets)).await;
+    let evaluation = eval("3+65")?;
+    let _ = ctx.say(format!("{}\n{}",user_deets,evaluation)).await?;
 
     Ok(())
     
@@ -38,7 +52,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll()],
+            commands: vec![ping(),roll(),calc()],
             ..Default::default()
         })
         .token(std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN"))

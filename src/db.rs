@@ -76,6 +76,12 @@ pub fn init_database() -> Result<(),rusqlite::Error> {
             PRIMARY KEY(userId,character,name),
             FOREIGN KEY(userId) REFERENCES users(id),
         );
+
+        CREATE TABLE IF NOT EXISTS customRolls (
+            name TEXT PRIMARY KEY,
+            formula TEXT,
+
+        );
     ";
 
 
