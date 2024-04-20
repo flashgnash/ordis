@@ -13,6 +13,8 @@ use dice::roll;
 mod db;
 use db::test;
 
+mod gpt;
+use gpt::ask;
 
 use rand::prelude::*;
 
@@ -80,7 +82,7 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
     };
 
     let user_deets = test(user)?;
-    let _ = ctx.say(format!("{}\n{}",quote,user_deets)).await?;
+    let _ = ctx.say(format!("{}",quote)).await?;
 
     Ok(())
     
@@ -91,7 +93,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(),calc()],
+            commands: vec![ping(),roll(),calc(),ask()],
             ..Default::default()
         })
         .token(std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN"))
