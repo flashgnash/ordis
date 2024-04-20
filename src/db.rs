@@ -46,13 +46,11 @@ impl fmt::Display for User {
 
 pub struct StatType {
     name: String,
-    guild_id: u64,
     modifierAction: String
 }
 
 pub struct UserStat {
     userId: u64,
-    guild_id: u64,
     name: String,
     value: i32,
     stat_block_message: u64,
@@ -66,24 +64,40 @@ pub fn init_database() -> Result<(),rusqlite::Error> {
 
 
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
+            id INTEGER,
             username TEXT,
-            count INTEGER DEFAULT 0
+            count INTEGER DEFAULT 0,
+
+            PRIMARY KEY(id)
         );
-        
-        CREATE TABLE IF NOT EXISTS userStats (
-            userId INTEGER NOT NULL, 
-            value INTEGER NOT NULL, 
+
+        CREATE TABLE IF NOT EXISTS characters (
+            name INTEGER NOT NULL,
+            userId INTEGER NOT NULL,
             
-            PRIMARY KEY(userId,character,name),
-            FOREIGN KEY(userId) REFERENCES users(id),
-        );
+            PRIMARY KEY(userId,name),
+            FOREIGN KEY(userId) REFERENCES users(id)
 
-        CREATE TABLE IF NOT EXISTS customRolls (
-            name TEXT PRIMARY KEY,
+        );
+       
+        CREATE TABLE IF NOT EXISTS statTypes (
+            name INTEGER NOT NULL, 
             formula TEXT,
-
+            
+            PRIMARY KEY(name)
         );
+
+        CREATE TABLE IF NOT EXISTS stats (
+            name TEXT NOT NULL,
+            value INTEGER NOT NULL,
+            character TEXT NOT NULL,
+
+            PRIMARY KEY(character,name),
+
+            FOREIGN KEY (character) REFERENCES characters(userId,name),
+            FOREIGN KEY(name) REFERENCES statTypes(name)
+        );
+
     ";
 
 
@@ -92,15 +106,17 @@ pub fn init_database() -> Result<(),rusqlite::Error> {
     return Ok(());
 
 }
-pub fn setStat(user: User,stat: UserStat) -> Result<User,DbError>{
+pub fn setStat(user: User,stat: UserStat) -> Result<(),DbError>{
     
     let connection = Connection::open("testing.db")?;
 
+
+    return Ok(());
 }
 
 pub fn test(user: User) -> Result<User,DbError>{
 
-    
+    init_database()?; 
     let connection = Connection::open("testing.db")?;
    
 
