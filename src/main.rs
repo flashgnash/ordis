@@ -25,7 +25,7 @@ async fn calc(ctx: Context<'_>, formula: String) -> Result<(),Error> {
 
     let evaluation = eval(&formula)?;
     
-    let _ = ctx.say(format!("{} = {}",formula,evaluation)).await?;
+    let _ = ctx.say(format!("{formula} = {evaluation}")).await?;
 
     Ok(())
     
@@ -82,7 +82,7 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
     };
 
     let user_deets = test(user)?;
-    let _ = ctx.say(format!("{}",quote)).await?;
+    let _ = ctx.say(format!("{quote}")).await?;
 
     Ok(())
     

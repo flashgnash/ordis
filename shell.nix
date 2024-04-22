@@ -8,7 +8,11 @@ pkgs.mkShell {
     rust-analyzer
     clippy
     sqlite
+
+    openssl.dev
   ];
+
+	PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
   RUST_BACKTRACE = "full";
 }
