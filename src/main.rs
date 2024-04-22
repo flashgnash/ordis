@@ -32,7 +32,7 @@ async fn calc(ctx: Context<'_>, formula: String) -> Result<(),Error> {
 }
 
 
-fn random_number(num1: i32, num2:i32) -> i32 {
+fn random_number(_num1: i32, num2:i32) -> i32 {
 
    let mut rng = rand::thread_rng();
    return rng.gen_range(1..num2);
@@ -81,7 +81,7 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
 
     };
 
-    let user_deets = test(user)?;
+    let _user_deets = test(user)?;
     let _ = ctx.say(format!("{quote}")).await?;
 
     Ok(())

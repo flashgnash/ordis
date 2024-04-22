@@ -46,11 +46,11 @@ impl fmt::Display for User {
 
 pub struct StatType {
     name: String,
-    modifierAction: String
+    modifier_action: String
 }
 
 pub struct UserStat {
-    userId: u64,
+    user_id: u64,
     name: String,
     value: i32,
     stat_block_message: u64,
@@ -106,9 +106,9 @@ pub fn init_database() -> Result<(),rusqlite::Error> {
     return Ok(());
 
 }
-pub fn setStat(user: User,stat: UserStat) -> Result<(),DbError>{
+pub fn set_stat(_user: User,_stat: UserStat) -> Result<(),DbError>{
     
-    let connection = Connection::open("testing.db")?;
+    let _connection = Connection::open("testing.db")?;
 
 
     return Ok(());
@@ -149,7 +149,7 @@ pub fn test(user: User) -> Result<User,DbError>{
     })?;
 
     if let Some(row) = rows.next() {                                                  
-        let user: User = row?;                                            
+        let _user: User = row?;                                            
     } else {                                                                           
         return Err(DbError::RowNotFound); 
     } 
