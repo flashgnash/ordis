@@ -1,5 +1,5 @@
 ---
-name: dev
+name: Ordis
 project_root: "/home/flashgnash/Source/rust/Ordis"
 windows:
 - git:
