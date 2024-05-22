@@ -22,6 +22,7 @@
           rust-analyzer
           clippy
           sqlite
+          sqlite-web
 
           openssl.dev
         ];
