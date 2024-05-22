@@ -1,7 +1,6 @@
 use poise::serenity_prelude as serenity;
 use evalexpr::*;
 
-
 mod common;
 use crate::common::Data;
 use crate::common::Error;
@@ -14,10 +13,11 @@ mod db;
 use db::test;
 
 mod gpt;
+use gpt::translate;
 use gpt::ask;
 
 use rand::prelude::*;
-
+use std::{thread, time};
 
 #[poise::command(slash_command, prefix_command)]
 async fn calc(ctx: Context<'_>, formula: String) -> Result<(),Error> {
@@ -81,6 +81,7 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
 
     };
 
+
     let _user_deets = test(user)?;
     let _ = ctx.say(format!("{quote}")).await?;
 
@@ -93,7 +94,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(),calc(),ask()],
+            commands: vec![ping(),roll(),calc(),ask(),translate()],
             ..Default::default()
         })
         .token(std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN"))
