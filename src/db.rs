@@ -114,7 +114,7 @@ pub fn set_stat(_user: User,_stat: UserStat) -> Result<(),DbError>{
     return Ok(());
 }
 
-pub fn test(user: User) -> Result<User,DbError>{
+pub fn get_user(user: User) -> Result<User,DbError>{
 
     init_database()?; 
     let connection = Connection::open("testing.db")?;
@@ -136,6 +136,7 @@ pub fn test(user: User) -> Result<User,DbError>{
         (&user.id,&user.username)
     )?;
 
+
     let mut stmt = connection.prepare("SELECT id,username,count FROM users WHERE id = ?;")?;
 
 
@@ -148,8 +149,10 @@ pub fn test(user: User) -> Result<User,DbError>{
          })                                                                            
     })?;
 
+    let mut user:User;
+
     if let Some(row) = rows.next() {                                                  
-        let _user: User = row?;                                            
+        user = row?;                                            
     } else {                                                                           
         return Err(DbError::RowNotFound); 
     } 

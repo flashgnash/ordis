@@ -10,7 +10,7 @@ mod dice;
 use dice::roll;
 
 mod db;
-use db::test;
+use db::get_user;
 
 mod gpt;
 use gpt::translate;
@@ -72,6 +72,7 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
     let quote = get_random(&quotes);
 
 
+        
     let author = &ctx.author();
 
     let user = db::User {
@@ -82,8 +83,9 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
     };
 
 
-    let _user_deets = test(user)?;
-    let _ = ctx.say(format!("{quote}")).await?;
+    let count = get_user(user)?.count.unwrap();
+
+    let _ = ctx.say(format!("{quote} {count}")).await?;
 
     Ok(())
     
