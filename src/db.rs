@@ -106,9 +106,19 @@ pub fn init_database() -> Result<(),rusqlite::Error> {
     return Ok(());
 
 }
-pub fn set_stat(_user: User,_stat: UserStat) -> Result<(),DbError>{
+pub fn create_char(_user: User,_stat: UserStat) -> Result<(),DbError>{
     
     let _connection = Connection::open("testing.db")?;
+
+    let query = "
+        INSERT INTO users (id,username)
+        VALUES (?1,?2) 
+        ON CONFLICT(id) 
+        DO UPDATE SET 
+            count=count+1,
+            username=(?2)
+        ;
+    ";
 
 
     return Ok(());

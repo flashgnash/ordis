@@ -29,7 +29,7 @@ pub fn join_to_string(numbers: &[i32], separator: &str) -> String {
     return s;
 }
 
-pub fn sum_array(arr: Vec<i32>) -> i32{
+pub fn sum_array(arr: &Vec<i32>) -> i32{
     let mut result = 0;
 
     for num in arr {
