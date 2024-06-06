@@ -10,11 +10,14 @@ use crate::common::safe_to_number;
 use crate::common::join_to_string;
 use crate::common::sum_array;
 
+use meval::eval_str;
 
 
 extern crate regex;
 use regex::Regex;
 use std::fmt;
+use std::collections::HashMap;
+
 
 #[derive(Debug)]
 pub enum DiceError {
@@ -68,18 +71,26 @@ pub fn roll_one_instance(instance:&str) -> Result<(i32,Vec<i32>),DiceError> {
 
 }
 
-fn replace_matches(input: &str, pattern: &Regex) -> Result<(String,String), DiceError> {
+fn roll_matches(input: &str, pattern: &Regex) -> Result<(String,String), DiceError> {
+
+
     let mut result = input.to_string();
-    let mut message = "- ";
+    let mut all_rolls: HashMap<String,Vec<i32>> = HashMap::new();
+
+    let mut message = format!("- ``{input}``").to_string();
+
     for mat in pattern.find_iter(input) {
         let (processed, rolls) = roll_one_instance(mat.as_str())?;
-       
-        let mat_str = mat.as_str()
+      
 
-        result = result.replacen(mat.as_str(), &processed.to_string(), 1);
-        message = &format!("{message}{mat_str}: {result}, ").to_string()
+
+        let mat_str = mat.as_str();
+
+        message = format!("{message} {mat_str}: [{}] ",join_to_string(&rolls,","));
+        result = result.replacen(mat_str, &processed.to_string(), 1);
+
     }
-    Ok((result,message.to_string()))
+    Ok((result,message))
 
 }
 
@@ -96,7 +107,7 @@ fn roll_replace(text: &str) -> Result<(String,String),DiceError> { //Change name
     // });
 
 
-    let (result,message) = replace_matches(&text,&regex)?;
+    let (result,message) = roll_matches(&text,&regex)?;
 
 
     return Ok((result,message));
@@ -135,17 +146,15 @@ pub async fn roll(
     ) -> Result<(),Error> {
 
 
-    println!("{}",roll_replace(&dice)?);
 
 
-
-    let instances = dice.split(' ');
+    let instances = dice.split(',');
 
     
 
     let mut result: Vec<String> = vec![];
     
-    let mut grand_total = 0;
+    let mut grand_total = 0.0;
 
 
     let mut longest_line = 0;
@@ -153,63 +162,14 @@ pub async fn roll(
     for instance in instances {
 
 
-        //Figure out what the user wants
+    let (replaced,messages) = roll_replace(&instance)?;
+        let calc_result = eval_str(&replaced)?;
 
-        let mut number_of_dice = 1;
-        let mut faces_of_die = 6;
-
-        let components : Vec<&str> = instance.split('d').collect();
+        let mut message = format!("{} = {} = __{}__",&messages,&replaced,&calc_result);
+       
+        let total = calc_result;
         
 
-        if components[0] == "" {
-            faces_of_die = safe_to_number(components[1]); 
-        }
-        else if components.len() == 2 {
-            faces_of_die = safe_to_number(components[1]); 
-            number_of_dice = safe_to_number(components[0]); 
-        }
-        else {
-            ctx.say("Too much D (you had more than one of the letter d in one of your rolls)").await?;
-        }
-
-
-
-        if number_of_dice == 0 {
-            ctx.say("How am I supposed to roll 0 dice?").await?; //TODO handle errors elsewhere
-            return Ok(());
-        }
-        if faces_of_die == 0 {
-            ctx.say("How do you expect me to roll a d0?").await?;
-            return Ok(());
-        }
-        if faces_of_die == 1 {
-            ctx.say("How do you expect me to roll a d1?").await?;
-            return Ok(());
-        }
-
-
-        //Roll the dice
-
-
-
-
- 
-        let dice_rolls = generate_randoms(number_of_dice, faces_of_die);
-        //Write the messages
-
-        let all_roles = join_to_string(&dice_rolls,",");
-        let total: i32 = sum_array(&dice_rolls);
-
-        let rolls_message = format!("- {} D{}s: **({})**",number_of_dice,faces_of_die,total);
-
-        let padded_rolls_message = pad_string(&rolls_message,30);
-
-        let mut message = format!("{}``[{}]``",padded_rolls_message,all_roles);
-     
-        if number_of_dice == 1  {
-           message = format!("- 1 D{}: **({})**",faces_of_die, total);
-        }    
-       
         if message.len() > longest_line {
             longest_line = message.len();
         }

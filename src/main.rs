@@ -1,5 +1,7 @@
 use poise::serenity_prelude as serenity;
-use evalexpr::*;
+extern crate meval;
+use meval::eval_str;
+
 
 mod common;
 use crate::common::Data;
@@ -23,7 +25,7 @@ use std::{thread, time};
 async fn calc(ctx: Context<'_>, formula: String) -> Result<(),Error> {
 
 
-    let evaluation = eval(&formula)?;
+    let evaluation = eval_str(&formula)?;
     
     let _ = ctx.say(format!("{formula} = {evaluation}")).await?;
 
