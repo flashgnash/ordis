@@ -23,7 +23,8 @@
           clippy
           sqlite
           sqlite-web
-
+          
+          diesel-cli
           openssl.dev
         ];
 
