@@ -10,6 +10,14 @@
   let 
     system="x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
+
+    new-migration = pkgs.writeShellScriptBin "new-migration" (''
+
+diesel migration generate --diff-schema $1
+
+    '');
+
+
   in
   {
     
@@ -26,7 +34,10 @@
           
           diesel-cli
           openssl.dev
+
+          new-migration
         ];
+
 
         PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
 
