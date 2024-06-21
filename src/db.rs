@@ -1,48 +1,33 @@
-use rusqlite::{params, Connection, Result};
-use rusqlite::types::ToSql;
-use rusqlite::Error as SqliteError;  
 use std::error::Error; 
 use std::fmt;
+
+
+pub mod models;
+pub mod schema;
+
+
+use self::models::*;
+
+
+use diesel::sqlite::SqliteConnection;
+use diesel::prelude::*;
+
+
+use std::env;
+
 #[derive(Debug)]
-pub enum DbError {                                                                 
-        RowNotFound,   
-        SqliteError(SqliteError)
-}   
+pub enum DbError {
+    NotFound,
+}
 
-impl fmt::Display for DbError {                                                    
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {                         
-        match *self {                                                              
-            DbError::SqliteError(ref e) => write!(f, "SQLite error: {}", e),       
-            DbError::RowNotFound => write!(f, "Row not found"),                    
-        }                                                                          
-    }                                                                              
-}    
+pub fn establish_connection() -> SqliteConnection {
 
-
-
-
-impl Error for DbError {}  
-
-
-impl From<SqliteError> for DbError {
-    fn from(error: SqliteError) -> Self {
-        DbError::SqliteError(error)
-    }
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    SqliteConnection::establish(&database_url)
+        .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }
 
 
-#[derive(Clone)]
-pub struct User {
-    pub id: u64,
-    pub username: String,
-    pub count: Option<i32>
-}
-
-impl fmt::Display for User {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "User {{ id: {}, username: {}, count: {:?} }}", self.id, self.username, self.count)
-    }
-}
 
 pub struct StatType {
     name: String,
@@ -56,121 +41,27 @@ pub struct UserStat {
     stat_block_message: u64,
 }
 
-pub fn init_database() -> Result<(),rusqlite::Error> {
-    
-    let connection = Connection::open("testing.db")?;
-
-    let query = "
 
 
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER,
-            username TEXT,
-            count INTEGER DEFAULT 0,
 
-            PRIMARY KEY(id)
-        );
+pub fn get_user(user_id: u64) -> Result<User,DbError> {
+    use self::schema::users::dsl::*;
 
-        CREATE TABLE IF NOT EXISTS characters (
-            name INTEGER NOT NULL,
-            userId INTEGER NOT NULL,
-            
-            PRIMARY KEY(userId,name),
-            FOREIGN KEY(userId) REFERENCES users(id)
+    let connection = &mut establish_connection();
 
-        );
-       
-        CREATE TABLE IF NOT EXISTS statTypes (
-            name INTEGER NOT NULL, 
-            formula TEXT,
-            
-            PRIMARY KEY(name)
-        );
+    let mut users_result = users
+        .filter(id.eq(user_id.to_string()))
+        .limit(1)
+        .select(User::as_select())
+        .load(connection)
+        .expect("Error loading posts");
 
-        CREATE TABLE IF NOT EXISTS stats (
-            name TEXT NOT NULL,
-            value INTEGER NOT NULL,
-            character TEXT NOT NULL,
-
-            PRIMARY KEY(character,name),
-
-            FOREIGN KEY (character) REFERENCES characters(userId,name),
-            FOREIGN KEY(name) REFERENCES statTypes(name)
-        );
-
-    ";
-
-
-    connection.execute(query,())?;
-    
-    return Ok(());
-
-}
-pub fn create_char(_user: User,_stat: UserStat) -> Result<(),DbError>{
-    
-    let _connection = Connection::open("testing.db")?;
-
-    let query = "
-        INSERT INTO users (id,username)
-        VALUES (?1,?2) 
-        ON CONFLICT(id) 
-        DO UPDATE SET 
-            count=count+1,
-            username=(?2)
-        ;
-    ";
-
-
-    return Ok(());
+    if(users_result.len() > 0){
+        let user = users_result.remove(0);
+        Ok(user)
+    }
+    else {
+        Err(DbError::NotFound)
+    }
 }
 
-pub fn get_user(user: User) -> Result<User,DbError>{
-
-    init_database()?; 
-    let connection = Connection::open("testing.db")?;
-   
-
-    let query = "
-        INSERT INTO users (id,username)
-        VALUES (?1,?2) 
-        ON CONFLICT(id) 
-        DO UPDATE SET 
-            count=count+1,
-            username=(?2)
-        ;
-    ";
-
-
-    let _ = connection.execute(
-        query,
-        (&user.id,&user.username)
-    )?;
-
-
-    let mut stmt = connection.prepare("SELECT id,username,count FROM users WHERE id = ?;")?;
-
-
-    let your_primary_key: &dyn ToSql = &user.id;                                           
-    let mut rows = stmt.query_map(params![your_primary_key], |row| {                   
-        Ok(User {                                                                
-            id: row.get(0)?,                                                           
-            username: row.get(1)?,
-            count: row.get(2)?
-         })                                                                            
-    })?;
-
-    let mut user:User;
-
-    if let Some(row) = rows.next() {                                                  
-        user = row?;                                            
-    } else {                                                                           
-        return Err(DbError::RowNotFound); 
-    } 
-
-
-    Ok(user)    
-
-
-    //connection.execute?(query);
-
-}

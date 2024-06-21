@@ -12,7 +12,8 @@ mod dice;
 use dice::roll;
 
 mod db;
-use db::get_user;
+use db::models::*;
+
 
 mod gpt;
 use gpt::translate;
@@ -20,6 +21,8 @@ use gpt::ask;
 
 use rand::prelude::*;
 use std::{thread, time};
+
+
 
 #[poise::command(slash_command, prefix_command)]
 async fn calc(ctx: Context<'_>, formula: String) -> Result<(),Error> {
@@ -77,17 +80,10 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
         
     let author = &ctx.author();
 
-    let user = db::User {
-       id: author.id.0,
-       username: author.name.clone(),
-       count: None
-
-    };
+    let user = db::get_user(author.id.0);
 
 
-    let count = get_user(user)?.count.unwrap();
-
-    let _ = ctx.say(format!("{quote} {count}")).await?;
+    let _ = ctx.say(format!("{quote} ")).await?;
 
     Ok(())
     

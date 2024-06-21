@@ -2,7 +2,7 @@
   description = "Ordis discord bot";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=23.11";
+    nixpkgs.url = "nixpkgs/nixpkgs-unstable";
 
   };
 
@@ -11,12 +11,11 @@
     system="x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
 
-    new-migration = pkgs.writeShellScriptBin "new-migration" (''
+    new-migration = pkgs.writeShellScriptBin "new-migration" (''diesel migration generate $1 '');
 
-diesel migration generate --diff-schema $1
+    redo-migration = pkgs.writeShellScriptBin "redo-migration" (''diesel migration redo'');
 
-    '');
-
+    run-migration = pkgs.writeShellScriptBin "run-migration" (''diesel migration run'');
 
   in
   {
@@ -36,11 +35,13 @@ diesel migration generate --diff-schema $1
           openssl.dev
 
           new-migration
+          redo-migration
+          run-migration
         ];
 
 
         PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-
+        OUT_DIR = "./src/db";
         RUST_BACKTRACE = "full";
     };
 
