@@ -1,6 +1,6 @@
 ---
 name: Ordis
-project_root: "/home/flashgnash/Source/rust/Ordis"
+project_root: "./"
 windows:
 - git:
     layout: c4fd,181x46,0,0,0
