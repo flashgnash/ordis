@@ -8,7 +8,6 @@ use serde;
 use std::convert::From;
 use std::fmt;
 use chrono::Utc;
-use poise::async_trait;
 
 lazy_static! {                                                                                                                                                                   
     static ref CLIENT: reqwest::Client = reqwest::Client::new();                                                                                                                                   

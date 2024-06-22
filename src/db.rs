@@ -1,5 +1,4 @@
-use std::error::Error; 
-use std::fmt;
+ 
 
 
 pub mod models;
@@ -56,7 +55,7 @@ pub fn get_user(user_id: u64) -> Result<User,DbError> {
         .load(connection)
         .expect("Error loading posts");
 
-    if(users_result.len() > 0){
+    if users_result.len() > 0 {
         let user = users_result.remove(0);
         Ok(user)
     }

@@ -75,7 +75,7 @@ fn roll_matches(input: &str, pattern: &Regex) -> Result<(String,String), DiceErr
 
 
     let mut result = input.to_string();
-    let mut all_rolls: HashMap<String,Vec<i32>> = HashMap::new();
+    let all_rolls: HashMap<String,Vec<i32>> = HashMap::new();
 
     let mut message = format!("- ``{input}``").to_string();
 
@@ -165,7 +165,7 @@ pub async fn roll(
     let (replaced,messages) = roll_replace(&instance)?;
         let calc_result = eval_str(&replaced)?;
 
-        let mut message = format!("{} = {} = __{}__",&messages,&replaced,&calc_result);
+        let message = format!("{} = {} = __{}__",&messages,&replaced,&calc_result);
        
         let total = calc_result;
         

@@ -12,7 +12,6 @@ mod dice;
 use dice::roll;
 
 mod db;
-use db::models::*;
 
 
 mod gpt;
@@ -20,7 +19,6 @@ use gpt::translate;
 use gpt::ask;
 
 use rand::prelude::*;
-use std::{thread, time};
 
 
 
