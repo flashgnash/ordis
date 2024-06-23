@@ -67,6 +67,24 @@ pub fn get_user(connection: &mut SqliteConnection, user_id: u64) -> Result<User,
 pub fn update_user(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
     use self::schema::users::dsl::*;
 
+    println!("Updating user");
+
+    diesel::insert_into(schema::users::table)
+        .values(user)
+        .execute(connection);
+
+    let user = diesel::update(users.find(id))
+        .set(count.eq(user.count))
+        .execute(connection);
+
+    return Ok(());
+}
+
+pub fn create_user(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
+    use self::schema::users::dsl::*;
+
+    println!("Creating user");
+
     diesel::insert_into(schema::users::table)
         .values(user)
         .execute(connection);

@@ -72,6 +72,8 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     match userResult {
         Ok(v) => {
             user = v;
+            user.count = Some(user.count.unwrap_or(0) + 1);
+            db::update_user(db_connection, &user);
         }
         Err(e) => {
             println!("User not found ({})", e);
@@ -81,7 +83,7 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
                 username: Some(user_name.to_string()),
                 count: Some(1),
             };
-            db::update_user(db_connection, &new_user);
+            db::create_user(db_connection, &new_user);
             user = new_user;
         }
     }
