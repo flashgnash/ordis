@@ -33,6 +33,8 @@
           
           diesel-cli
           openssl.dev
+            
+          lldb
 
           new-migration
           redo-migration

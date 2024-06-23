@@ -9,8 +9,8 @@ windows:
 - main:
     layout: 72ec,181x46,0,0{90x46,0,0,1,90x46,91,0[90x23,91,0,3,90x22,91,24,4]}
     panes:
-    - nvim . 
-    - cargo run
+    - $EDITOR . 
+    - lldb
     - sqlite3 testing.db
 - term:
     layout: c502,181x46,0,0,5

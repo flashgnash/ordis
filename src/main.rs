@@ -1,61 +1,46 @@
-use poise::serenity_prelude as serenity;
-extern crate meval;
 use meval::eval_str;
-
+use poise::serenity_prelude as serenity;
 
 mod common;
+use crate::common::Context;
 use crate::common::Data;
 use crate::common::Error;
-use crate::common::Context;
 
 mod dice;
 use dice::roll;
 
 mod db;
-
+use crate::db::models::User;
 
 mod gpt;
-use gpt::translate;
 use gpt::ask;
+use gpt::translate;
 
 use rand::prelude::*;
 
-
-
 #[poise::command(slash_command, prefix_command)]
-async fn calc(ctx: Context<'_>, formula: String) -> Result<(),Error> {
-
-
+async fn calc(ctx: Context<'_>, formula: String) -> Result<(), Error> {
     let evaluation = eval_str(&formula)?;
-    
+
     let _ = ctx.say(format!("{formula} = {evaluation}")).await?;
 
     Ok(())
-    
 }
 
-
-fn random_number(_num1: i32, num2:i32) -> i32 {
-
-   let mut rng = rand::thread_rng();
-   return rng.gen_range(1..num2);
-
+fn random_number(_num1: i32, num2: i32) -> i32 {
+    let mut rng = rand::thread_rng();
+    return rng.gen_range(1..num2);
 }
 fn get_random(vec: &Vec<&str>) -> String {
     let count = vec.len() as i32;
 
-    let index = random_number(0,count) as usize;
+    let index = random_number(0, count) as usize;
 
     return vec[index].to_string();
-
 }
 
-
-
 #[poise::command(slash_command, prefix_command)]
-async fn ping(ctx: Context<'_>) -> Result<(),Error> {
-
-
+async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let quotes : Vec<&str> = vec![
         "Operator? Ordis wonders... what are you thinking about?",
         "Operator, I've run diagnostic regressions. All systems nominal. You don't need to thank me.",
@@ -74,25 +59,54 @@ async fn ping(ctx: Context<'_>) -> Result<(),Error> {
 
     let quote = get_random(&quotes);
 
-
-        
     let author = &ctx.author();
 
-    let user = db::get_user(author.id.0);
+    let db_connection = &mut db::establish_connection();
 
+    let user_id = author.id.0;
+    let user_name = &author.name;
 
-    let _ = ctx.say(format!("{quote} ")).await?;
+    let mut userResult = db::get_user(db_connection, user_id);
+    let mut user: User;
+
+    match userResult {
+        Ok(v) => {
+            user = v;
+        }
+        Err(e) => {
+            println!("User not found ({})", e);
+
+            let new_user = User {
+                id: user_id.to_string(),
+                username: Some(user_name.to_string()),
+                count: Some(1),
+            };
+            db::update_user(db_connection, &new_user);
+            user = new_user;
+        }
+    }
+
+    let mut count = 0;
+
+    match user.count {
+        Some(v) => {
+            count = v;
+        }
+        None => {
+            count = 0;
+        }
+    }
+
+    let _ = ctx.say(format!("{quote} {count}")).await?;
 
     Ok(())
-    
 }
 
 #[tokio::main]
 async fn main() {
-
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(),calc(),ask(),translate()],
+            commands: vec![ping(), roll(), calc(), ask(), translate()],
             ..Default::default()
         })
         .token(std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN"))
@@ -106,5 +120,4 @@ async fn main() {
 
     println!("Starting framework...");
     framework.run().await.unwrap();
-
 }
