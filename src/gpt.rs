@@ -158,7 +158,7 @@ Do not respond with anything else under any circumstances";
         ];
 
 
-    let input = generate(&token,"gpt-3.5-turbo",messages).await?;
+    let input = generate(&token,"gpt-4o-mini",messages).await?;
 
     if let Some(result) = string_to_bool(&input.choices[0].message.content) {
         println!("Converted value: {}", result);
