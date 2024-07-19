@@ -6,6 +6,6 @@ CREATE TABLE characters (
     user_id TEXT NOT NULL,
     name TEXT,
 
-    PRIMARY KEY(id)
+    PRIMARY KEY(user_id,id)
 );
 

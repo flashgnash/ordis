@@ -18,7 +18,6 @@ pub struct User {
 #[diesel(belongs_to(User))]
 pub struct Character {
     pub id: String,
-
+    pub user_id: String,
     pub name: Option<String>,
-    pub count: Option<i32>,
 }

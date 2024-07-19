@@ -66,14 +66,14 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let user_id = author.id.0;
     let user_name = &author.name;
 
-    let mut userResult = db::get_user(db_connection, user_id);
+    let mut userResult = db::users::get(db_connection, user_id);
     let mut user: User;
 
     match userResult {
         Ok(v) => {
             user = v;
             user.count = Some(user.count.unwrap_or(0) + 1);
-            db::update_user(db_connection, &user);
+            db::users::update(db_connection, &user);
         }
         Err(e) => {
             println!("User not found ({})", e);
@@ -83,7 +83,7 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
                 username: Some(user_name.to_string()),
                 count: Some(1),
             };
-            db::create_user(db_connection, &new_user);
+            db::users::create(db_connection, &new_user);
             user = new_user;
         }
     }
