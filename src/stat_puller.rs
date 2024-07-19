@@ -8,55 +8,26 @@ use crate::common::safe_to_number;
 use crate::common::join_to_string;
 use crate::common::sum_array;
 
-use meval::eval_str;
-
 extern crate regex;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Debug)]
-pub enum DiceError {
-    TooMuchD,
-    InvalidFaceCount,
-    InvalidDiceCount,
+pub enum StatPullerError {
+    Generic,
 }
 
-impl fmt::Display for DiceError {
+impl fmt::Display for StatPullerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl std::error::Error for DiceError {}
+impl std::error::Error for StatPullerError {}
 
-pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
-    let mut number_of_dice = 1;
-    let mut faces_of_die = 6;
-
-    let components: Vec<&str> = instance.split('d').collect();
-    if components[0] == "" {
-        faces_of_die = safe_to_number(components[1]);
-    } else if components.len() == 2 {
-        faces_of_die = safe_to_number(components[1]);
-        number_of_dice = safe_to_number(components[0]);
-    } else {
-        return Err(DiceError::TooMuchD);
-    }
-
-    if number_of_dice == 0 {
-        return Err(DiceError::InvalidDiceCount);
-    }
-    if faces_of_die == 0 {
-        return Err(DiceError::InvalidFaceCount);
-    }
-    if faces_of_die == 1 {
-        return Err(DiceError::InvalidFaceCount);
-    }
-
-    let dice_rolls = generate_randoms(number_of_dice, faces_of_die);
-
-    Ok((sum_array(&dice_rolls), dice_rolls))
+pub fn pull_stat(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
+    return Ok(0);
 }
 
 fn roll_matches(input: &str, pattern: &Regex) -> Result<(String, String), DiceError> {

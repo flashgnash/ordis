@@ -9,6 +9,8 @@ use crate::common::Error;
 mod dice;
 use dice::roll;
 
+mod stat_puller;
+
 mod db;
 use crate::db::models::User;
 
