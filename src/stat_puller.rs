@@ -8,6 +8,10 @@ use crate::common::safe_to_number;
 use crate::common::join_to_string;
 use crate::common::sum_array;
 
+use crate::gpt::generate_to_string;
+use crate::gpt::Message;
+use crate::gpt::Role;
+
 extern crate regex;
 use regex::Regex;
 use std::collections::HashMap;
@@ -26,94 +30,78 @@ impl fmt::Display for StatPullerError {
 
 impl std::error::Error for StatPullerError {}
 
-pub fn pull_stat(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
-    return Ok(0);
-}
+pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
+    let mut model = "gpt-4o-mini";
 
-fn roll_matches(input: &str, pattern: &Regex) -> Result<(String, String), DiceError> {
-    let mut result = input.to_string();
-    let all_rolls: HashMap<String, Vec<i32>> = HashMap::new();
+    let schema = r#"
+        {
+            "name": (string),
+            "level": (number),
+            "actions": (number),
+            "reactions": (number),
+            "speed": (number),
+            "armor": (number),
+            "hp": (number),
+            "current_hp": (number),
+            "hpr": (number),
+            "hit_die_per_level": (number),
+            "stat_die_per_level": (number),
+            "spell_die_per_level": (number),
+            "stat_points_saved": (number),
+            "spell_points_saved": (number),
+            "stats": {
+                "str": (number),
+                "agl": (number),
+                "con": (number),
+                "wis": (number),
+                "int": (number),
+                "cha": (number)
+            },
+            "tags": {
+                "something": "1%",
+                "something else": "2%",
+                "another_tag": "3%"
+            }
+        }        
+    "#;
 
-    let mut message = format!("- ``{input}``").to_string();
+    let preprompt = format!(
+        "You are a stat pulling program. 
+                Following this prompt you will receive a block of stats.
+                Use the following schema:
+                {schema}
+                If there are missing values, interpret them as null
+                You should translate these stats into a json dictionary.
+                All keys should be lower case and spell corrected. Respond with only valid json"
+    )
+    .to_string();
 
-    for mat in pattern.find_iter(input) {
-        let (processed, rolls) = roll_one_instance(mat.as_str())?;
+    println!("{}", &preprompt);
+    let messages = vec![
+        Message {
+            role: Role::system,
+            content: preprompt,
+        },
+        Message {
+            role: Role::user,
+            content: message.to_string(),
+        },
+    ];
 
-        let mat_str = mat.as_str();
+    let response = generate_to_string(model, messages).await?;
 
-        message = format!("{message} {mat_str}: [{}] ", join_to_string(&rolls, ","));
-        result = result.replacen(mat_str, &processed.to_string(), 1);
-    }
-    Ok((result, message))
-}
-
-fn roll_replace(text: &str) -> Result<(String, String), DiceError> {
-    //Change name later this is terrible
-
-    let regex_string = r"\d+d\d+";
-
-    let regex = Regex::new(regex_string).unwrap(); // This regex pattern matches three-letter words
-
-    // let result = regex.replace_all(&original, |caps: &Captures| {
-    //     let cap = caps.get(0)?.as_str()
-    //     roll_one_instance(cap)?.to_string()
-    // });
-
-    let (result, message) = roll_matches(&text, &regex)?;
-
-    return Ok((result, message));
-}
-
-fn generate_randoms(count: i32, faces: i32) -> Vec<i32> {
-    let mut rng = rand::thread_rng();
-
-    let mut rolls: Vec<i32> = vec![];
-
-    for _i in 0..count {
-        rolls.push(rng.gen_range(1..faces));
-    }
-
-    return rolls;
-}
-
-fn pad_string(input: &str, total_len: usize) -> String {
-    format!("{:<width$}", input, width = total_len)
+    return Ok(response);
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
-    let instances = dice.split(',');
+pub async fn pull_stats(ctx: Context<'_>, message: String) -> Result<(), Error> {
+    let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let mut result: Vec<String> = vec![];
+    let response_message = generate_statpuller(&message).await?;
 
-    let mut grand_total = 0.0;
+    println!("```json\n{}```", response_message);
 
-    let mut longest_line = 0;
+    msg.edit(ctx, |m| m.content(response_message)).await?;
 
-    for instance in instances {
-        let (replaced, messages) = roll_replace(&instance)?;
-        let calc_result = eval_str(&replaced)?;
-
-        let message = format!("{} = {} = __{}__", &messages, &replaced, &calc_result);
-
-        let total = calc_result;
-
-        if message.len() > longest_line {
-            longest_line = message.len();
-        }
-
-        grand_total = grand_total + total;
-        result.push(message);
-    }
-
-    let message = result.join("\n");
-
-    let underline = format!("__{}__", pad_string("", longest_line - 8));
-    ctx.say(format!(
-        "\n**Rolling...**\n\n{}\n{}\nTotal: {}",
-        message, underline, grand_total
-    ))
-    .await?;
-
-    Ok(())
+    return Ok(());
 }
