@@ -29,13 +29,21 @@ pub struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn message(&self, ctx: poise::serenity_prelude::Context, msg: Message) {
-        println!("Testing");
-
+    async fn message(
+        &self,
+        ctx: poise::serenity_prelude::Context,
+        msg: poise::serenity_prelude::Message,
+    ) {
         if msg.author.bot {
             return;
         }
 
+        if let Some(message_reference) = msg.message_reference {
+            println!(
+                "This is a reply to message ID: {}",
+                message_reference.message_id.unwrap()
+            );
+        }
         if msg.content == "!ping" {
             if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
                 println!("Error sending message: {:?}", why);
