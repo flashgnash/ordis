@@ -1,6 +1,11 @@
 use meval::eval_str;
-use poise::serenity_prelude as serenity;
 
+use poise::async_trait;
+use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::CacheHttp;
+use poise::serenity_prelude::EventHandler;
+use poise::serenity_prelude::Message;
+use poise::serenity_prelude::Ready;
 mod common;
 use crate::common::Context;
 use crate::common::Data;
@@ -19,6 +24,31 @@ use gpt::ask;
 use gpt::translate;
 
 use rand::prelude::*;
+
+pub struct Handler;
+
+#[async_trait]
+impl EventHandler for Handler {
+    async fn message(&self, ctx: poise::serenity_prelude::Context, msg: Message) {
+        println!("Testing");
+
+        if msg.author.bot {
+            return;
+        }
+
+        if msg.content == "!ping" {
+            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
+                println!("Error sending message: {:?}", why);
+            }
+        }
+    }
+
+    async fn ready(&self, ctx: poise::serenity_prelude::Context, _ready: Ready) {
+        println!("Bot is connected!");
+    }
+
+    // You can add other event methods here as needed
+}
 
 #[poise::command(slash_command, prefix_command)]
 async fn calc(ctx: Context<'_>, formula: String) -> Result<(), Error> {
@@ -109,7 +139,10 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 #[tokio::main]
 async fn main() {
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
-    let intents = serenity::GatewayIntents::non_privileged();
+    let intents = serenity::GatewayIntents::non_privileged()
+        | serenity::GatewayIntents::GUILD_MESSAGES
+        | serenity::GatewayIntents::DIRECT_MESSAGES
+        | serenity::GatewayIntents::MESSAGE_CONTENT;
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
@@ -126,6 +159,7 @@ async fn main() {
 
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
+        .event_handler(Handler)
         .await;
     println!("Starting framework...");
     client.unwrap().start().await.unwrap();
