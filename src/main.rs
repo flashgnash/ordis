@@ -1,12 +1,10 @@
 use meval::eval_str;
 use poise::serenity_prelude as serenity;
-use poise::Framework;
+
 mod common;
 use crate::common::Context;
 use crate::common::Data;
 use crate::common::Error;
-
-use std::error::Error;
 
 mod dice;
 use dice::roll;
@@ -67,7 +65,7 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
     let db_connection = &mut db::establish_connection();
 
-    let user_id = author.id.0;
+    let user_id = author.id.get();
     let user_name = &author.name;
 
     let mut userResult = db::users::get(db_connection, user_id);
@@ -108,43 +106,27 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-async fn handle_event(
-    ctx: &serenity::Context,
-    event: &serenity::Event,
-    framework: &Framework<(), serenity::Error>,
-    user_data: &(),
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    match event {
-        serenity::Event::MessageCreate(message) => {
-            println!("Received message: {}", message.content);
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() {
+    let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let intents = serenity::GatewayIntents::non_privileged();
+
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![ping(), roll(), calc(), ask(), translate()],
-
-            event_handler: |ctx, event, framework, user_data| {
-                Box::pin(async move {
-                    handle_event(ctx, event, framework, user_data).await;
-                })
-            },
             ..Default::default()
         })
-        .token(std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN"))
-        .intents(serenity::GatewayIntents::non_privileged())
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {})
             })
-        });
+        })
+        .build();
 
+    let client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await;
     println!("Starting framework...");
-    framework.run().await.unwrap();
+    client.unwrap().start().await.unwrap();
 }

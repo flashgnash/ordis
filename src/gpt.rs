@@ -8,6 +8,10 @@ use serde;
 use std::convert::From;
 use std::fmt;
 use chrono::Utc;
+use crate::serenity::EditMessage;
+use poise::CreateReply;
+
+
 
 lazy_static! {                                                                                                                                                                   
     static ref CLIENT: reqwest::Client = reqwest::Client::new();                                                                                                                                   
@@ -233,7 +237,9 @@ pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
     println!("{}",response_message);
 
-    msg.edit(ctx, |m| m.content(format!("Translation of: ``{message}``\n\n{response_message}"))).await?;
+    let mut reply = CreateReply::default().content("translation of: ``{message}``\n\n{response_message}");
+    
+    msg.edit(ctx, reply).await?;
 
     return Ok(());
 }
@@ -256,7 +262,9 @@ pub async fn ask(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
     println!("{}",response_message);
 
-    msg.edit(ctx, |m| m.content(response_message)).await?;
+    let mut reply = CreateReply::default().content(response_message);
+
+    msg.edit(ctx, reply).await?;
 
     return Ok(());
 }

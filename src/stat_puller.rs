@@ -17,6 +17,9 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::fmt;
 
+use poise::serenity_prelude::EditMessage;
+use poise::CreateReply;
+
 #[derive(Debug)]
 pub enum StatPullerError {
     Generic,
@@ -44,11 +47,11 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
             "hp": (number),
             "current_hp": (number),
             "hpr": (number),
-            "hit_die_per_level": (number),
-            "stat_die_per_level": (number),
-            "spell_die_per_level": (number),
-            "stat_points_saved": (number),
-            "spell_points_saved": (number),
+            "hit_die_per_level": (number)d(number),
+            "stat_die_per_level": (number)d(number),
+            "spell_die_per_level": (number)d(number),
+            "stat_points_saved": (number)d(number),
+            "spell_points_saved": (number)d(number),
             "stats": {
                 "str": (number),
                 "agl": (number),
@@ -101,7 +104,9 @@ pub async fn pull_stats(ctx: Context<'_>, message: String) -> Result<(), Error> 
 
     println!("```json\n{}```", response_message);
 
-    msg.edit(ctx, |m| m.content(response_message)).await?;
+    let mut reply = CreateReply::default().content(response_message);
+
+    msg.edit(ctx, reply).await?;
 
     return Ok(());
 }
