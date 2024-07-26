@@ -125,12 +125,8 @@ pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
 
         let total = calc_result;
 
-            if message.len() > longest_line {
-                longest_line = message.len();
-            }
-
-            grand_total = grand_total + total;
-            result.push(message);
+        if message.len() > longest_line {
+            longest_line = message.len();
         }
 
         grand_total = grand_total + total;

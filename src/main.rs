@@ -2,9 +2,7 @@ use meval::eval_str;
 
 use poise::async_trait;
 use poise::serenity_prelude as serenity;
-use poise::serenity_prelude::CacheHttp;
 use poise::serenity_prelude::EventHandler;
-use poise::serenity_prelude::Message;
 use poise::serenity_prelude::Ready;
 mod common;
 use crate::common::Context;
@@ -51,7 +49,7 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn ready(&self, ctx: poise::serenity_prelude::Context, _ready: Ready) {
+    async fn ready(&self, _ctx: poise::serenity_prelude::Context, _ready: Ready) {
         println!("Bot is connected!");
     }
 
