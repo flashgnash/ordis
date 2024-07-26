@@ -12,7 +12,6 @@ use meval::eval_str;
 
 extern crate regex;
 use regex::Regex;
-use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Debug)]
@@ -32,7 +31,7 @@ impl std::error::Error for DiceError {}
 
 pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
     let mut number_of_dice = 1;
-    let mut faces_of_die = 6;
+    let faces_of_die;
 
     let components: Vec<&str> = instance.split('d').collect();
     if components[0] == "" {
@@ -61,7 +60,6 @@ pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
 
 fn roll_matches(input: &str, pattern: &Regex) -> Result<(String, String), DiceError> {
     let mut result = input.to_string();
-    let all_rolls: HashMap<String, Vec<i32>> = HashMap::new();
 
     let mut message = format!("- ``{input}``").to_string();
 
@@ -121,14 +119,11 @@ pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
 
     for instance in instances {
         let (replaced, messages) = roll_replace(&instance)?;
-        println!("{}", &instance);
+        let calc_result = eval_str(&replaced)?;
 
-        if (&replaced != "") {
-            let calc_result = eval_str(&replaced)?;
+        let message = format!("{} = {} = __{}__", &messages, &replaced, &calc_result);
 
-            let message = format!("{} = {} = __{}__", &messages, &replaced, &calc_result);
-
-            let total = calc_result;
+        let total = calc_result;
 
             if message.len() > longest_line {
                 longest_line = message.len();
@@ -137,6 +132,9 @@ pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
             grand_total = grand_total + total;
             result.push(message);
         }
+
+        grand_total = grand_total + total;
+        result.push(message);
     }
 
     let message = result.join("\n");

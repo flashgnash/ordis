@@ -1,22 +1,20 @@
-use models::*;
-
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
 use crate::db::*;
 
+#[allow(dead_code)]
 pub fn create(connection: &mut SqliteConnection, character: &Character) -> Result<(), DbError> {
-    use self::schema::characters::dsl::*;
-
     println!("Creating character");
 
-    diesel::insert_into(schema::characters::table)
+    let _ = diesel::insert_into(schema::characters::table)
         .values(character)
         .execute(connection);
 
     return Ok(());
 }
 
+#[allow(dead_code)]
 pub fn get(connection: &mut SqliteConnection, character_id: u64) -> Result<Character, DbError> {
     use self::schema::characters::dsl::*;
 
@@ -35,14 +33,13 @@ pub fn get(connection: &mut SqliteConnection, character_id: u64) -> Result<Chara
     }
 }
 
-pub fn update(connection: &mut SqliteConnection, character: &Character) -> Result<(), DbError> {
-    use self::schema::characters::dsl::*;
+// #[allow(dead_code)]
+// pub fn update(connection: &mut SqliteConnection, character: &Character) -> Result<(), DbError> {
+//     println!("Updating character");
 
-    println!("Updating character");
+//     let character = diesel::update(characters.find(id))
+//         .set(count.eq(character.count))
+//         .execute(connection);
 
-    // let character = diesel::update(characters.find(id))
-    //     .set(count.eq(character.count))
-    //     .execute(connection);
-
-    return Ok(());
-}
+//     return Ok(());
+// }

@@ -8,87 +8,51 @@ use serde;
 use std::convert::From;
 use std::fmt;
 use chrono::Utc;
+use poise::CreateReply;
+
+
 
 lazy_static! {                                                                                                                                                                   
     static ref CLIENT: reqwest::Client = reqwest::Client::new();                                                                                                                                   
 }  
 
 
-// enum GptError {                                                                                                                                                                   
-//     Reqwest(reqwest::Error),                                                                                                                                                     
-//     Json(serde_json::Error),                                                                                                                                                     
-// }        
-//
 
-// impl From<reqwest::Error> for GptError {
-//     fn from(err: reqwest::Error) -> GptError {
-//         GptError::Reqwest(err)
-//     }
-// }                                                                                                                                                                                
-//                                                                                                                                                                                  
-// impl From<serde_json::Error> for GptError {
-//     fn from(err: serde_json::Error) -> GptError {
-//         GptError::Json(err)
-//     }
-// }     
-//
-//    impl fmt::Display for GPTError {
-//         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//             match *self {
-//                 GPTError::Reqwest(ref err) => err.fmt(f),
-//                 GPTError::Json(ref err) => err.fmt(f),
-//             }                                                                                                                                                                        
-//         }                                                                                                                                                                            
-//     }                                                                                                                                                                                
-// impl fmt::Debug for GPTError {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         match *self {
-//             GPTError::Reqwest(ref err) => err.fmt(f),
-//             GPTError::Json(ref err) => err.fmt(f),
-//         }
-//     }
-// }
-//
-// impl std::error::Error for GPTError {}     
-//
-//
-//
-//
 #[derive(Serialize, Deserialize)]
-enum Role {
-    user,
-    assistant,
-    system
+pub enum Role {
+    User,
+    Assistant,
+    System
 }
 
 #[derive(Serialize, Deserialize)]
-struct Message {
-    role:Role,
-    content:String
+pub struct Message {
+    pub role:Role,
+    pub content:String
 }
 
 #[derive(Serialize, Deserialize)]
-struct OpenAI_Request {
-    model:String,
-    messages: Vec<Message>
+pub struct OpenAIRequest {
+    pub model:String,
+    pub messages: Vec<Message>
 
 
 }
 
 #[derive(Serialize, Deserialize)]
-struct Choice {
-    finish_reason:String,
-    index:i32,
-    message:Message
+pub struct Choice {
+    pub finish_reason:String,
+    pub index:i32,
+    pub message:Message
 }
 
 #[derive(Serialize, Deserialize)]
-struct OpenAI_Response {
-    choices:Vec<Choice>
+pub struct OpenAIResponse{
+    pub choices:Vec<Choice>
 
 }
 
-impl fmt::Display for OpenAI_Response {
+impl fmt::Display for OpenAIResponse {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.choices[0].message.content)
     }
@@ -96,12 +60,22 @@ impl fmt::Display for OpenAI_Response {
 
 
 
-async fn generate(token: &String,model:&str, messages:Vec<Message>) -> Result<OpenAI_Response, Error> {                                       
+#[allow(dead_code)]
+pub async fn generate_to_string(model:&str,messages:Vec<Message>) -> Result<String,Error> {
+    let response = generate(model,messages).await?;
+
+    let response_message = &response.choices[0].message.content;
+    return Ok(format!("{}",response_message));
+}
+
+
+pub async fn generate(model:&str, messages:Vec<Message>) -> Result<OpenAIResponse, Error> {                                       
+    let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
     
     let client = &CLIENT;
     
 
-    let request = OpenAI_Request {
+    let request = OpenAIRequest {
         model: model.to_string(),
         messages: messages 
 
@@ -116,9 +90,8 @@ async fn generate(token: &String,model:&str, messages:Vec<Message>) -> Result<Op
         .send().await?.text().await?;
 
                                                                                       
-    //println!("{content}");                                                          
     
-    let response : OpenAI_Response = serde_json::from_str(&content)?;
+    let response : OpenAIResponse = serde_json::from_str(&content)?;
 
     Ok(response)
 }    
@@ -132,7 +105,7 @@ fn string_to_bool(value: &str) -> Option<bool> {
 }
 
 
-pub async fn model_selector(token:&String, message:&str) -> Result<bool,Error> {
+pub async fn model_selector(message:&str) -> Result<bool,Error> {
     let prompt = "
 You are a programming filter.
 
@@ -145,20 +118,20 @@ Do not respond with anything else under any circumstances";
     let messages = vec![            
 
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: prompt.to_string()
 
             },
 
             Message {
-                role: Role::user,
-                content:message.to_string(),
+                role: Role::User,
+                content: message.to_string(),
 
             }
         ];
 
 
-    let input = generate(&token,"gpt-4o-mini",messages).await?;
+    let input = generate("gpt-4o-mini",messages).await?;
 
     if let Some(result) = string_to_bool(&input.choices[0].message.content) {
         println!("Converted value: {}", result);
@@ -172,76 +145,71 @@ Do not respond with anything else under any circumstances";
 }
 
 
-pub async fn generate_ordis(token:&String, message: &str) -> Result<OpenAI_Response,Error> {
+pub async fn generate_ordis(message: &str) -> Result<OpenAIResponse,Error> {
 
-
-    let use_gpt_4 = model_selector(token,message).await?;
-    let mut model = "gpt-3.5-turbo";
+    let use_gpt_4 = model_selector(message).await?;
+    let mut model = "gpt-4o-mini";
 
     if use_gpt_4 {
-        model = "gpt-4o";
+        model = "gpt-4";
     }
 
     let now = Utc::now();
 
     let messages = vec![            
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: format!(
                     "You know the following information: The current time in UTC is {}. You are a discord bot. You have an ancestor called Johnny 5 who was the greatest discord bot of its time",
                     now.format("%Y-%m-%d %H:%M:%S"))
-
             },
 
-
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
-
             },
 
             Message {
-                role: Role::user,
+                role: Role::User,
                 content:message.to_string(),
-
             }
         ];
 
 
-    return generate(token,model,messages).await;
+    return generate(model,messages).await;
 
 }
-pub async fn generate_translator(token:String, message: &str, lang1: &str, lang2:&str) -> Result<OpenAI_Response,Error> {
+pub async fn generate_translator(message: &str, lang1: &str, lang2:&str) -> Result<OpenAIResponse,Error> {
 
     let now = Utc::now();
     let messages = vec![            
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: format!("The current time is {}",now.format("%Y-%m-%d %H:%M:%S"))
 
             },
 
 
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
 
             },
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: format!("Act as a {lang1}-{lang2} translator. Respond with only an accurate translation and nothing else. Please translate to natural speech in the given language")
 
             },
 
             Message {
-                role: Role::user,
+                role: Role::User,
                 content:message.to_string(),
 
             }
         ];
 
 
-    return generate(&token,"gpt-3.5-turbo",messages).await;
+    return generate("gpt-4o-mini",messages).await;
 
 }
 
@@ -250,20 +218,17 @@ pub async fn generate_translator(token:String, message: &str, lang1: &str, lang2
 #[poise::command(slash_command, prefix_command)]
 pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
-    let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
-    let model = std::env::var("OPENAI_MODEL").unwrap_or("gpt-3.5-turbo".to_string());
-    let authorized_user = std::env::var("OPENAI_AUTHORIZED").expect("This command will not work without the env variable OPENAI_AUTHORIZED (should contain a discord user ID)");
-    
-
     let msg = ctx.say("*Translating, please wait...*").await?;
 
-    let response = generate_translator(token,&message,"english","spanish").await?;
+    let response = generate_translator(&message,"english","spanish").await?;
 
     let response_message = &response.choices[0].message.content;
 
     println!("{}",response_message);
 
-    msg.edit(ctx, |m| m.content(format!("Translation of: ``{message}``\n\n{response_message}"))).await?;
+    let reply = CreateReply::default().content("translation of: ``{message}``\n\n{response_message}");
+    
+    msg.edit(ctx, reply).await?;
 
     return Ok(());
 }
@@ -272,21 +237,17 @@ pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
 #[poise::command(slash_command, prefix_command)]
 pub async fn ask(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
-    let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
-    let model = std::env::var("OPENAI_MODEL").unwrap_or("gpt-3.5-turbo".to_string());
-    let authorized_user = std::env::var("OPENAI_AUTHORIZED").expect("This command will not work without the env variable OPENAI_AUTHORIZED (should contain a discord user ID)");
-   
-
-
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let response = generate_ordis(&token,&message).await?;
+    let response = generate_ordis(&message).await?;
 
     let response_message = &response.choices[0].message.content;
 
     println!("{}",response_message);
 
-    msg.edit(ctx, |m| m.content(response_message)).await?;
+    let reply = CreateReply::default().content(response_message);
+
+    msg.edit(ctx, reply).await?;
 
     return Ok(());
 }

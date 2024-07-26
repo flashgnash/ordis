@@ -1,6 +1,11 @@
 use meval::eval_str;
-use poise::serenity_prelude as serenity;
 
+use poise::async_trait;
+use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::CacheHttp;
+use poise::serenity_prelude::EventHandler;
+use poise::serenity_prelude::Message;
+use poise::serenity_prelude::Ready;
 mod common;
 use crate::common::Context;
 use crate::common::Data;
@@ -8,6 +13,8 @@ use crate::common::Error;
 
 mod dice;
 use dice::roll;
+
+mod stat_puller;
 
 mod db;
 use crate::db::models::User;
@@ -17,6 +24,39 @@ use gpt::ask;
 use gpt::translate;
 
 use rand::prelude::*;
+
+pub struct Handler;
+
+#[async_trait]
+impl EventHandler for Handler {
+    async fn message(
+        &self,
+        ctx: poise::serenity_prelude::Context,
+        msg: poise::serenity_prelude::Message,
+    ) {
+        if msg.author.bot {
+            return;
+        }
+
+        if let Some(message_reference) = msg.message_reference {
+            println!(
+                "This is a reply to message ID: {}",
+                message_reference.message_id.unwrap()
+            );
+        }
+        if msg.content == "!ping" {
+            if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
+                println!("Error sending message: {:?}", why);
+            }
+        }
+    }
+
+    async fn ready(&self, ctx: poise::serenity_prelude::Context, _ready: Ready) {
+        println!("Bot is connected!");
+    }
+
+    // You can add other event methods here as needed
+}
 
 #[poise::command(slash_command, prefix_command)]
 async fn calc(ctx: Context<'_>, formula: String) -> Result<(), Error> {
@@ -63,17 +103,17 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
     let db_connection = &mut db::establish_connection();
 
-    let user_id = author.id.0;
+    let user_id = author.id.get();
     let user_name = &author.name;
 
-    let mut userResult = db::users::get(db_connection, user_id);
+    let user_result = db::users::get(db_connection, user_id);
     let mut user: User;
 
-    match userResult {
+    match user_result {
         Ok(v) => {
             user = v;
             user.count = Some(user.count.unwrap_or(0) + 1);
-            db::users::update(db_connection, &user);
+            let _ = db::users::update(db_connection, &user);
         }
         Err(e) => {
             println!("User not found ({})", e);
@@ -83,12 +123,12 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
                 username: Some(user_name.to_string()),
                 count: Some(1),
             };
-            db::users::create(db_connection, &new_user);
+            let _ = db::users::create(db_connection, &new_user);
             user = new_user;
         }
     }
 
-    let mut count = 0;
+    let count;
 
     match user.count {
         Some(v) => {
@@ -106,20 +146,29 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
 #[tokio::main]
 async fn main() {
+    let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let intents = serenity::GatewayIntents::non_privileged()
+        | serenity::GatewayIntents::GUILD_MESSAGES
+        | serenity::GatewayIntents::DIRECT_MESSAGES
+        | serenity::GatewayIntents::MESSAGE_CONTENT;
+
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![ping(), roll(), calc(), ask(), translate()],
             ..Default::default()
         })
-        .token(std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN"))
-        .intents(serenity::GatewayIntents::non_privileged())
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {})
             })
-        });
+        })
+        .build();
 
+    let client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .event_handler(Handler)
+        .await;
     println!("Starting framework...");
-    framework.run().await.unwrap();
+    client.unwrap().start().await.unwrap();
 }
