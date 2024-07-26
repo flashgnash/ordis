@@ -1,25 +1,16 @@
-use rand::prelude::*;
-
 use crate::common::Context;
 use crate::common::Error;
-
-use crate::common::safe_to_number;
-
-use crate::common::join_to_string;
-use crate::common::sum_array;
 
 use crate::gpt::generate_to_string;
 use crate::gpt::Message;
 use crate::gpt::Role;
 
 extern crate regex;
-use regex::Regex;
-use std::collections::HashMap;
 use std::fmt;
 
-use poise::serenity_prelude::EditMessage;
 use poise::CreateReply;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum StatPullerError {
     Generic,
@@ -33,8 +24,9 @@ impl fmt::Display for StatPullerError {
 
 impl std::error::Error for StatPullerError {}
 
+#[allow(dead_code)]
 pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
-    let mut model = "gpt-4o-mini";
+    let model = "gpt-4o-mini";
 
     let schema = r#"
         {
@@ -82,11 +74,11 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
     println!("{}", &preprompt);
     let messages = vec![
         Message {
-            role: Role::system,
+            role: Role::System,
             content: preprompt,
         },
         Message {
-            role: Role::user,
+            role: Role::User,
             content: message.to_string(),
         },
     ];
@@ -104,7 +96,7 @@ pub async fn pull_stats(ctx: Context<'_>, message: String) -> Result<(), Error> 
 
     println!("```json\n{}```", response_message);
 
-    let mut reply = CreateReply::default().content(response_message);
+    let reply = CreateReply::default().content(response_message);
 
     msg.edit(ctx, reply).await?;
 

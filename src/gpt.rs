@@ -8,7 +8,6 @@ use serde;
 use std::convert::From;
 use std::fmt;
 use chrono::Utc;
-use crate::serenity::EditMessage;
 use poise::CreateReply;
 
 
@@ -21,9 +20,9 @@ lazy_static! {
 
 #[derive(Serialize, Deserialize)]
 pub enum Role {
-    user,
-    assistant,
-    system
+    User,
+    Assistant,
+    System
 }
 
 #[derive(Serialize, Deserialize)]
@@ -33,7 +32,7 @@ pub struct Message {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct OpenAI_Request {
+pub struct OpenAIRequest {
     pub model:String,
     pub messages: Vec<Message>
 
@@ -48,12 +47,12 @@ pub struct Choice {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct OpenAI_Response {
+pub struct OpenAIResponse{
     pub choices:Vec<Choice>
 
 }
 
-impl fmt::Display for OpenAI_Response {
+impl fmt::Display for OpenAIResponse {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.choices[0].message.content)
     }
@@ -61,6 +60,7 @@ impl fmt::Display for OpenAI_Response {
 
 
 
+#[allow(dead_code)]
 pub async fn generate_to_string(model:&str,messages:Vec<Message>) -> Result<String,Error> {
     let response = generate(model,messages).await?;
 
@@ -69,13 +69,13 @@ pub async fn generate_to_string(model:&str,messages:Vec<Message>) -> Result<Stri
 }
 
 
-pub async fn generate(model:&str, messages:Vec<Message>) -> Result<OpenAI_Response, Error> {                                       
+pub async fn generate(model:&str, messages:Vec<Message>) -> Result<OpenAIResponse, Error> {                                       
     let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
     
     let client = &CLIENT;
     
 
-    let request = OpenAI_Request {
+    let request = OpenAIRequest {
         model: model.to_string(),
         messages: messages 
 
@@ -91,7 +91,7 @@ pub async fn generate(model:&str, messages:Vec<Message>) -> Result<OpenAI_Respon
 
                                                                                       
     
-    let response : OpenAI_Response = serde_json::from_str(&content)?;
+    let response : OpenAIResponse = serde_json::from_str(&content)?;
 
     Ok(response)
 }    
@@ -118,13 +118,13 @@ Do not respond with anything else under any circumstances";
     let messages = vec![            
 
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: prompt.to_string()
 
             },
 
             Message {
-                role: Role::user,
+                role: Role::User,
                 content: message.to_string(),
 
             }
@@ -145,10 +145,8 @@ Do not respond with anything else under any circumstances";
 }
 
 
-pub async fn generate_ordis(message: &str) -> Result<OpenAI_Response,Error> {
+pub async fn generate_ordis(message: &str) -> Result<OpenAIResponse,Error> {
 
-
-    let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
     let use_gpt_4 = model_selector(message).await?;
     let mut model = "gpt-4o-mini";
 
@@ -160,24 +158,20 @@ pub async fn generate_ordis(message: &str) -> Result<OpenAI_Response,Error> {
 
     let messages = vec![            
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: format!(
                     "You know the following information: The current time in UTC is {}. You are a discord bot. You have an ancestor called Johnny 5 who was the greatest discord bot of its time",
                     now.format("%Y-%m-%d %H:%M:%S"))
-
             },
 
-
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
-
             },
 
             Message {
-                role: Role::user,
+                role: Role::User,
                 content:message.to_string(),
-
             }
         ];
 
@@ -185,31 +179,30 @@ pub async fn generate_ordis(message: &str) -> Result<OpenAI_Response,Error> {
     return generate(model,messages).await;
 
 }
-pub async fn generate_translator(message: &str, lang1: &str, lang2:&str) -> Result<OpenAI_Response,Error> {
+pub async fn generate_translator(message: &str, lang1: &str, lang2:&str) -> Result<OpenAIResponse,Error> {
 
-    let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
     let now = Utc::now();
     let messages = vec![            
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: format!("The current time is {}",now.format("%Y-%m-%d %H:%M:%S"))
 
             },
 
 
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
 
             },
             Message {
-                role: Role::system,
+                role: Role::System,
                 content: format!("Act as a {lang1}-{lang2} translator. Respond with only an accurate translation and nothing else. Please translate to natural speech in the given language")
 
             },
 
             Message {
-                role: Role::user,
+                role: Role::User,
                 content:message.to_string(),
 
             }
@@ -225,10 +218,6 @@ pub async fn generate_translator(message: &str, lang1: &str, lang2:&str) -> Resu
 #[poise::command(slash_command, prefix_command)]
 pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
-    let model = std::env::var("OPENAI_MODEL").unwrap_or("gpt-4o-mini".to_string());
-    let authorized_user = std::env::var("OPENAI_AUTHORIZED").expect("This command will not work without the env variable OPENAI_AUTHORIZED (should contain a discord user ID)");
-    
-
     let msg = ctx.say("*Translating, please wait...*").await?;
 
     let response = generate_translator(&message,"english","spanish").await?;
@@ -237,7 +226,7 @@ pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
     println!("{}",response_message);
 
-    let mut reply = CreateReply::default().content("translation of: ``{message}``\n\n{response_message}");
+    let reply = CreateReply::default().content("translation of: ``{message}``\n\n{response_message}");
     
     msg.edit(ctx, reply).await?;
 
@@ -248,12 +237,6 @@ pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
 #[poise::command(slash_command, prefix_command)]
 pub async fn ask(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
-    let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
-    let model = std::env::var("OPENAI_MODEL").unwrap_or("gpt-4o-mini".to_string());
-    let authorized_user = std::env::var("OPENAI_AUTHORIZED").expect("This command will not work without the env variable OPENAI_AUTHORIZED (should contain a discord user ID)");
-   
-
-
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
     let response = generate_ordis(&message).await?;
@@ -262,7 +245,7 @@ pub async fn ask(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
     println!("{}",response_message);
 
-    let mut reply = CreateReply::default().content(response_message);
+    let reply = CreateReply::default().content(response_message);
 
     msg.edit(ctx, reply).await?;
 

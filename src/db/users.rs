@@ -1,22 +1,20 @@
-use models::*;
-
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
 use crate::db::*;
 
+#[allow(dead_code)]
 pub fn create(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
-    use self::schema::users::dsl::*;
-
     println!("Creating user");
 
-    diesel::insert_into(schema::users::table)
+    let _ = diesel::insert_into(schema::users::table)
         .values(user)
         .execute(connection);
 
     return Ok(());
 }
 
+#[allow(dead_code)]
 pub fn get(connection: &mut SqliteConnection, user_id: u64) -> Result<User, DbError> {
     use self::schema::users::dsl::*;
 
@@ -35,12 +33,13 @@ pub fn get(connection: &mut SqliteConnection, user_id: u64) -> Result<User, DbEr
     }
 }
 
+#[allow(dead_code)]
 pub fn update(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
     use self::schema::users::dsl::*;
 
     println!("Updating user");
 
-    let user = diesel::update(users.find(id))
+    let _ = diesel::update(users.find(id))
         .set(count.eq(user.count))
         .execute(connection);
 
