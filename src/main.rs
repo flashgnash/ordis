@@ -25,6 +25,22 @@ use rand::prelude::*;
 
 pub struct Handler;
 
+async fn fetch_message(
+    ctx: &poise::serenity_prelude::Context,
+    channel_id: poise::serenity_prelude::ChannelId,
+    message_id: poise::serenity_prelude::MessageId,
+) {
+    match ctx.http.get_message(channel_id, message_id).await {
+        Ok(message) => {
+            println!("Message content: {}", message.content);
+            println!("Author: {}", message.author.name);
+        }
+        Err(why) => {
+            println!("Error fetching message: {:?}", why);
+        }
+    }
+}
+
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(
@@ -37,10 +53,11 @@ impl EventHandler for Handler {
         }
 
         if let Some(message_reference) = msg.message_reference {
-            println!(
-                "This is a reply to message ID: {}",
-                message_reference.message_id.unwrap()
-            );
+            let message_ref = message_reference.message_id.unwrap();
+            let channel_ref = message_reference.channel_id;
+
+            println!("{}, {}", message_ref, channel_ref);
+            let _ = fetch_message(&ctx, channel_ref, message_ref).await;
         }
         if msg.content == "!ping" {
             if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
