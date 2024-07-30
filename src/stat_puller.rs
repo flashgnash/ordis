@@ -74,11 +74,11 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
     println!("{}", &preprompt);
     let messages = vec![
         Message {
-            role: Role::System,
+            role: Role::system,
             content: preprompt,
         },
         Message {
-            role: Role::User,
+            role: Role::user,
             content: message.to_string(),
         },
     ];

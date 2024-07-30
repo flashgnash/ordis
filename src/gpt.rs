@@ -20,9 +20,9 @@ lazy_static! {
 
 #[derive(Serialize, Deserialize)]
 pub enum Role {
-    User,
-    Assistant,
-    System
+    user,
+    assistant,
+    system
 }
 
 #[derive(Serialize, Deserialize)]
@@ -118,13 +118,13 @@ Do not respond with anything else under any circumstances";
     let messages = vec![            
 
             Message {
-                role: Role::System,
+                role: Role::system,
                 content: prompt.to_string()
 
             },
 
             Message {
-                role: Role::User,
+                role: Role::user,
                 content: message.to_string(),
 
             }
@@ -157,19 +157,19 @@ pub async fn generate_ordis(message: &str) -> Result<OpenAIResponse,Error> {
 
     let messages = vec![            
             Message {
-                role: Role::System,
+                role: Role::system,
                 content: format!(
                     "You know the following information: The current time in UTC is {}. You are a discord bot. You have an ancestor called Johnny 5 who was the greatest discord bot of its time",
                     now.format("%Y-%m-%d %H:%M:%S"))
             },
 
             Message {
-                role: Role::System,
+                role: Role::system,
                 content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
             },
 
             Message {
-                role: Role::User,
+                role: Role::user,
                 content:message.to_string(),
             }
         ];
@@ -183,25 +183,25 @@ pub async fn generate_translator(message: &str, lang1: &str, lang2:&str) -> Resu
     let now = Utc::now();
     let messages = vec![            
             Message {
-                role: Role::System,
+                role: Role::system,
                 content: format!("The current time is {}",now.format("%Y-%m-%d %H:%M:%S"))
 
             },
 
 
             Message {
-                role: Role::System,
+                role: Role::system,
                 content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
 
             },
             Message {
-                role: Role::System,
+                role: Role::system,
                 content: format!("Act as a {lang1}-{lang2} translator. Respond with only an accurate translation and nothing else. Please translate to natural speech in the given language")
 
             },
 
             Message {
-                role: Role::User,
+                role: Role::user,
                 content:message.to_string(),
 
             }

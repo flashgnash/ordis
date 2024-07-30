@@ -29,32 +29,8 @@ async fn fetch_message(
     ctx: &poise::serenity_prelude::Context,
     channel_id: poise::serenity_prelude::ChannelId,
     message_id: poise::serenity_prelude::MessageId,
-) {
-    match ctx.http.get_message(channel_id, message_id).await {
-        Ok(message) => {
-            println!("Message content: {}", message.content);
-            println!("Author: {} ({})", message.author.name, message.author.id);
-            println!("(My ID is {})", ctx.cache.current_user().id);
-
-            if ctx.cache.current_user().id == message.author.id {
-                println!("That's me!");
-
-                let messages = vec![
-                    gpt::Message {
-                        role: gpt::Role::Assistant,
-                        content: message.content.to_string(),
-                    },
-                    gpt::Message {
-                        role: gpt::Role::User,
-                        content: message.content.to_string(),
-                    },
-                ];
-            }
-        }
-        Err(why) => {
-            println!("Error fetching message: {:?}", why);
-        }
-    }
+) -> Result<poise::serenity_prelude::Message, Error> {
+    Ok(ctx.http.get_message(channel_id, message_id).await?)
 }
 
 #[async_trait]
@@ -73,7 +49,42 @@ impl EventHandler for Handler {
             let channel_ref = message_reference.channel_id;
 
             println!("{}, {}", message_ref, channel_ref);
-            let _ = fetch_message(&ctx, channel_ref, message_ref).await;
+            let original_message = fetch_message(&ctx, channel_ref, message_ref).await.unwrap();
+
+            if ctx.cache.current_user().id == original_message.author.id {
+                println!("That's me!");
+
+
+            let messages = vec![            
+
+                    gpt::Message {
+                        role: gpt::Role::system,
+                        content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
+
+                    },
+                    gpt::Message {
+                        role: gpt::Role::assistant,
+                        content: original_message.content.to_string()
+
+                    },
+
+                    gpt::Message {
+                        role: gpt::Role::user,
+                        content:msg.content.to_string(),
+
+                    }
+                ];
+
+
+                let response = gpt::generate_to_string("gpt-4o-mini",messages).await.unwrap();
+
+                
+                if let Err(why) = msg.channel_id.say(&ctx.http, response.to_string()).await {
+                    println!("Error sending message: {:?}", why);
+                }
+
+                return;
+            }
         }
         if msg.content == "!ping" {
             if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
