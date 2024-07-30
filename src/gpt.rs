@@ -144,7 +144,6 @@ Do not respond with anything else under any circumstances";
 
 }
 
-
 pub async fn generate_ordis(message: &str) -> Result<OpenAIResponse,Error> {
 
     let use_gpt_4 = model_selector(message).await?;

@@ -33,7 +33,23 @@ async fn fetch_message(
     match ctx.http.get_message(channel_id, message_id).await {
         Ok(message) => {
             println!("Message content: {}", message.content);
-            println!("Author: {}", message.author.name);
+            println!("Author: {} ({})", message.author.name, message.author.id);
+            println!("(My ID is {})", ctx.cache.current_user().id);
+
+            if ctx.cache.current_user().id == message.author.id {
+                println!("That's me!");
+
+                let messages = vec![
+                    gpt::Message {
+                        role: gpt::Role::Assistant,
+                        content: message.content.to_string(),
+                    },
+                    gpt::Message {
+                        role: gpt::Role::User,
+                        content: message.content.to_string(),
+                    },
+                ];
+            }
         }
         Err(why) => {
             println!("Error fetching message: {:?}", why);
