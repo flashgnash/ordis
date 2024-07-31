@@ -33,6 +33,30 @@ pub fn get(connection: &mut SqliteConnection, user_id: u64) -> Result<User, DbEr
     }
 }
 
+pub fn get_or_create(connection: &mut SqliteConnection, user_id: u64) -> Result<User, DbError> {
+    let user_result = get(connection, user_id);
+
+    match user_result {
+        Ok(v) => Ok(user),
+        Err(e) => {
+            //This is probably not a good plan; catches all error types
+            //TODO find a way to catch specific exceptions
+            println!("User not found ({}). Creating a new one", e);
+
+            let new_user = User {
+                id: user_id.to_string(),
+                username: Some(user_name.to_string()),
+                count: Some(1),
+                stat_block = None,
+                stat_block_hash = None
+
+            };
+            let _ = db::users::create(connection, &new_user);
+            Ok(new_user)
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub fn update(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
     use self::schema::users::dsl::*;

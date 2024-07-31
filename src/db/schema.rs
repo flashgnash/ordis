@@ -13,6 +13,8 @@ diesel::table! {
         id -> Text,
         username -> Nullable<Text>,
         count -> Nullable<Integer>,
+        stat_block_hash -> Nullable<Text>,
+        stat_block -> Nullable<Text>,
     }
 }
 

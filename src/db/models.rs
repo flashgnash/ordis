@@ -9,6 +9,8 @@ pub struct User {
     pub id: String,
     pub username: Option<String>,
     pub count: Option<i32>,
+    pub stat_block: Option<String>,
+    pub stat_block_hash: Option<String>,
 }
 
 #[derive(Queryable, Selectable)]

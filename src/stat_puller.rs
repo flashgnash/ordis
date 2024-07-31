@@ -1,3 +1,4 @@
+use crate::common::fetch_message_poise;
 use crate::common::Context;
 use crate::common::Error;
 
@@ -5,9 +6,14 @@ use crate::gpt::generate_to_string;
 use crate::gpt::Message;
 use crate::gpt::Role;
 
+mod db;
+use crate::db::models::User;
+use serde_json::Value;
+
 extern crate regex;
 use std::fmt;
 
+use poise::serenity_prelude::ChannelId;
 use poise::CreateReply;
 
 #[allow(dead_code)]
@@ -66,6 +72,7 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
                 Use the following schema:
                 {schema}
                 If there are missing values, interpret them as null
+                If you are expecting a value in a specific format but it is incorrect, instead set the value as 'ERROR - (explanation)'
                 You should translate these stats into a json dictionary.
                 All keys should be lower case and spell corrected. Respond with only valid json"
     )
@@ -88,16 +95,71 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
     return Ok(response);
 }
 
+async fn get_stat_block_json(ctx: Context<'_>) -> Result<String, Error> {
+    let author = &ctx.author();
+    let user_id = author.id.get();
+    let db_connection = &mut db::establish_connection();
+    let user_result = db::users::get(db_connection, user_id);
+
+    let stat_block_hash = user_result.stat_block_hash;
+
+    let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+
+    let mut generate_new_json: bool;
+
+    match stat_block_hash {
+        Some(value) => {}
+        None => {
+            generate_new_json = true;
+        }
+    }
+    let mut response_message: String;
+
+    if generate_new_json {
+        response_message = generate_statpuller(&stat_message.content).await?;
+    }
+
+    Ok(response_message)
+}
+
 #[poise::command(slash_command, prefix_command)]
-pub async fn pull_stats(ctx: Context<'_>, message: String) -> Result<(), Error> {
+pub async fn pull_stats(
+    ctx: Context<'_>,
+    channel_id: poise::serenity_prelude::ChannelId,
+    message_id: poise::serenity_prelude::MessageId,
+) -> Result<(), Error> {
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let response_message = generate_statpuller(&message).await?;
+    let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+
+    let response_message = generate_statpuller(&stat_message.content).await?;
 
     println!("```json\n{}```", response_message);
 
     let reply = CreateReply::default().content(response_message);
+    msg.edit(ctx, reply).await?;
 
+    return Ok(());
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn pull_stat(
+    ctx: Context<'_>,
+    channel_id: poise::serenity_prelude::ChannelId,
+    message_id: poise::serenity_prelude::MessageId,
+    stat_name: String,
+) -> Result<(), Error> {
+    let msg = ctx.say("*Thinking, please wait...*").await?;
+
+    let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+
+    let response_message = generate_statpuller(&stat_message.content).await?;
+
+    let stats: Value = serde_json::from_str(&response_message)?;
+
+    // println!("```json\n{}```", response_message);
+
+    let reply = CreateReply::default().content(stats.get(stat_name).unwrap().to_string());
     msg.edit(ctx, reply).await?;
 
     return Ok(());
