@@ -1,7 +1,7 @@
 use crate::common::fetch_message_poise;
+use crate::common::safe_to_number;
 use crate::common::Context;
 use crate::common::Error;
-
 use crate::gpt::generate_to_string;
 use crate::gpt::Message;
 use crate::gpt::Role;
@@ -142,7 +142,7 @@ async fn get_stat_block_json(ctx: &Context<'_>) -> Result<String, Error> {
             generate_new_json = true;
         }
     }
-    let mut response_message: String;
+    let response_message: String;
 
     if generate_new_json {
         response_message = generate_statpuller(&stat_message.content).await?;
@@ -217,7 +217,23 @@ pub async fn setup_character_sheet(
     user.stat_block_message_id = Some(message_id.to_string());
     user.stat_block_channel_id = Some(channel_id.to_string());
 
+    let saved_message_id = &user
+        .stat_block_message_id
+        .clone()
+        .expect("Somehow saved_message_id was null");
+    let saved_channel_id = &user
+        .stat_block_channel_id
+        .clone()
+        .expect("Somehow saved_channel_id was null");
+
     let _ = db::users::update(db_connection, &user);
+
+    let _ = ctx
+        .say(format!(
+            "Saved your character sheet as {saved_message_id} in channel {saved_channel_id}"
+        ))
+        .await;
+
     Ok(())
 }
 
@@ -233,8 +249,12 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
     let stat_die = stats.get("stat_die_per_level").unwrap().to_string();
     let spell_die = stats.get("spell_die_per_level").unwrap().to_string();
 
+    let mut hit_die_sum: i32 = 0;
+    let mut stat_die_sum: i32 = 0;
+    let mut spell_die_sum: i32 = 0;
+
     let mut message = format!(
-        "Per Level: \nHit: {hit_die} \\| Stat: {stat_die} \\| Spell: {spell_die}\n------------------------------------"
+        "Per Level: \nHit: {hit_die} \\| Stat: {stat_die} \\| Spell: {spell_die}\n------------------------------------\nRolls:"
     );
 
     for i in 1..num_levels + 1 {
@@ -242,12 +262,16 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
         let (stat_die_result, _) = roll_replace(&stat_die.as_str())?;
         let (spell_die_result, _) = roll_replace(&spell_die.as_str())?;
 
+        hit_die_sum = hit_die_sum + safe_to_number(&hit_die_result);
+        stat_die_sum = stat_die_sum + safe_to_number(&stat_die_result);
+        spell_die_sum = spell_die_sum + safe_to_number(&spell_die_result);
+
         message = format!(
             "{message}\n\n{i})       :heart: {hit_die_result}         :hash: {stat_die_result}         :magic_wand: {spell_die_result}"
         );
     }
     message = message.replace('"', "");
-
+    message = format!("{message}\n\n**Total**:\n           :heart: {hit_die_sum}         :hash: {stat_die_sum}         :magic_wand: {spell_die_sum}");
     let reply = CreateReply::default().content(message);
     msg.edit(ctx, reply).await?;
 

@@ -174,7 +174,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(), roll(), calc(), ask(), translate(),pull_stats(),pull_stat(),setup_character_sheet(),level_up()],
+            commands: vec![ping(), roll(), calc(), ask(), translate(),pull_stat(),setup_character_sheet(),level_up()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
