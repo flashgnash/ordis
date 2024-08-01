@@ -14,8 +14,9 @@ use dice::roll;
 
 mod stat_puller;
 use stat_puller::pull_stats;
+use stat_puller::level_up;
 use stat_puller::pull_stat;
-
+use stat_puller::setup_character_sheet;
 mod db;
 use crate::db::models::User;
 
@@ -173,7 +174,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(), roll(), calc(), ask(), translate(),pull_stats(),pull_stat()],
+            commands: vec![ping(), roll(), calc(), ask(), translate(),pull_stats(),pull_stat(),setup_character_sheet(),level_up()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {

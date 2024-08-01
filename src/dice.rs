@@ -74,7 +74,7 @@ fn roll_matches(input: &str, pattern: &Regex) -> Result<(String, String), DiceEr
     Ok((result, message))
 }
 
-fn roll_replace(text: &str) -> Result<(String, String), DiceError> {
+pub fn roll_replace(text: &str) -> Result<(String, String), DiceError> {
     //Change name later this is terrible
 
     let regex_string = r"\d+d\d+";
