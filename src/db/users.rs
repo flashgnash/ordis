@@ -37,7 +37,7 @@ pub fn get_or_create(connection: &mut SqliteConnection, user_id: u64) -> Result<
     let user_result = get(connection, user_id);
 
     match user_result {
-        Ok(v) => Ok(user),
+        Ok(v) => Ok(v),
         Err(e) => {
             //This is probably not a good plan; catches all error types
             //TODO find a way to catch specific exceptions
@@ -45,13 +45,12 @@ pub fn get_or_create(connection: &mut SqliteConnection, user_id: u64) -> Result<
 
             let new_user = User {
                 id: user_id.to_string(),
-                username: Some(user_name.to_string()),
+                username: None,
                 count: Some(1),
-                stat_block = None,
-                stat_block_hash = None
-
+                stat_block: None,
+                stat_block_hash: None,
             };
-            let _ = db::users::create(connection, &new_user);
+            let _ = users::create(connection, &new_user);
             Ok(new_user)
         }
     }
@@ -63,9 +62,7 @@ pub fn update(connection: &mut SqliteConnection, user: &User) -> Result<(), DbEr
 
     println!("Updating user");
 
-    let _ = diesel::update(users.find(id))
-        .set(count.eq(user.count))
-        .execute(connection);
+    let _ = diesel::update(users.find(id)).set(user).execute(connection);
 
     return Ok(());
 }

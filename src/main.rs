@@ -142,11 +142,9 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let user_id = author.id.get();
     let user_name = &author.name;
 
-    let user_result = db::users::get_or_create(db_connection, user_id);
-    let mut user: User;
+    let mut user = db::users::get_or_create(db_connection, user_id).unwrap();
 
 
-    user = v;
     user.count = Some(user.count.unwrap_or(0) + 1);
     let _ = db::users::update(db_connection, &user);
     let count;

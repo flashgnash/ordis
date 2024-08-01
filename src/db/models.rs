@@ -1,7 +1,7 @@
 use crate::db::schema;
 use diesel::prelude::*;
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, AsChangeset)]
 #[diesel(table_name = schema::users)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 #[derive(Insertable, Clone)]

@@ -5,9 +5,10 @@ use crate::common::Error;
 use crate::gpt::generate_to_string;
 use crate::gpt::Message;
 use crate::gpt::Role;
+use sha2::{Digest, Sha256};
 
-mod db;
-use crate::db::models::User;
+use crate::db;
+
 use serde_json::Value;
 
 extern crate regex;
@@ -78,7 +79,6 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
     )
     .to_string();
 
-    println!("{}", &preprompt);
     let messages = vec![
         Message {
             role: Role::system,
@@ -95,20 +95,33 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
     return Ok(response);
 }
 
-async fn get_stat_block_json(ctx: Context<'_>) -> Result<String, Error> {
+async fn get_stat_block_json(
+    ctx: &Context<'_>,
+    channel_id: poise::serenity_prelude::ChannelId,
+    message_id: poise::serenity_prelude::MessageId,
+) -> Result<String, Error> {
     let author = &ctx.author();
     let user_id = author.id.get();
     let db_connection = &mut db::establish_connection();
-    let user_result = db::users::get(db_connection, user_id);
+    let mut user = db::users::get(db_connection, user_id)?;
 
-    let stat_block_hash = user_result.stat_block_hash;
+    let stat_block_hash = &user.stat_block_hash;
 
     let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
 
-    let mut generate_new_json: bool;
+    let mut generate_new_json: bool = false;
+
+    let mut hasher = Sha256::new();
+    hasher.update(&stat_message.content);
+    let result = hasher.finalize();
+    let hash_hex = format!("{:x}", result);
 
     match stat_block_hash {
-        Some(value) => {}
+        Some(value) => {
+            if value != &hash_hex {
+                generate_new_json = true;
+            }
+        }
         None => {
             generate_new_json = true;
         }
@@ -117,7 +130,19 @@ async fn get_stat_block_json(ctx: Context<'_>) -> Result<String, Error> {
 
     if generate_new_json {
         response_message = generate_statpuller(&stat_message.content).await?;
+        println!("Generated new json");
+        user.stat_block = Some(response_message.clone());
+
+        user.stat_block_hash = Some(hash_hex);
+    } else {
+        response_message = user
+            .stat_block
+            .clone()
+            .expect("Error: Stat block hash was present but stat block was not!");
+        println!("Got cached stat block")
     }
+
+    let _ = db::users::update(db_connection, &user);
 
     Ok(response_message)
 }
@@ -134,7 +159,7 @@ pub async fn pull_stats(
 
     let response_message = generate_statpuller(&stat_message.content).await?;
 
-    println!("```json\n{}```", response_message);
+    // println!("```json\n{}```", response_message);
 
     let reply = CreateReply::default().content(response_message);
     msg.edit(ctx, reply).await?;
@@ -151,9 +176,9 @@ pub async fn pull_stat(
 ) -> Result<(), Error> {
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+    // let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
 
-    let response_message = generate_statpuller(&stat_message.content).await?;
+    let response_message = get_stat_block_json(&ctx, channel_id, message_id).await?;
 
     let stats: Value = serde_json::from_str(&response_message)?;
 
