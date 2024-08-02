@@ -8,12 +8,15 @@ mod common;
 use crate::common::Context;
 use crate::common::Data;
 use crate::common::Error;
-
+use crate::common::fetch_message;
 mod dice;
 use dice::roll;
 
 mod stat_puller;
-
+use stat_puller::pull_stats;
+use stat_puller::level_up;
+use stat_puller::pull_stat;
+use stat_puller::setup_character_sheet;
 mod db;
 use crate::db::models::User;
 
@@ -24,14 +27,6 @@ use gpt::translate;
 use rand::prelude::*;
 
 pub struct Handler;
-
-async fn fetch_message(
-    ctx: &poise::serenity_prelude::Context,
-    channel_id: poise::serenity_prelude::ChannelId,
-    message_id: poise::serenity_prelude::MessageId,
-) -> Result<poise::serenity_prelude::Message, Error> {
-    Ok(ctx.http.get_message(channel_id, message_id).await?)
-}
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -55,30 +50,30 @@ impl EventHandler for Handler {
                 println!("That's me!");
 
 
-            let messages = vec![            
+                let messages = vec![            
 
-                    gpt::Message {
-                        role: gpt::Role::system,
-                        content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
+                        gpt::Message {
+                            role: gpt::Role::system,
+                            content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
 
-                    },
-                    gpt::Message {
-                        role: gpt::Role::assistant,
-                        content: original_message.content.to_string()
+                        },
+                        gpt::Message {
+                            role: gpt::Role::assistant,
+                            content: original_message.content.to_string()
 
-                    },
+                        },
 
-                    gpt::Message {
-                        role: gpt::Role::user,
-                        content:msg.content.to_string(),
+                        gpt::Message {
+                            role: gpt::Role::user,
+                            content:msg.content.to_string(),
 
-                    }
-                ];
+                        }
+                    ];
 
 
                 let response = gpt::generate_to_string("gpt-4o-mini",messages).await.unwrap();
 
-                
+
                 if let Err(why) = msg.channel_id.say(&ctx.http, response.to_string()).await {
                     println!("Error sending message: {:?}", why);
                 }
@@ -148,28 +143,11 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let user_id = author.id.get();
     let user_name = &author.name;
 
-    let user_result = db::users::get(db_connection, user_id);
-    let mut user: User;
+    let mut user = db::users::get_or_create(db_connection, user_id).unwrap();
 
-    match user_result {
-        Ok(v) => {
-            user = v;
-            user.count = Some(user.count.unwrap_or(0) + 1);
-            let _ = db::users::update(db_connection, &user);
-        }
-        Err(e) => {
-            println!("User not found ({})", e);
 
-            let new_user = User {
-                id: user_id.to_string(),
-                username: Some(user_name.to_string()),
-                count: Some(1),
-            };
-            let _ = db::users::create(db_connection, &new_user);
-            user = new_user;
-        }
-    }
-
+    user.count = Some(user.count.unwrap_or(0) + 1);
+    let _ = db::users::update(db_connection, &user);
     let count;
 
     match user.count {
@@ -196,7 +174,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(), roll(), calc(), ask(), translate()],
+            commands: vec![ping(), roll(), calc(), ask(), translate(),pull_stat(),setup_character_sheet(),level_up()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
