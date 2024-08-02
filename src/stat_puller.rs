@@ -163,19 +163,18 @@ async fn get_stat_block_json(ctx: &Context<'_>) -> Result<String, Error> {
     Ok(response_message)
 }
 
-#[poise::command(slash_command, prefix_command)]
-pub async fn pull_stats(
-    ctx: Context<'_>,
-    channel_id: poise::serenity_prelude::ChannelId,
-    message_id: poise::serenity_prelude::MessageId,
-) -> Result<(), Error> {
-    let msg = ctx.say("*Thinking, please wait...*").await?;
+#[poise::command(
+    slash_command,
+    // description_localized = "Pull all stats from your character sheet (only you will be able to see the result of this command)"
+)]
+pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
+    let thinking_message = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
 
-    let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+    let msg = ctx.send(thinking_message).await?;
 
-    let response_message = generate_statpuller(&stat_message.content).await?;
-
-    // println!("```json\n{}```", response_message);
+    let response_message = get_stat_block_json(&ctx).await?;
 
     let reply = CreateReply::default().content(response_message);
     msg.edit(ctx, reply).await?;
@@ -183,7 +182,10 @@ pub async fn pull_stats(
     return Ok(());
 }
 
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(
+    slash_command,
+    // description_localized = "Pull a single stat from your character sheet"
+)]
 pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error> {
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
@@ -216,6 +218,8 @@ pub async fn setup_character_sheet(
     let message_id = msg.id;
     let channel_id = msg.channel_id;
 
+    let message_content = msg.content;
+
     user.stat_block_message_id = Some(message_id.to_string());
     user.stat_block_channel_id = Some(channel_id.to_string());
 
@@ -230,11 +234,13 @@ pub async fn setup_character_sheet(
 
     let _ = db::users::update(db_connection, &user);
 
-    let _ = ctx
-        .say(format!(
-            "Saved your character sheet as {saved_message_id} in channel {saved_channel_id}"
+    let reply = CreateReply::default()
+        .content(format!(
+            "Saved your character sheet as {saved_message_id} in channel {saved_channel_id}\n```{message_content}```"
         ))
-        .await;
+        .ephemeral(true);
+
+    let _ = ctx.send(reply).await;
 
     Ok(())
 }

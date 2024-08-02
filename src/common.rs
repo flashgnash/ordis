@@ -1,6 +1,42 @@
 pub struct Data {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
+use poise::serenity_prelude::Message;
+
+pub async fn fetch_message_chain(
+    ctx: &poise::serenity_prelude::Context,
+    channel_id: poise::serenity_prelude::ChannelId,
+    message_id: poise::serenity_prelude::MessageId,
+) -> Result<Vec<Message>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut messages = Vec::new();
+
+    // Fetch the initial message
+    let mut message = ctx.http.get_message(channel_id, message_id).await?;
+    messages.push(message.clone());
+
+    match message.message_reference {
+        Some(value) => {
+            let res = fetch_message(
+                ctx,
+                value.channel_id,
+                value.message_id.expect("No message ID?!"),
+            )
+            .await?;
+
+            println!("{}", &message.content);
+            messages.push(res.clone());
+            let future = fetch_message_chain(ctx, res.channel_id, res.id);
+
+            let replies = Box::pin(future).await?;
+
+            for reply in replies {
+                messages.push(reply.clone());
+            }
+        }
+        None => println!("End of message chain"),
+    }
+    Ok(messages)
+}
 
 pub async fn fetch_message_poise<E>(
     ctx: &poise::Context<'_, Data, E>,
@@ -14,7 +50,7 @@ pub async fn fetch_message(
     ctx: &poise::serenity_prelude::Context,
     channel_id: poise::serenity_prelude::ChannelId,
     message_id: poise::serenity_prelude::MessageId,
-) -> Result<poise::serenity_prelude::Message, Error> {
+) -> Result<poise::serenity_prelude::Message, Box<dyn std::error::Error + Send + Sync>> {
     Ok(ctx.http.get_message(channel_id, message_id).await?)
 }
 

@@ -9,6 +9,7 @@ use crate::common::Context;
 use crate::common::Data;
 use crate::common::Error;
 use crate::common::fetch_message;
+use crate::common::fetch_message_chain;
 mod dice;
 use dice::roll;
 
@@ -35,46 +36,80 @@ impl EventHandler for Handler {
         ctx: poise::serenity_prelude::Context,
         msg: poise::serenity_prelude::Message,
     ) {
+
         if msg.author.bot {
             return;
         }
 
-        if let Some(message_reference) = msg.message_reference {
+        if let Some(ref message_reference) = msg.message_reference {
             let message_ref = message_reference.message_id.unwrap();
             let channel_ref = message_reference.channel_id;
 
-            println!("{}, {}", message_ref, channel_ref);
             let original_message = fetch_message(&ctx, channel_ref, message_ref).await.unwrap();
 
             if ctx.cache.current_user().id == original_message.author.id {
                 println!("That's me!");
 
 
-                let messages = vec![            
+                let mut messages = vec![            
 
                         gpt::Message {
                             role: gpt::Role::system,
                             content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
 
                         },
-                        gpt::Message {
-                            role: gpt::Role::assistant,
-                            content: original_message.content.to_string()
+                        // gpt::Message {
+                        //     role: gpt::Role::assistant,
+                        //     content: original_message.content.to_string()
 
-                        },
+                        // },
 
-                        gpt::Message {
-                            role: gpt::Role::user,
-                            content:msg.content.to_string(),
+                        // gpt::Message {
+                        //     role: gpt::Role::user,
+                        //     content:msg.content.to_string(),
 
-                        }
+                        // }
                     ];
+
+
+                let mut message_chain = fetch_message_chain(&ctx, channel_ref, message_ref).await.unwrap();//("Fetch message chain failed");
+                message_chain.reverse();
+
+                for chain_message in message_chain {
+
+                    // println!("Message content: {}",chain_message.content);
+                    // Determine role based on whether the message author is the bot
+                    let role = if chain_message.author.id == ctx.cache.current_user().id  {
+                        gpt::Role::assistant
+                    } else {
+                        gpt::Role::user
+                    };
+
+                    messages.push(gpt::Message {
+                        role,
+                        content: chain_message.content.to_string(),
+                    });
+                }                   
+
+                messages.push(gpt::Message {
+                    role: gpt::Role::assistant,
+                    content: original_message.content.to_string()
+                });
+
+                messages.push(gpt::Message {
+                    role: gpt::Role::assistant,
+                    content: msg.content.to_string()
+                });
+
+                for message in &messages {
+                    println!("{}",message.content)
+                }
 
 
                 let response = gpt::generate_to_string("gpt-4o-mini",messages).await.unwrap();
 
 
-                if let Err(why) = msg.channel_id.say(&ctx.http, response.to_string()).await {
+                if let Err(why) = &msg.reply(&ctx.http, response.to_string()).await {
                     println!("Error sending message: {:?}", why);
                 }
 
@@ -174,7 +209,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(), roll(), calc(), ask(), translate(),pull_stat(),setup_character_sheet(),level_up()],
+            commands: vec![ping(), roll(), calc(), ask(), translate(),pull_stat(),pull_stats(),setup_character_sheet(),level_up()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
