@@ -201,18 +201,20 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
     return Ok(());
 }
 
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(context_menu_command = "Set as character sheet")]
 pub async fn setup_character_sheet(
     ctx: Context<'_>,
-    channel_id: poise::serenity_prelude::ChannelId,
-    message_id: poise::serenity_prelude::MessageId,
+    #[description = "Message to use as character sheet"] msg: crate::serenity::Message,
 ) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
     let author = &ctx.author();
     let user_id = author.id.get();
 
-    let mut user = db::users::get(db_connection, user_id)?;
+    let mut user = db::users::get_or_create(db_connection, user_id)?;
+
+    let message_id = msg.id;
+    let channel_id = msg.channel_id;
 
     user.stat_block_message_id = Some(message_id.to_string());
     user.stat_block_channel_id = Some(channel_id.to_string());
@@ -244,6 +246,8 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
     let response_message = get_stat_block_json(&ctx).await?;
 
     let stats: Value = serde_json::from_str(&response_message)?;
+
+    println!("{}", stats);
 
     let hit_die = stats.get("hit_die_per_level").unwrap().to_string();
     let stat_die = stats.get("stat_die_per_level").unwrap().to_string();
