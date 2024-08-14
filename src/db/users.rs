@@ -63,9 +63,13 @@ pub fn get_or_create(connection: &mut SqliteConnection, user_id: u64) -> Result<
 pub fn update(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
     use self::schema::users::dsl::*;
 
-    println!("Updating user");
+    let user_id = &user.id.to_string();
 
-    let _ = diesel::update(users.find(id)).set(user).execute(connection);
+    println!("Updating user {user_id}");
+
+    let _ = diesel::update(users.filter(id.eq(user_id)))
+        .set(user)
+        .execute(connection);
 
     return Ok(());
 }
