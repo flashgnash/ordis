@@ -98,7 +98,7 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
     return Ok(response);
 }
 
-async fn get_stat_block_json(ctx: &Context<'_>) -> Result<String, Error> {
+async fn get_stat_block_json(ctx: &Context<'_>) -> Result<(String, String), Error> {
     let author = &ctx.author();
     let user_id = author.id.get();
     let db_connection = &mut db::establish_connection();
@@ -160,7 +160,7 @@ async fn get_stat_block_json(ctx: &Context<'_>) -> Result<String, Error> {
 
     let _ = db::users::update(db_connection, &user);
 
-    Ok(response_message)
+    Ok((response_message, stat_message.content))
 }
 
 #[poise::command(
@@ -174,7 +174,7 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
 
     let msg = ctx.send(thinking_message).await?;
 
-    let response_message = get_stat_block_json(&ctx).await?;
+    let (response_message, _) = get_stat_block_json(&ctx).await?;
 
     let reply = CreateReply::default().content(response_message);
     msg.edit(ctx, reply).await?;
@@ -187,11 +187,15 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
     // description_localized = "Pull a single stat from your character sheet"
 )]
 pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error> {
+    let stat_block_thinking_message = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
     // let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
 
-    let response_message = get_stat_block_json(&ctx).await?;
+    let (response_message, _) = get_stat_block_json(&ctx).await?;
 
     let stats: Value = serde_json::from_str(&response_message)?;
 
@@ -247,11 +251,20 @@ pub async fn setup_character_sheet(
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
-    let msg = ctx.say("*Thinking, please wait...*").await?;
-
-    let response_message = get_stat_block_json(&ctx).await?;
+    let (response_message, stat_message_raw) = get_stat_block_json(&ctx).await?;
 
     let stats: Value = serde_json::from_str(&response_message)?;
+
+    let reply = CreateReply::default()
+        .content(format!(
+            "Original stat block text:\n```{}````",
+            stat_message_raw
+        ))
+        .ephemeral(true);
+
+    let _ = ctx.send(reply).await;
+
+    let msg = ctx.say("*Thinking, please wait...*").await?;
 
     println!("{}", stats);
 
