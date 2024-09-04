@@ -58,7 +58,7 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     let reply = CreateReply::default()
         .content(format!(
-            "Original stat block text:\n```{}````",
+            "Original stat block text:\n```{}```",
             stat_message_raw
         ))
         .ephemeral(true);
