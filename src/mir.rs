@@ -6,7 +6,16 @@ use crate::dice::roll_replace;
 use poise::CreateReply;
 use serde_json::Value;
 
+use crate::dice::roll_internal;
+
 use crate::stat_puller::get_stat_block_json;
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn stat_roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
+    let result = roll_internal(&dice).await?;
+
+    Ok(())
+}
 
 #[poise::command(context_menu_command = "Set as character sheet")]
 pub async fn setup_character_sheet(

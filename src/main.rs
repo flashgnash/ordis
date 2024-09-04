@@ -23,6 +23,7 @@ use stat_puller::pull_stat;
 mod mir;
 use mir::level_up;
 use mir::setup_character_sheet;
+use mir::stat_roll;
 
 
 mod gpt;
@@ -213,7 +214,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(), roll(), calc(), ask(), translate(),pull_stat(),pull_stats(),setup_character_sheet(),level_up()],
+            commands: vec![ping(),stat_roll(), calc(), ask(), translate(),pull_stat(),pull_stats(),setup_character_sheet(),level_up()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {

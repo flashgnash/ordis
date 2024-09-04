@@ -107,15 +107,10 @@ fn pad_string(input: &str, total_len: usize) -> String {
     format!("{:<width$}", input, width = total_len)
 }
 
-#[poise::command(slash_command, prefix_command)]
-pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
+pub async fn roll_internal(dice: &String) -> Result<Vec<(String, f64)>, Error> {
     let instances = dice.split(',');
 
-    let mut result: Vec<String> = vec![];
-
-    let mut grand_total = 0.0;
-
-    let mut longest_line = 0;
+    let mut result: Vec<(String, f64)> = vec![];
 
     for instance in instances {
         let (replaced, messages) = roll_replace(&instance)?;
@@ -123,17 +118,31 @@ pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
 
         let message = format!("{} = {} = __{}__", &messages, &replaced, &calc_result);
 
-        let total = calc_result;
+        result.push((message, calc_result));
+    }
 
+    Ok(result)
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
+    let results = roll_internal(&dice).await?;
+
+    let mut longest_line = 0;
+    let mut message_lines: Vec<String> = vec![];
+    let mut grand_total = 0.0;
+
+    for (message, calc_result) in results {
         if message.len() > longest_line {
             longest_line = message.len();
         }
 
-        grand_total = grand_total + total;
-        result.push(message);
+        grand_total = grand_total + calc_result;
+
+        message_lines.push(message)
     }
 
-    let message = result.join("\n");
+    let message = message_lines.join("\n");
 
     let underline = format!("__{}__", pad_string("", longest_line - 8));
     ctx.say(format!(
