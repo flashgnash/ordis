@@ -13,13 +13,17 @@ use crate::common::fetch_message_chain;
 mod dice;
 use dice::roll;
 
+mod db;
+
+
 mod stat_puller;
 use stat_puller::pull_stats;
-use stat_puller::level_up;
 use stat_puller::pull_stat;
-use stat_puller::setup_character_sheet;
-mod db;
-use crate::db::models::User;
+
+mod mir;
+use mir::level_up;
+use mir::setup_character_sheet;
+
 
 mod gpt;
 use gpt::ask;
