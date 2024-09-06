@@ -124,15 +124,15 @@ pub async fn roll_internal(dice: &String) -> Result<Vec<(String, f64)>, Error> {
     Ok(result)
 }
 
-#[poise::command(slash_command, prefix_command)]
-pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
-    let results = roll_internal(&dice).await?;
-
+pub async fn output_roll_messages(
+    ctx: Context<'_>,
+    rolls: Vec<(String, f64)>,
+) -> Result<(), Error> {
     let mut longest_line = 0;
     let mut message_lines: Vec<String> = vec![];
     let mut grand_total = 0.0;
 
-    for (message, calc_result) in results {
+    for (message, calc_result) in rolls {
         if message.len() > longest_line {
             longest_line = message.len();
         }
@@ -150,6 +150,15 @@ pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
         message, underline, grand_total
     ))
     .await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
+    let results = roll_internal(&dice).await?;
+
+    output_roll_messages(ctx, results).await?;
 
     Ok(())
 }

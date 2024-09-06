@@ -2,17 +2,36 @@ use crate::common::safe_to_number;
 use crate::common::Context;
 use crate::common::Error;
 use crate::db;
-use crate::dice::roll_replace;
+
+use crate::dice;
+use crate::stat_puller;
+
 use poise::CreateReply;
 use serde_json::Value;
 
-use crate::dice::roll_internal;
-
-use crate::stat_puller::get_stat_block_json;
-
 #[poise::command(slash_command, prefix_command)]
 pub async fn stat_roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
-    let result = roll_internal(&dice).await?;
+    let (response_message, stat_message_raw) = stat_puller::get_stat_block_json(&ctx).await?;
+
+    let stat_block: Value = serde_json::from_str(&response_message)?;
+
+    let mut str_replaced = dice;
+
+    if let Some(stats) = stat_block.get("stats") {
+        if let Some(stats_object) = stats.as_object() {
+            for (stat, value) in stats_object {
+                println!("{stat}: {value}");
+                if let Some(int_value) = value.as_i64() {
+                    let stat_mod = int_value / 10;
+                    str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
+                }
+            }
+        }
+    }
+
+    let results = dice::roll_internal(&str_replaced).await?;
+
+    dice::output_roll_messages(ctx, results).await?;
 
     Ok(())
 }
@@ -61,7 +80,7 @@ pub async fn setup_character_sheet(
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
-    let (response_message, stat_message_raw) = get_stat_block_json(&ctx).await?;
+    let (response_message, stat_message_raw) = stat_puller::get_stat_block_json(&ctx).await?;
 
     let stats: Value = serde_json::from_str(&response_message)?;
 
@@ -91,9 +110,9 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
     );
 
     for i in 1..num_levels + 1 {
-        let (hit_die_result, _) = roll_replace(&hit_die.as_str())?;
-        let (stat_die_result, _) = roll_replace(&stat_die.as_str())?;
-        let (spell_die_result, _) = roll_replace(&spell_die.as_str())?;
+        let (hit_die_result, _) = dice::roll_replace(&hit_die.as_str())?;
+        let (stat_die_result, _) = dice::roll_replace(&stat_die.as_str())?;
+        let (spell_die_result, _) = dice::roll_replace(&spell_die.as_str())?;
 
         hit_die_sum = hit_die_sum + safe_to_number(&hit_die_result);
         stat_die_sum = stat_die_sum + safe_to_number(&stat_die_result);
