@@ -29,6 +29,7 @@ use mir::roll;
 mod gpt;
 use gpt::ask;
 use gpt::translate;
+use gpt::translate_context;
 
 use rand::prelude::*;
 
@@ -214,7 +215,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(), calc(), ask(), translate(),pull_stat(),pull_stats(),setup_character_sheet(),level_up()],
+            commands: vec![ping(),roll(), calc(), ask(), translate(),translate_context(),pull_stat(),pull_stats(),setup_character_sheet(),level_up()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {

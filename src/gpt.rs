@@ -213,11 +213,8 @@ pub async fn generate_translator(message: &str, lang1: &str, lang2:&str) -> Resu
 }
 
 
-
-#[poise::command(slash_command, prefix_command)]
-pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
-
-    let msg = ctx.say("*Translating, please wait...*").await?;
+pub async fn translate_internal(ctx: Context<'_>,message:String) -> Result<(),Error> {
+     let msg = ctx.say("*Translating, please wait...*").await?;
 
     let response = generate_translator(&message,"english","spanish").await?;
 
@@ -225,9 +222,34 @@ pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
     println!("{}",response_message);
 
-    let reply = CreateReply::default().content("translation of: ``{message}``\n\n{response_message}");
+    let message_text = format!("translation of: ``{message}``\n\n{response_message}");
+
+    let reply = CreateReply::default().content(message_text);
     
     msg.edit(ctx, reply).await?;
+
+    Ok(())   
+}
+
+
+
+#[poise::command(context_menu_command = "Translate message")]
+pub async fn translate_context(
+    ctx: Context<'_>,
+     #[description = "Message to translate"] msg: crate::serenity::Message
+     ) -> Result<(),Error> {
+
+      translate_internal(ctx,msg.content).await?;
+
+      Ok(())
+}
+
+
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
+
+    translate_internal(ctx,message).await?;
 
     return Ok(());
 }
