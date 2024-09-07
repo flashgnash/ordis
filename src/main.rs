@@ -11,7 +11,7 @@ use crate::common::Error;
 use crate::common::fetch_message;
 use crate::common::fetch_message_chain;
 mod dice;
-use dice::roll;
+// use dice::roll;
 
 mod db;
 
@@ -23,7 +23,7 @@ use stat_puller::pull_stat;
 mod mir;
 use mir::level_up;
 use mir::setup_character_sheet;
-use mir::stat_roll;
+use mir::roll;
 
 
 mod gpt;
@@ -214,7 +214,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),stat_roll(), calc(), ask(), translate(),pull_stat(),pull_stats(),setup_character_sheet(),level_up()],
+            commands: vec![ping(),roll(), calc(), ask(), translate(),pull_stat(),pull_stats(),setup_character_sheet(),level_up()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {

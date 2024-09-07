@@ -5,26 +5,50 @@ use crate::db;
 
 use crate::dice;
 use crate::stat_puller;
+use crate::stat_puller::StatPullerError;
 
 use poise::CreateReply;
 use serde_json::Value;
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn stat_roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
-    let (response_message, stat_message_raw) = stat_puller::get_stat_block_json(&ctx).await?;
-
-    let stat_block: Value = serde_json::from_str(&response_message)?;
+pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
+    let stat_block_result = stat_puller::get_stat_block_json(&ctx).await;
 
     let mut str_replaced = dice;
 
-    if let Some(stats) = stat_block.get("stats") {
-        if let Some(stats_object) = stats.as_object() {
-            for (stat, value) in stats_object {
-                println!("{stat}: {value}");
-                if let Some(int_value) = value.as_i64() {
-                    let stat_mod = int_value / 10;
-                    str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
+    let mut nag_user_about_character_sheet = false;
+
+    match stat_block_result {
+        Ok((response_message, _)) => {
+            let stat_block: Value = serde_json::from_str(&response_message)?;
+
+            if let Some(stats) = stat_block.get("stats") {
+                if let Some(stats_object) = stats.as_object() {
+                    for (stat, value) in stats_object {
+                        println!("{stat}: {value}");
+                        if let Some(int_value) = value.as_i64() {
+                            let stat_mod = int_value / 10;
+                            str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
+                        }
+                    }
                 }
+            }
+        }
+
+        Err(e) => {
+            if let Some(stat_puller_error) = e.downcast_ref::<StatPullerError>() {
+                match stat_puller_error {
+                    StatPullerError::NoCharacterSheet => {
+                        // Handle specific error
+                        println!("Caught NoCharacterSheet error");
+
+                        nag_user_about_character_sheet = true;
+                    }
+                    _ => return Err(e), // Propagate other StatPullerError variants
+                }
+            } else {
+                // Propagate other errors that are not StatPullerError
+                return Err(e);
             }
         }
     }
@@ -32,6 +56,14 @@ pub async fn stat_roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
     let results = dice::roll_internal(&str_replaced).await?;
 
     dice::output_roll_messages(ctx, results).await?;
+
+    if nag_user_about_character_sheet {
+        let character_sheet_missing_message = CreateReply::default()
+                            .content("Hint: if you configure a character sheet you can add stat modifiers to your rolls (e.g /roll 1d100+str )")
+                            .ephemeral(true);
+
+        let _ = ctx.send(character_sheet_missing_message).await?;
+    }
 
     Ok(())
 }
