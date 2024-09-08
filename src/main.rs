@@ -1,5 +1,8 @@
 use meval::eval_str;
 
+
+use dotenv::dotenv;
+
 use poise::async_trait;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::EventHandler;
@@ -207,6 +210,9 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
 #[tokio::main]
 async fn main() {
+
+    dotenv().ok();
+    
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let intents = serenity::GatewayIntents::non_privileged()
         | serenity::GatewayIntents::GUILD_MESSAGES

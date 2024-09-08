@@ -18,3 +18,4 @@ regex = "1.10.4"
 meval = "0.2.0"
 diesel = { version = "2.1.0", features = ["sqlite"]}
 sha2 = "0.10.8"
+dotenv = "0.15.0"
