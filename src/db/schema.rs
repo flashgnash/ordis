@@ -5,6 +5,10 @@ diesel::table! {
         id -> Text,
         user_id -> Text,
         name -> Nullable<Text>,
+        stat_block_hash -> Nullable<Text>,
+        stat_block -> Nullable<Text>,
+        stat_block_message_id -> Nullable<Text>,
+        stat_block_channel_id -> Nullable<Text>,
     }
 }
 
