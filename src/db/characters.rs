@@ -15,6 +15,26 @@ pub fn create(connection: &mut SqliteConnection, character: &Character) -> Resul
 }
 
 #[allow(dead_code)]
+pub fn get_from_user_id(
+    connection: &mut SqliteConnection,
+    user: u64,
+) -> Result<Vec<Character>, DbError> {
+    use self::schema::characters::dsl::*;
+
+    let characters_result = characters
+        .filter(user_id.eq(user.to_string()))
+        .select(Character::as_select())
+        .load(connection)
+        .expect("Error loading posts");
+
+    if characters_result.len() > 0 {
+        Ok(characters_result)
+    } else {
+        Err(DbError::NotFound)
+    }
+}
+
+#[allow(dead_code)]
 pub fn get(connection: &mut SqliteConnection, character_id: u64) -> Result<Character, DbError> {
     use self::schema::characters::dsl::*;
 
