@@ -21,6 +21,7 @@ diesel::table! {
         stat_block -> Nullable<Text>,
         stat_block_message_id -> Nullable<Text>,
         stat_block_channel_id -> Nullable<Text>,
+        selected_character_id -> Nullable<Text>,
     }
 }
 
