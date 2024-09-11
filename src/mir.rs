@@ -111,7 +111,7 @@ pub async fn setup_character_sheet(
     Ok(())
 }
 
-#[poise::command(context_menu_command = "Create character from character sheet")]
+#[poise::command(context_menu_command = "Create character")]
 pub async fn create_character(
     ctx: Context<'_>,
     msg: crate::serenity::Message,
@@ -140,6 +140,37 @@ pub async fn create_character(
     Ok(())
 }
 
+#[poise::command(slash_command, prefix_command)]
+pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {
+    let db_connection = &mut db::establish_connection();
+
+    let author = &ctx.author();
+    let user_id = author.id.get();
+
+    let characters = db::characters::get_from_user_id(db_connection, user_id)?;
+
+    let num_characters = characters.len();
+    let mut character_messages: Vec<String> = vec![];
+
+    for character in characters {
+        let character_name = character.name.unwrap_or("No name provided".to_string());
+        let character_id = character.id;
+
+        character_messages.push(format!("- {character_id}: {character_name}"))
+    }
+
+    let character_list_message = "Characters:\n".to_string() + &character_messages.join("\n");
+
+    let reply = CreateReply::default()
+        .content(format!(
+            "You have ({num_characters}) character(s): {character_list_message}"
+        ))
+        .ephemeral(true);
+
+    let _ = ctx.send(reply).await;
+
+    Ok(())
+}
 #[poise::command(slash_command, prefix_command)]
 pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
     let (response_message, stat_message_raw) = stat_puller::get_stat_block_json(&ctx).await?;
