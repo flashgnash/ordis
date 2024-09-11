@@ -2,6 +2,7 @@ use crate::common::safe_to_number;
 use crate::common::Context;
 use crate::common::Error;
 use crate::db;
+use crate::db::models::Character;
 
 use crate::dice;
 use crate::stat_puller;
@@ -106,6 +107,35 @@ pub async fn setup_character_sheet(
         .ephemeral(true);
 
     let _ = ctx.send(reply).await;
+
+    Ok(())
+}
+
+#[poise::command(context_menu_command = "Create character from character sheet")]
+pub async fn create_character(
+    ctx: Context<'_>,
+    msg: crate::serenity::Message,
+) -> Result<(), Error> {
+    let db_connection = &mut db::establish_connection();
+
+    let author = &ctx.author();
+
+    let user_id = author.id.get();
+    let user_name = &author.name;
+
+    let new_character = Character {
+        name: Some("Hank".to_string()),
+        id: user_id.to_string() + "_" + "Hank",
+        user_id: user_id.to_string(),
+
+        stat_block: None,
+        stat_block_hash: None,
+
+        stat_block_message_id: None,
+        stat_block_channel_id: None,
+    };
+
+    let _ = db::characters::create(db_connection, &new_character)?;
 
     Ok(())
 }

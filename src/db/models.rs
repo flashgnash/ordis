@@ -26,4 +26,10 @@ pub struct Character {
     pub id: String,
     pub user_id: String,
     pub name: Option<String>,
+
+    pub stat_block: Option<String>,
+    pub stat_block_hash: Option<String>,
+
+    pub stat_block_message_id: Option<String>,
+    pub stat_block_channel_id: Option<String>,
 }
