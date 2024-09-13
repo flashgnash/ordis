@@ -13,8 +13,6 @@ use serde_json::Value;
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
-pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
-    let dice = dice_expression.unwrap_or("1d100".to_string());
     let stat_block_result = stat_puller::get_stat_block_json(&ctx).await;
 
     let mut str_replaced = dice;
