@@ -12,9 +12,9 @@ use poise::CreateReply;
 use serde_json::Value;
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
 pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
     let dice = dice_expression.unwrap_or("1d100".to_string());
+
     let stat_block_result = stat_puller::get_stat_block_json(&ctx).await;
 
     let mut str_replaced = dice;
@@ -125,19 +125,43 @@ pub async fn create_character(
     let user_id = author.id.get();
     let user_name = &author.name;
 
-    let new_character = Character {
-        name: Some("Hank".to_string()),
-        id: user_id.to_string() + "_" + "Hank",
-        user_id: user_id.to_string(),
+    let (response_message, stat_message_raw) = stat_puller::get_stat_block_json(&ctx).await?;
 
-        stat_block: None,
-        stat_block_hash: None,
+    println!("{}", response_message);
 
-        stat_block_message_id: None,
-        stat_block_channel_id: None,
-    };
+    let stats: Value = serde_json::from_str(&response_message)?;
 
-    let _ = db::characters::create(db_connection, &new_character)?;
+    // let character_name = stats.get("name");
+
+    if let Some(character_name) = stats.get("name") {
+        println!("{}", stats.get("name").unwrap());
+
+        let new_character = Character {
+            name: Some(character_name.to_string()),
+            id: user_id.to_string() + "_" + &character_name.to_string(),
+            user_id: user_id.to_string(),
+
+            stat_block: None,
+            stat_block_hash: None,
+
+            stat_block_message_id: None,
+            stat_block_channel_id: None,
+        };
+
+        let _ = db::characters::create(db_connection, &new_character)?;
+
+        let reply = CreateReply::default()
+            .content(format!("Character {character_name} created successfully!"))
+            .ephemeral(true);
+
+        let _ = ctx.send(reply).await;
+    } else {
+        let reply = CreateReply::default()
+            .content(format!("Error: No character name detected"))
+            .ephemeral(true);
+
+        let _ = ctx.send(reply).await;
+    }
 
     Ok(())
 }
