@@ -96,6 +96,18 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
     return Ok(response);
 }
 
+pub async fn get_stat_block_json_from_message(
+    ctx: &Context<'_>,
+    channel_id: ChannelId,
+    message_id: MessageId,
+) -> Result<String, Error> {
+    let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+
+    let response_message = generate_statpuller(&stat_message.content).await?;
+
+    Ok(response_message)
+}
+
 pub async fn get_stat_block_json(ctx: &Context<'_>) -> Result<(String, String), Error> {
     let author = &ctx.author();
     let user_id = author.id.get();

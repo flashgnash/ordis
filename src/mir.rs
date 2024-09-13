@@ -123,9 +123,9 @@ pub async fn create_character(
     let author = &ctx.author();
 
     let user_id = author.id.get();
-    let user_name = &author.name;
 
-    let (response_message, stat_message_raw) = stat_puller::get_stat_block_json(&ctx).await?;
+    let response_message =
+        stat_puller::get_stat_block_json_from_message(&ctx, msg.channel_id, msg.id).await?;
 
     println!("{}", response_message);
 
@@ -134,24 +134,40 @@ pub async fn create_character(
     // let character_name = stats.get("name");
 
     if let Some(character_name) = stats.get("name") {
+        if character_name.to_string() == "null" {
+            let reply = CreateReply::default()
+                .content(format!("Error: No character name found"))
+                .ephemeral(true);
+
+            let _ = ctx.send(reply).await;
+
+            return Ok(());
+        }
         println!("{}", stats.get("name").unwrap());
 
+        let character_name_stringified = character_name
+            .as_str()
+            .expect("Character name was not a string?!")
+            .to_string();
+
         let new_character = Character {
-            name: Some(character_name.to_string()),
-            id: user_id.to_string() + "_" + &character_name.to_string(),
+            name: Some(character_name_stringified.clone()),
+            id: user_id.to_string() + "_" + &character_name_stringified,
             user_id: user_id.to_string(),
 
             stat_block: None,
             stat_block_hash: None,
 
-            stat_block_message_id: None,
-            stat_block_channel_id: None,
+            stat_block_message_id: Some(msg.id.to_string()),
+            stat_block_channel_id: Some(msg.channel_id.to_string()),
         };
 
         let _ = db::characters::create(db_connection, &new_character)?;
 
         let reply = CreateReply::default()
-            .content(format!("Character {character_name} created successfully!"))
+            .content(format!(
+                "Character {character_name_stringified} created successfully!"
+            ))
             .ephemeral(true);
 
         let _ = ctx.send(reply).await;
