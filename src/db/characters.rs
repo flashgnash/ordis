@@ -14,6 +14,11 @@ pub fn create(connection: &mut SqliteConnection, character: &Character) -> Resul
     return Ok(());
 }
 
+pub fn delete_by_id(connection: &mut SqliteConnection, character_id: i32) -> QueryResult<usize> {
+    use self::schema::characters::dsl::*;
+
+    diesel::delete(characters.filter(id.eq(character_id))).execute(connection)
+}
 #[allow(dead_code)]
 pub fn get_from_user_id(
     connection: &mut SqliteConnection,
@@ -35,11 +40,11 @@ pub fn get_from_user_id(
 }
 
 #[allow(dead_code)]
-pub fn get(connection: &mut SqliteConnection, character_id: u64) -> Result<Character, DbError> {
+pub fn get(connection: &mut SqliteConnection, character_id: i32) -> Result<Character, DbError> {
     use self::schema::characters::dsl::*;
 
     let mut characters_result = characters
-        .filter(id.eq(character_id.to_string()))
+        .filter(id.eq(Some(character_id)))
         .limit(1)
         .select(Character::as_select())
         .load(connection)

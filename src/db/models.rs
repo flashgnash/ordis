@@ -23,8 +23,8 @@ pub struct User {
 #[derive(Insertable, Clone)]
 #[diesel(belongs_to(User))]
 pub struct Character {
-    pub id: String,
-    pub user_id: String,
+    pub id: Option<i32>,
+    pub user_id: Option<String>,
     pub name: Option<String>,
 
     pub stat_block: Option<String>,

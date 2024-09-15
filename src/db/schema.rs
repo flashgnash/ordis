@@ -1,9 +1,9 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    characters (id, user_id) {
-        id -> Text,
-        user_id -> Text,
+    characters (id) {
+        id -> Nullable<Integer>,
+        user_id -> Nullable<Text>,
         name -> Nullable<Text>,
         stat_block_hash -> Nullable<Text>,
         stat_block -> Nullable<Text>,

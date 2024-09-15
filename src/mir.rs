@@ -152,8 +152,8 @@ pub async fn create_character(
 
         let new_character = Character {
             name: Some(character_name_stringified.clone()),
-            id: user_id.to_string() + "_" + &character_name_stringified,
-            user_id: user_id.to_string(),
+            id: None,
+            user_id: Some(user_id.to_string()),
 
             stat_block: None,
             stat_block_hash: None,
@@ -183,6 +183,24 @@ pub async fn create_character(
 }
 
 #[poise::command(slash_command, prefix_command)]
+pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(), Error> {
+    let db_connection = &mut db::establish_connection();
+
+    db::characters::delete_by_id(db_connection, character_id)?;
+
+    let reply = CreateReply::default()
+        .content(format!("Succesfully deleted character id {character_id}"))
+        .ephemeral(true);
+
+    let _ = ctx.send(reply).await;
+
+    Ok(())
+}
+#[poise::command(slash_command, prefix_command)]
+pub async fn select_character(ctx: Context<'_>) -> Result<(), Error> {
+    Ok(())
+}
+#[poise::command(slash_command, prefix_command)]
 pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
@@ -196,7 +214,7 @@ pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {
 
     for character in characters {
         let character_name = character.name.unwrap_or("No name provided".to_string());
-        let character_id = character.id;
+        let character_id = character.id.unwrap_or(-1).to_string();
 
         character_messages.push(format!("- {character_id}: {character_name}"))
     }
