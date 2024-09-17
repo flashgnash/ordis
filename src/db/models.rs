@@ -17,7 +17,7 @@ pub struct User {
     pub stat_block_channel_id: Option<String>,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, AsChangeset)]
 #[diesel(table_name = schema::characters)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 #[derive(Insertable, Clone)]
