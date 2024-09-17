@@ -47,7 +47,11 @@ pub fn get_or_create(connection: &mut SqliteConnection, user_id: u64) -> Result<
                 id: user_id.to_string(),
                 username: None,
                 count: Some(1),
-                selected_character: None,
+                stat_block: None,
+                stat_block_hash: None,
+
+                stat_block_message_id: None,
+                stat_block_channel_id: None,
             };
             let _ = users::create(connection, &new_user);
             Ok(new_user)
