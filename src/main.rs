@@ -37,7 +37,7 @@ use gpt::translate_context;
 use rand::prelude::*;
 
 pub struct Handler;
-
+Blah blah bad commit here!
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(
