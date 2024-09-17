@@ -58,6 +58,20 @@ pub fn get(connection: &mut SqliteConnection, character_id: i32) -> Result<Chara
     }
 }
 
+pub fn update(connection: &mut SqliteConnection, character: &Character) -> Result<(), DbError> {
+    use self::schema::characters::dsl::*;
+
+    let character_id = &character.id;
+
+    println!("Updating character {character_id}");
+
+    let _ = diesel::update(characters.filter(id.eq(character_id)))
+        .set(character)
+        .execute(connection);
+
+    return Ok(());
+}
+
 // #[allow(dead_code)]
 // pub fn update(connection: &mut SqliteConnection, character: &Character) -> Result<(), DbError> {
 //     println!("Updating character");
