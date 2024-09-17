@@ -118,6 +118,13 @@ pub async fn create_character(
     ctx: Context<'_>,
     msg: crate::serenity::Message,
 ) -> Result<(), Error> {
+    let placeholder_message = ctx
+        .send(
+            CreateReply::default()
+                .content("Thinking... please wait")
+                .ephemeral(true),
+        )
+        .await?;
     let db_connection = &mut db::establish_connection();
 
     let author = &ctx.author();
@@ -139,7 +146,7 @@ pub async fn create_character(
                 .content(format!("Error: No character name found"))
                 .ephemeral(true);
 
-            let _ = ctx.send(reply).await;
+            let _ = placeholder_message.edit(ctx, reply).await;
 
             return Ok(());
         }
@@ -170,13 +177,13 @@ pub async fn create_character(
             ))
             .ephemeral(true);
 
-        let _ = ctx.send(reply).await;
+        let _ = placeholder_message.edit(ctx, reply).await;
     } else {
         let reply = CreateReply::default()
             .content(format!("Error: No character name detected"))
             .ephemeral(true);
 
-        let _ = ctx.send(reply).await;
+        let _ = placeholder_message.edit(ctx, reply).await;
     }
 
     Ok(())
@@ -188,9 +195,8 @@ pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(),
 
     db::characters::delete_by_id(db_connection, character_id)?;
 
-    let reply = CreateReply::default()
-        .content(format!("Succesfully deleted character id {character_id}"))
-        .ephemeral(true);
+    let reply =
+        CreateReply::default().content(format!("Succesfully deleted character id {character_id}"));
 
     let _ = ctx.send(reply).await;
 
@@ -233,6 +239,16 @@ pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {
 }
 #[poise::command(slash_command, prefix_command)]
 pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
+    let original_stat_block_message = ctx
+        .send(
+            CreateReply::default()
+                .content("Thinking... please wait")
+                .ephemeral(true),
+        )
+        .await?;
+
+    let msg = ctx.say("*Thinking, please wait...*").await?;
+
     let (response_message, stat_message_raw) = stat_puller::get_stat_block_json(&ctx).await?;
 
     let stats: Value = serde_json::from_str(&response_message)?;
@@ -244,9 +260,7 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
         ))
         .ephemeral(true);
 
-    let _ = ctx.send(reply).await;
-
-    let msg = ctx.say("*Thinking, please wait...*").await?;
+    let _ = original_stat_block_message.edit(ctx, reply).await;
 
     println!("{}", stats);
 
