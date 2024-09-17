@@ -63,7 +63,7 @@ pub fn update(connection: &mut SqliteConnection, character: &Character) -> Resul
 
     let character_id = &character.id;
 
-    println!("Updating character {character_id}");
+    // println!("Updating character {character_id}");
 
     let _ = diesel::update(characters.filter(id.eq(character_id)))
         .set(character)
