@@ -71,47 +71,47 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
     Ok(())
 }
 
-#[poise::command(context_menu_command = "Set as character sheet")]
-pub async fn setup_character_sheet(
-    ctx: Context<'_>,
-    #[description = "Message to use as character sheet"] msg: crate::serenity::Message,
-) -> Result<(), Error> {
-    let db_connection = &mut db::establish_connection();
+// #[poise::command(context_menu_command = "Set as character sheet")]
+// pub async fn setup_character_sheet(
+//     ctx: Context<'_>,
+//     #[description = "Message to use as character sheet"] msg: crate::serenity::Message,
+// ) -> Result<(), Error> {
+//     let db_connection = &mut db::establish_connection();
 
-    let author = &ctx.author();
-    let user_id = author.id.get();
+//     let author = &ctx.author();
+//     let user_id = author.id.get();
 
-    let mut user = db::users::get_or_create(db_connection, user_id)?;
+//     let mut user = db::users::get_or_create(db_connection, user_id)?;
 
-    let message_id = msg.id;
-    let channel_id = msg.channel_id;
+//     let message_id = msg.id;
+//     let channel_id = msg.channel_id;
 
-    let message_content = msg.content;
+//     let message_content = msg.content;
 
-    user.stat_block_message_id = Some(message_id.to_string());
-    user.stat_block_channel_id = Some(channel_id.to_string());
+//     user.stat_block_message_id = Some(message_id.to_string());
+//     user.stat_block_channel_id = Some(channel_id.to_string());
 
-    let saved_message_id = &user
-        .stat_block_message_id
-        .clone()
-        .expect("Somehow saved_message_id was null");
-    let saved_channel_id = &user
-        .stat_block_channel_id
-        .clone()
-        .expect("Somehow saved_channel_id was null");
+//     let saved_message_id = &user
+//         .stat_block_message_id
+//         .clone()
+//         .expect("Somehow saved_message_id was null");
+//     let saved_channel_id = &user
+//         .stat_block_channel_id
+//         .clone()
+//         .expect("Somehow saved_channel_id was null");
 
-    let _ = db::users::update(db_connection, &user);
+//     let _ = db::users::update(db_connection, &user);
 
-    let reply = CreateReply::default()
-        .content(format!(
-            "Saved your character sheet as {saved_message_id} in channel {saved_channel_id}\n```{message_content}```"
-        ))
-        .ephemeral(true);
+//     let reply = CreateReply::default()
+//         .content(format!(
+//             "Saved your character sheet as {saved_message_id} in channel {saved_channel_id}\n```{message_content}```"
+//         ))
+//         .ephemeral(true);
 
-    let _ = ctx.send(reply).await;
+//     let _ = ctx.send(reply).await;
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 #[poise::command(context_menu_command = "Create character")]
 pub async fn create_character(

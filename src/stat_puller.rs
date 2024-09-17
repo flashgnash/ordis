@@ -112,65 +112,67 @@ pub async fn get_stat_block_json(ctx: &Context<'_>) -> Result<(String, String), 
     let author = &ctx.author();
     let user_id = author.id.get();
     let db_connection = &mut db::establish_connection();
-    let mut user = db::users::get(db_connection, user_id)?;
+    let user = db::users::get(db_connection, user_id)?;
 
-    // let channel_id_u64: u64 = user
-    //     .stat_block_channel_id
-    //     .clone()
-    //     .expect("No channel ID saved")
+    if let Some(character_id) = user.selected_character {
+        let mut character = db::characters::get(db_connection, character_id)?;
+        // let channel_id_u64: u64 = user
+        //     .stat_block_channel_id
+        //     .clone()
+        //     .expect("No channel ID saved")
 
-    if let Some(channel_id_u64) = user.stat_block_channel_id.clone() {
-        let channel_id_parsed = channel_id_u64.parse().expect("Invalid ChannelID");
-        let channel_id = ChannelId::new(channel_id_parsed);
+        if let Some(channel_id_u64) = character.stat_block_channel_id.clone() {
+            let channel_id_parsed = channel_id_u64.parse().expect("Invalid ChannelID");
+            let channel_id = ChannelId::new(channel_id_parsed);
 
-        if let Some(message_id_u64) = user.stat_block_message_id.clone() {
-            let message_id_parsed = message_id_u64.parse().expect("Invalid MessageID");
-            let message_id = MessageId::new(message_id_parsed);
+            if let Some(message_id_u64) = character.stat_block_message_id.clone() {
+                let message_id_parsed = message_id_u64.parse().expect("Invalid MessageID");
+                let message_id = MessageId::new(message_id_parsed);
 
-            let stat_block_hash = &user.stat_block_hash;
+                let stat_block_hash = &character.stat_block_hash;
 
-            let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+                let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
 
-            let mut generate_new_json: bool = false;
+                let mut generate_new_json: bool = false;
 
-            let mut hasher = Sha256::new();
-            hasher.update(&stat_message.content);
-            let result = hasher.finalize();
-            let hash_hex = format!("{:x}", result);
+                let mut hasher = Sha256::new();
+                hasher.update(&stat_message.content);
+                let result = hasher.finalize();
+                let hash_hex = format!("{:x}", result);
 
-            match stat_block_hash {
-                Some(value) => {
-                    if value != &hash_hex {
+                match stat_block_hash {
+                    Some(value) => {
+                        if value != &hash_hex {
+                            generate_new_json = true;
+                        }
+                    }
+                    None => {
                         generate_new_json = true;
                     }
                 }
-                None => {
-                    generate_new_json = true;
+
+                let response_message: String;
+
+                if generate_new_json {
+                    response_message = generate_statpuller(&stat_message.content).await?;
+                    println!("Generated new json");
+                    character.stat_block = Some(response_message.clone());
+
+                    character.stat_block_hash = Some(hash_hex);
+                } else {
+                    response_message = character
+                        .stat_block
+                        .clone()
+                        .expect("Error: Stat block hash was present but stat block was not!");
+                    println!("Got cached stat block")
                 }
+
+                let _ = db::characters::update(db_connection, &character);
+
+                return Ok((response_message, stat_message.content));
             }
-
-            let response_message: String;
-
-            if generate_new_json {
-                response_message = generate_statpuller(&stat_message.content).await?;
-                println!("Generated new json");
-                user.stat_block = Some(response_message.clone());
-
-                user.stat_block_hash = Some(hash_hex);
-            } else {
-                response_message = user
-                    .stat_block
-                    .clone()
-                    .expect("Error: Stat block hash was present but stat block was not!");
-                println!("Got cached stat block")
-            }
-
-            let _ = db::users::update(db_connection, &user);
-
-            return Ok((response_message, stat_message.content));
         }
     }
-
     return Err(Box::new(StatPullerError::NoCharacterSheet));
     // let message_id_u64: u64 = user
     //     .stat_block_message_id
