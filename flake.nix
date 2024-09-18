@@ -47,7 +47,9 @@
 
             latest=$(find migrations -type d | sort -r | head -n 1)
             up=$(cat "$latest"/up.sql)
-            chatgpt "Please generate a sqlite down.sql for the following up.sql: $up"
+            chatgpt "
+            With the context of the current schema ($(cat src/db/schema.rs))
+            Please generate a sqlite down.sql for the following up.sql: $up"
 
 
           '';
