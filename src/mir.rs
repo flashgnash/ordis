@@ -1,3 +1,4 @@
+use crate::common;
 use crate::common::safe_to_number;
 use crate::common::Context;
 use crate::common::Error;
@@ -188,7 +189,24 @@ pub async fn create_character(
 pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
-    db::characters::delete_by_id(db_connection, character_id)?;
+    let author = &ctx.author();
+    let user_id = author.id.get();
+
+    let is_admin = common::check_admin(
+        ctx,
+        ctx.guild_id().expect("No guild ID found???!??!?!?"),
+        author.id,
+    )
+    .await;
+
+    if is_admin {
+        db::characters::delete_global(db_connection, character_id)?; //TODO if the bot goes public, this needs to also filter by guild
+                                                                     // (don't let people delete other guilds' characters just because they're admin in their own one.)
+                                                                     // This could even be done via the check admin function, if provided with the guild ID the character belongs to instead
+                                                                     // of the current guild ID (not currently an issue as I whitelist which guilds the bot can join anyway)
+    } else {
+        db::characters::delete(db_connection, character_id, user_id)?;
+    }
 
     let reply =
         CreateReply::default().content(format!("Succesfully deleted character id {character_id}"));
@@ -270,8 +288,13 @@ pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {
     for character in characters {
         let character_name = character.name.unwrap_or("No name provided".to_string());
         let character_id = character.id.unwrap_or(-1).to_string();
+        let channel_id = character
+            .stat_block_channel_id
+            .unwrap_or("No channel ID".to_string());
 
-        character_messages.push(format!("- {character_id}: {character_name}"))
+        character_messages.push(format!(
+            "- {character_id}: {character_name} (in channel <#{channel_id}>)"
+        ))
     }
 
     let character_list_message = "Characters:\n".to_string() + &character_messages.join("\n");

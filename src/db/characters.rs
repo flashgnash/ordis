@@ -14,11 +14,29 @@ pub fn create(connection: &mut SqliteConnection, character: &Character) -> Resul
     return Ok(());
 }
 
-pub fn delete_by_id(connection: &mut SqliteConnection, character_id: i32) -> QueryResult<usize> {
+pub fn delete(
+    connection: &mut SqliteConnection,
+    character_id: i32,
+    owner_id: u64,
+) -> Result<(), DbError> {
+    use self::schema::characters::dsl::*;
+
+    diesel::delete(
+        characters
+            .filter(id.eq(character_id))
+            .filter(user_id.eq(owner_id.to_string())),
+    )
+    .execute(connection);
+
+    Ok(())
+}
+
+pub fn delete_global(connection: &mut SqliteConnection, character_id: i32) -> QueryResult<usize> {
     use self::schema::characters::dsl::*;
 
     diesel::delete(characters.filter(id.eq(character_id))).execute(connection)
 }
+
 #[allow(dead_code)]
 pub fn get_from_user_id(
     connection: &mut SqliteConnection,

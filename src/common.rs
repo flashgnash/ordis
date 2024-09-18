@@ -3,6 +3,24 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 use poise::serenity_prelude::Message;
 
+use poise::serenity_prelude as serenity;
+
+pub async fn check_admin(
+    ctx: Context<'_>,
+    guild_id: serenity::GuildId,
+    user_id: serenity::UserId,
+) -> bool {
+    if let Ok(member) = ctx.http().get_member(guild_id, user_id).await {
+        let perms = member
+            .permissions
+            .unwrap_or_else(|| return serenity::Permissions::empty());
+
+        perms.administrator()
+    } else {
+        false
+    }
+}
+
 pub async fn fetch_message_chain(
     ctx: &poise::serenity_prelude::Context,
     channel_id: poise::serenity_prelude::ChannelId,
