@@ -89,6 +89,30 @@ pub async fn create_character(
 
     let user_id = author.id.get();
 
+    let result =
+        db::characters::get_by_char_sheet(db_connection, msg.channel_id.get(), msg.id.get());
+
+    match result {
+        Ok(character) => {
+            let character_name = character.name.unwrap_or("No Name".to_string());
+            let character_id = character.id.unwrap_or(-1);
+
+            placeholder_message
+                .edit(
+                    ctx,
+                    CreateReply::default()
+                        .content(format!("There is already a character using that character sheet! (id {character_id}, name {character_name})"))
+                        .ephemeral(true),
+                )
+                .await?;
+
+            return Ok(());
+        }
+        Err(e) => {
+            println!("No existing char found using that character sheet");
+        }
+    }
+
     let response_message =
         stat_puller::get_stat_block_json_from_message(&ctx, msg.channel_id, msg.id).await?;
 

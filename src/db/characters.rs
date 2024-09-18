@@ -77,6 +77,29 @@ pub fn get(connection: &mut SqliteConnection, character_id: i32) -> Result<Chara
         Err(DbError::NotFound)
     }
 }
+#[allow(dead_code)]
+pub fn get_by_char_sheet(
+    connection: &mut SqliteConnection,
+    channel_id: u64,
+    message_id: u64,
+) -> Result<Character, DbError> {
+    use self::schema::characters::dsl::*;
+
+    let mut characters_result = characters
+        .filter(stat_block_channel_id.eq(channel_id.to_string()))
+        .filter(stat_block_message_id.eq(message_id.to_string()))
+        .limit(1)
+        .select(Character::as_select())
+        .load(connection)
+        .expect("Error loading characters");
+
+    if characters_result.len() > 0 {
+        let character = characters_result.remove(0);
+        Ok(character)
+    } else {
+        Err(DbError::NotFound)
+    }
+}
 
 pub fn update(connection: &mut SqliteConnection, character: &Character) -> Result<(), DbError> {
     use self::schema::characters::dsl::*;
