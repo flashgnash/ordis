@@ -40,6 +40,26 @@ pub fn get_from_user_id(
 }
 
 #[allow(dead_code)]
+pub fn get_latest(connection: &mut SqliteConnection, user: u64) -> Result<Character, DbError> {
+    use self::schema::characters::dsl::*;
+
+    let mut characters_result = characters
+        .filter(user_id.eq(user.to_string())) // Filter by user_id
+        .order(id.desc()) // Order by ID in descending order
+        .limit(1)
+        .select(Character::as_select())
+        .load(connection)
+        .expect("Error loading character");
+
+    if characters_result.len() > 0 {
+        let character = characters_result.remove(0);
+        Ok(character)
+    } else {
+        Err(DbError::NotFound)
+    }
+}
+
+#[allow(dead_code)]
 pub fn get(connection: &mut SqliteConnection, character_id: i32) -> Result<Character, DbError> {
     use self::schema::characters::dsl::*;
 

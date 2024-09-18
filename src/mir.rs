@@ -129,9 +129,22 @@ pub async fn create_character(
 
         let _ = db::characters::create(db_connection, &new_character)?;
 
+        let new_character = db::characters::get_latest(db_connection, user_id)?;
+
+        let mut user = db::users::get_or_create(db_connection, user_id)?;
+
+        let mut extra_text: &str = "";
+
+        if user.selected_character == None {
+            user.selected_character = new_character.id;
+            db::users::update(db_connection, &user)?;
+
+            extra_text = "(and selected as default)";
+        }
+
         let reply = CreateReply::default()
             .content(format!(
-                "Character {character_name_stringified} created successfully!"
+                "Character {character_name_stringified} created successfully! {extra_text}"
             ))
             .ephemeral(true);
 
