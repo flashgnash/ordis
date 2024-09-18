@@ -235,18 +235,31 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
 
     match character {
         Ok((char)) => {
-            user.selected_character = Some(character_id);
-            db::users::update(db_connection, &user)?;
-            let char_name = char.name.unwrap_or("No Name".to_string());
+            let comparison_user_id = Some(user.id.clone());
 
-            placeholder
-                .edit(
-                    ctx,
-                    CreateReply::default()
-                        .content(format!("Selected character {char_name}"))
-                        .ephemeral(true),
-                )
-                .await?;
+            if char.user_id.eq(&comparison_user_id) {
+                user.selected_character = Some(character_id);
+                db::users::update(db_connection, &user)?;
+                let char_name = char.name.unwrap_or("No Name".to_string());
+
+                placeholder
+                    .edit(
+                        ctx,
+                        CreateReply::default()
+                            .content(format!("Selected character {char_name}"))
+                            .ephemeral(true),
+                    )
+                    .await?;
+            } else {
+                placeholder
+                    .edit(
+                        ctx,
+                        CreateReply::default()
+                            .content(format!("Error: That's not your character!"))
+                            .ephemeral(true),
+                    )
+                    .await?;
+            }
 
             return Ok(());
         }
