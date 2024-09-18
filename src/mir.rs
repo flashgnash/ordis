@@ -174,8 +174,62 @@ pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(),
     Ok(())
 }
 #[poise::command(slash_command, prefix_command)]
-pub async fn select_character(ctx: Context<'_>) -> Result<(), Error> {
-    Ok(())
+pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(), Error> {
+    let placeholder = ctx
+        .send(
+            CreateReply::default()
+                .content("Thinking... please wait")
+                .ephemeral(true),
+        )
+        .await?;
+
+    let db_connection = &mut db::establish_connection();
+
+    let author = &ctx.author();
+    let user_id = author.id.get();
+    let mut user = db::users::get_or_create(db_connection, user_id)?;
+
+    let character = db::characters::get(db_connection, character_id);
+
+    match character {
+        Ok((char)) => {
+            user.selected_character = Some(character_id);
+            db::users::update(db_connection, &user)?;
+            let char_name = char.name.unwrap_or("No Name".to_string());
+
+            placeholder
+                .edit(
+                    ctx,
+                    CreateReply::default()
+                        .content(format!("Selected character {char_name}"))
+                        .ephemeral(true),
+                )
+                .await?;
+
+            return Ok(());
+        }
+
+        Err(e) => {
+            match e {
+                db::DbError::NotFound => {
+                    // Handle specific error
+                    println!("Caught NotFound error");
+
+                    placeholder.edit(
+                        ctx,
+                        CreateReply::default()
+                            .content("You don't have a character with that id. Please do /get_characters to list your character sheets.")
+                            .ephemeral(true),
+                    ).await?;
+
+                    return Ok(());
+                }
+                _ => {
+                    return Err(Box::new(e));
+                }
+            }
+        }
+    }
 }
 #[poise::command(slash_command, prefix_command)]
 pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {

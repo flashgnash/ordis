@@ -68,7 +68,7 @@ pub fn get(connection: &mut SqliteConnection, character_id: i32) -> Result<Chara
         .limit(1)
         .select(Character::as_select())
         .load(connection)
-        .expect("Error loading posts");
+        .expect("Error loading characters");
 
     if characters_result.len() > 0 {
         let character = characters_result.remove(0);

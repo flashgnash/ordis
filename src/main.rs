@@ -25,11 +25,11 @@ use stat_puller::pull_stat;
 
 mod mir;
 use mir::level_up;
-// use mir::setup_character_sheet;
 use mir::create_character;
 use mir::get_characters;
 use mir::roll;
 use mir::delete_character;
+use mir::select_character;
 
 
 mod gpt;
@@ -228,9 +228,10 @@ async fn main() {
         | serenity::GatewayIntents::DIRECT_MESSAGES
         | serenity::GatewayIntents::MESSAGE_CONTENT;
 
+
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(), calc(), ask(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),create_character(),level_up()],
+            commands: vec![ping(),roll(), calc(), ask(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),select_character(),create_character(),level_up()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
