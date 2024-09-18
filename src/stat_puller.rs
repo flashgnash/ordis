@@ -112,7 +112,7 @@ pub async fn get_stat_block_json(ctx: &Context<'_>) -> Result<(String, String), 
     let author = &ctx.author();
     let user_id = author.id.get();
     let db_connection = &mut db::establish_connection();
-    let user = db::users::get(db_connection, user_id)?;
+    let user = db::users::get_or_create(db_connection, user_id)?;
 
     if let Some(character_id) = user.selected_character {
         let mut character = db::characters::get(db_connection, character_id)?;
