@@ -14,9 +14,14 @@ use regex::Regex;
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+
+    _ = ctx.send(placeholder).await?;
+
     let stat_block_result = stat_puller::get_stat_block_json(&ctx).await;
 
-    // Default to 1d100 if no string is provided
     //TODO make this default configurable per server
     let mut dice = dice_expression.unwrap_or("1d100".to_string());
 
