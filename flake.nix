@@ -24,6 +24,37 @@
         run-migration = pkgs.writeShellScriptBin "run-migration" (''diesel migration run'');
 
         build-and-debug = pkgs.writeShellScriptBin "build-and-debug" (''cargo build && lldb'');
+
+        gen-up = pkgs.writeShellApplication {
+          name = "gen-up";
+
+          text = ''
+            chatgpt "
+            Please write an up.sql for SQLite based on the following schema.rs: $(cat src/db/schema.rs)
+            Assume it is already being run in a transaction (don't add begin and end transaction statements)
+            The up.sql should make the following changes:
+            $1
+            "
+
+          '';
+
+        };
+
+        gen-down = pkgs.writeShellApplication {
+          name = "gen-down";
+
+          text = ''
+
+            latest=$(find migrations -type d | sort -r | head -n 1)
+            up=$(cat "$latest"/up.sql)
+            chatgpt "
+            With the context of the current schema ($(cat src/db/schema.rs))
+            Please generate a sqlite down.sql for the following up.sql: $up"
+
+
+          '';
+        };
+
       in
       {
         devShells.default = pkgs.mkShell {
@@ -44,6 +75,9 @@
             new-migration
             redo-migration
             run-migration
+
+            gen-up
+            gen-down
 
             build-and-debug
           ];
