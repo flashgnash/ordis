@@ -36,7 +36,7 @@ mod gpt;
 use gpt::ask;
 use gpt::translate;
 use gpt::translate_context;
-
+use gpt::draw;
 use rand::prelude::*;
 
 pub struct Handler;
@@ -231,7 +231,8 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(), calc(), ask(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),select_character(),create_character(),level_up()],
+            commands: vec![ping(),roll(), calc(), ask(), draw(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),select_character(),create_character(),level_up()],
+
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {

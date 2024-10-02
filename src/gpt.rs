@@ -52,6 +52,24 @@ pub struct OpenAIResponse{
 
 }
 
+
+#[derive(Serialize, Deserialize)]
+struct DallERequest {
+    pub prompt: String,
+    pub n: u8,  // Number of images
+    pub size: String,  // Image size e.g., "1024x1024"
+}
+
+#[derive(Serialize, Deserialize)]
+struct DallEResponse {
+    pub data: Vec<DallEImageData>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct DallEImageData {
+    pub url: String,
+}
+
 impl fmt::Display for OpenAIResponse {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.choices[0].message.content)
@@ -68,20 +86,40 @@ pub async fn generate_to_string(model:&str,messages:Vec<Message>) -> Result<Stri
     return Ok(format!("{}",response_message));
 }
 
+pub async fn generate_image(prompt: &str) -> Result<String, Error> {
+    let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
+    
+    let client = &CLIENT;
+
+    let request = DallERequest {
+        prompt: prompt.to_string(),
+        n: 1,  // Generate 1 image
+        size: "1024x1024".to_string(),
+    };
+
+    let content = client
+        .post("https://api.openai.com/v1/images/generations")
+        .json(&request)
+        .header(AUTHORIZATION, format!("Bearer {token}"))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let response: DallEResponse = serde_json::from_str(&content)?;
+    
+    let image_data = response.data.first().expect("No image generated! (openai)"); 
+    Ok(image_data.url.clone())
+}
 
 pub async fn generate(model:&str, messages:Vec<Message>) -> Result<OpenAIResponse, Error> {                                       
     let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
     
     let client = &CLIENT;
-    
-
-    let request = OpenAIRequest {
+        let request = OpenAIRequest {
         model: model.to_string(),
         messages: messages 
-
-
     };
-
 
     let content = 
         client.post("https://api.openai.com/v1/chat/completions")
@@ -250,6 +288,25 @@ pub async fn translate_context(
 pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
     translate_internal(ctx,message).await?;
+
+    return Ok(());
+}
+
+
+ 
+#[poise::command(slash_command, prefix_command)]
+pub async fn draw(ctx: Context<'_>, message:String) -> Result<(),Error> {
+
+    let msg = ctx.say("*Thinking, please wait...*").await?;
+
+    let response_message = generate_image(&message).await?;
+
+
+    println!("Generated image URL: {}",response_message);
+
+    let reply = CreateReply::default().content(response_message);
+
+    msg.edit(ctx, reply).await?;
 
     return Ok(());
 }

@@ -12,11 +12,31 @@ use crate::stat_puller::StatPullerError;
 use poise::CreateReply;
 use serde_json::Value;
 
+use regex::Regex;
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
-    let dice = dice_expression.unwrap_or("1d100".to_string());
+
+
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+
+    _ = ctx.send(placeholder).await?;
+
 
     let stat_block_result = stat_puller::get_stat_block_json(&ctx).await;
+
+    //TODO make this default configurable per server
+    let mut dice = dice_expression.unwrap_or("1d100".to_string());
+
+    //Replace d100 with 1d100, d6 with 1d6 etc
+
+    let re = Regex::new(r"(^|[^\d])d(\d+)").unwrap();
+
+    dice = re.replace_all(&dice, "1d$11d$2").to_string();
+
+    println!("{}", dice);
 
     let mut str_replaced = dice;
 
