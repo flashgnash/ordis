@@ -17,6 +17,11 @@ diesel::table! {
         id -> Text,
         username -> Nullable<Text>,
         count -> Nullable<Integer>,
+        stat_block_hash -> Nullable<Text>,
+        stat_block -> Nullable<Text>,
+        stat_block_message_id -> Nullable<Text>,
+        stat_block_channel_id -> Nullable<Text>,
+        selected_character_id -> Nullable<Text>,
         selected_character -> Nullable<Integer>,
     }
 }
