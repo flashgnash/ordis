@@ -19,6 +19,8 @@ mod dice;
 mod db;
 
 
+mod dictionary;
+
 mod stat_puller;
 use stat_puller::pull_stats;
 use stat_puller::pull_stat;
@@ -33,6 +35,12 @@ mod gpt;
 use gpt::ask;
 use gpt::translate;
 use gpt::translate_context;
+
+mod games;
+use games::wordle::get_word;
+use games::wordle::get_wordle;
+use games::wordle::guess_wordle;
+
 
 use rand::prelude::*;
 
@@ -221,7 +229,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(), calc(), ask(), translate(),translate_context(),pull_stat(),pull_stats(),setup_character_sheet(),level_up()],
+            commands: vec![ping(),roll(), calc(), ask(), translate(),translate_context(),pull_stat(),pull_stats(),setup_character_sheet(),level_up(),get_word(),get_wordle(),guess_wordle()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
