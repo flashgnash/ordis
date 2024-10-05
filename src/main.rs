@@ -27,8 +27,11 @@ use stat_puller::pull_stat;
 
 mod mir;
 use mir::level_up;
-use mir::setup_character_sheet;
+use mir::create_character;
+use mir::get_characters;
 use mir::roll;
+use mir::delete_character;
+use mir::select_character;
 
 
 mod gpt;
@@ -42,6 +45,7 @@ use games::wordle::get_wordle;
 use games::wordle::guess_wordle;
 
 
+use gpt::draw;
 use rand::prelude::*;
 
 pub struct Handler;
@@ -197,6 +201,12 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
     let mut user = db::users::get_or_create(db_connection, user_id).unwrap();
 
+    let characters = db::characters::get_from_user_id(db_connection,user_id)?;
+
+
+    for character in characters {
+        println!("{}",character.name.expect("Character has no name"));
+    }
 
     user.count = Some(user.count.unwrap_or(0) + 1);
     let _ = db::users::update(db_connection, &user);
@@ -227,9 +237,11 @@ async fn main() {
         | serenity::GatewayIntents::DIRECT_MESSAGES
         | serenity::GatewayIntents::MESSAGE_CONTENT;
 
+
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(), calc(), ask(), translate(),translate_context(),pull_stat(),pull_stats(),setup_character_sheet(),level_up(),get_word(),get_wordle(),guess_wordle()],
+            commands: vec![ping(),roll(), calc(), ask(), draw(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),select_character(),create_character(),level_up(),get_word(),get_wordle(),guess_wordle()],
+
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
