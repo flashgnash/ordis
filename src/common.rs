@@ -115,7 +115,7 @@ pub fn emojify(text: &str) -> String {
     for char in text.chars() {
         let char_lower = char.to_lowercase().to_string();
 
-        new_string = new_string + &format!("{}", &char_lower);
+        new_string = new_string + &format!(":regional_indicator_{}: ", &char_lower);
     }
 
     return new_string.to_string();
