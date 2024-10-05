@@ -3,6 +3,18 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 use poise::serenity_prelude::Message;
 
+pub fn emojify(text: &str) -> String {
+    let mut new_string = "".to_string();
+
+    for char in text.chars() {
+        let char_lower = char.to_lowercase();
+
+        new_string = new_string + &format!(":regional_indicator_{}:", char_lower);
+    }
+
+    return new_string.to_string();
+}
+
 pub async fn fetch_message_chain(
     ctx: &poise::serenity_prelude::Context,
     channel_id: poise::serenity_prelude::ChannelId,
