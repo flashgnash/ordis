@@ -1,9 +1,9 @@
 use rand::prelude::*;
 
+use crate::common::emojify;
+use crate::common::get_emojis;
 use crate::common::Context;
 use crate::common::Error;
-
-use crate::common::emojify;
 
 use crate::dictionary;
 use std::fmt;
@@ -83,5 +83,14 @@ pub async fn get_wordle(ctx: Context<'_>, string_length: Option<usize>) -> Resul
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn guess_wordle(ctx: Context<'_>, string_length: Option<usize>) -> Result<(), Error> {
+    let emojis = get_emojis(ctx, 1242498464605012089).await;
+
+    let mut msg: String = "".to_string();
+
+    for (k, v) in emojis {
+        msg = msg + &format!("{}: {}", k, v) + "\n";
+    }
+
+    let _ = ctx.say(msg).await?;
     Ok(())
 }
