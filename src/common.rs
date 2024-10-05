@@ -49,7 +49,7 @@ pub async fn refresh_emojis(ctx: Context<'_>) {
         if let Ok(emojis) = guild_id.emojis(&ctx).await {
             for emoji in emojis {
                 cache.insert(
-                    emoji.id.to_string(),
+                    emoji.name.clone(),
                     format!("<:{}:{}>", emoji.name, emoji.id),
                 );
             }
@@ -57,25 +57,65 @@ pub async fn refresh_emojis(ctx: Context<'_>) {
     }
 }
 
-pub async fn get_emojis(ctx: Context<'_>, guild_id: u64) -> HashMap<String, String> {
+async fn refresh_if_empty(ctx: Context<'_>) {
     let cache = EMOJI_CACHE.lock().await;
     let empty = cache.is_empty();
     drop(cache);
-
     if empty {
         refresh_emojis(ctx).await;
     }
+}
+
+pub async fn get_emojis(ctx: Context<'_>) -> HashMap<String, String> {
+    refresh_if_empty(ctx).await;
 
     let cache = EMOJI_CACHE.lock().await;
     return cache.clone();
 }
+
+pub async fn get_emoji(ctx: Context<'_>, emoji_name: &str) -> Option<String> {
+    refresh_if_empty(ctx).await;
+
+    let cache = EMOJI_CACHE.lock().await;
+
+    let result = cache.get(emoji_name);
+
+    if let Some(emoji_name) = result {
+        return Some(emoji_name.clone());
+    } else {
+        return None;
+    }
+}
+
+pub async fn emojify_custom(ctx: Context<'_>, text: &str, emoji_pattern: &str) -> String {
+    let mut new_string = "".to_string();
+
+    for char in text.chars() {
+        let char_lower = char.to_lowercase().to_string();
+
+        // let mut string_replacement = &char_lower;
+
+        let emoji_name = &emoji_pattern.replace("{}", &char_lower);
+
+        println!("{emoji_name}");
+
+        if let Some(emoji) = get_emoji(ctx, emoji_name).await {
+            new_string = new_string + &emoji + " "
+        } else {
+            new_string = new_string + &char_lower + " "
+        }
+    }
+
+    return new_string.to_string();
+}
+
 pub fn emojify(text: &str) -> String {
     let mut new_string = "".to_string();
 
     for char in text.chars() {
-        let char_lower = char.to_lowercase();
+        let char_lower = char.to_lowercase().to_string();
 
-        new_string = new_string + &format!(":regional_indicator_{}:", char_lower);
+        new_string = new_string + &format!("{}", &char_lower);
     }
 
     return new_string.to_string();

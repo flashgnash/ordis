@@ -1,6 +1,7 @@
 use rand::prelude::*;
 
 use crate::common::emojify;
+use crate::common::emojify_custom;
 use crate::common::get_emojis;
 use crate::common::Context;
 use crate::common::Error;
@@ -21,7 +22,7 @@ impl fmt::Display for Wordle {
         let mut blank_row: String = "".to_string();
 
         for _ in self.word.chars() {
-            blank_row = blank_row + ("⬜");
+            blank_row = blank_row + ("⬜ ");
         }
 
         let mut message: String = "".to_string();
@@ -82,14 +83,16 @@ pub async fn get_wordle(ctx: Context<'_>, string_length: Option<usize>) -> Resul
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn guess_wordle(ctx: Context<'_>, string_length: Option<usize>) -> Result<(), Error> {
-    let emojis = get_emojis(ctx, 1242498464605012089).await;
+pub async fn guess_wordle(ctx: Context<'_>, guess: String) -> Result<(), Error> {
+    let emojis = get_emojis(ctx).await;
 
     let mut msg: String = "".to_string();
 
     for (k, v) in emojis {
-        msg = msg + &format!("{}: {}", k, v) + "\n";
+        println!("{}", &format!("{}: {}", k, v));
     }
+
+    msg = emojify_custom(ctx, &guess, &"{}_dark").await;
 
     let _ = ctx.say(msg).await?;
     Ok(())
