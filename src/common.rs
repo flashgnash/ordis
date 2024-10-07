@@ -109,13 +109,17 @@ pub async fn emojify_custom(ctx: Context<'_>, text: &str, emoji_pattern: &str) -
     return new_string.to_string();
 }
 
-pub fn emojify(text: &str) -> String {
+pub fn emojify_char(character: &char) -> String {
+    let char_lower = character.to_lowercase();
+
+    format!(":regional_indicator_{}:", &char_lower)
+}
+
+pub fn emojify_string(message: &str) -> String {
     let mut new_string = "".to_string();
 
-    for char in text.chars() {
-        let char_lower = char.to_lowercase().to_string();
-
-        new_string = new_string + &format!(":regional_indicator_{}: ", &char_lower);
+    for char in message.chars() {
+        new_string = new_string + &emojify_char(&char) + " ";
     }
 
     return new_string.to_string();
