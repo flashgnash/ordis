@@ -8,11 +8,17 @@ use crate::common::Error;
 mod models;
 
 use models::Wordle;
-use models::WordleGuess;
 
 use crate::common::emojify_char;
 
+use lazy_static::lazy_static;
+use tokio::sync::Mutex;
+
 use crate::dictionary;
+
+lazy_static! {
+    static ref CURRENT_WORDLE: Mutex<Option<Wordle>> = Mutex::new(None);
+}
 
 async fn format_wordle(wordle: &Wordle, ctx: Context<'_>) -> Result<String, Error> {
     // let guesses: Vec<String> = self.guesses.iter().map(ToString::to_string).collect();
@@ -32,15 +38,26 @@ async fn format_wordle(wordle: &Wordle, ctx: Context<'_>) -> Result<String, Erro
         .expect("Count was negative?");
 
     for guess in &wordle.guesses {
+        let mut i = 0;
+
         for guess_char in guess.value.chars() {
             let mut format = "{}_dark";
 
             if wordle.word.contains(guess_char) {
-                println!("{} contains {}", wordle.word, guess_char);
-                format = ":regional_indicator_{}:";
+                if wordle.word.chars().nth(i).expect(&format!(
+                    "Tried comparing a character that did not exist in a wordle {i}, {}",
+                    wordle.word
+                )) == guess_char
+                {
+                    format = "{}_green"
+                } else {
+                    format = ":regional_indicator_{}:";
+                }
             }
 
             message = message + &emojify_char(&guess_char, Some(format), Some(ctx)).await? + " ";
+
+            i += 1;
         }
 
         message.push('\n');
@@ -73,22 +90,19 @@ pub async fn get_word(ctx: Context<'_>, string_length: Option<usize>) -> Result<
 }
 #[poise::command(slash_command, prefix_command)]
 pub async fn get_wordle(ctx: Context<'_>, string_length: Option<usize>) -> Result<(), Error> {
-    let mut wordle = generate_wordle(string_length)?;
+    let mut new_wordle = generate_wordle(string_length)?;
 
-    ctx.say(format!("Debug: The word is: {}", wordle.word))
+    ctx.say(format!("Debug: The word is: {}", &new_wordle.word))
         .await?;
 
-    wordle.guesses.push(WordleGuess {
-        value: "Hello".to_string(),
-    });
+    new_wordle.guess("Hello")?;
+    new_wordle.guess("Testh")?;
+    new_wordle.guess("Blahb")?;
 
-    wordle.guesses.push(WordleGuess {
-        value: "Peace".to_string(),
-    });
-    wordle.guesses.push(WordleGuess {
-        value: "Break".to_string(),
-    });
-    let wordle_formatted = format_wordle(&wordle, ctx).await?;
+    let wordle_formatted = format_wordle(&new_wordle, ctx).await?;
+
+    let mut current_wordle = CURRENT_WORDLE.lock().await;
+    *current_wordle = Some(new_wordle);
 
     let _ = ctx.say(wordle_formatted).await?;
 
