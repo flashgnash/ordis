@@ -10,8 +10,20 @@ use serenity::model::id::GuildId;
 use lazy_static::lazy_static;
 
 use std::collections::HashMap;
-
+use std::fmt;
 use tokio::sync::Mutex;
+
+#[derive(Debug)]
+pub enum EmojiError {
+    NotFound,
+}
+
+impl fmt::Display for EmojiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl std::error::Error for EmojiError {}
 
 pub async fn check_admin(
     ctx: Context<'_>,
@@ -109,20 +121,37 @@ pub async fn emojify_custom(ctx: Context<'_>, text: &str, emoji_pattern: &str) -
     return new_string.to_string();
 }
 
-pub fn emojify_char(character: &char) -> String {
+pub async fn emojify_char(
+    character: &char,
+    emoji_pattern: Option<&str>,
+    ctx: Option<Context<'_>>,
+) -> Result<String, Error> {
     let char_lower = character.to_lowercase();
 
-    format!(":regional_indicator_{}:", &char_lower)
+    if let Some(pattern) = emoji_pattern {
+        let pattern_replaced = pattern.replace("{}", &char_lower.to_string());
+
+        if let Some(context) = ctx {
+            match (get_emoji(context, &pattern_replaced).await) {
+                Some(emoji) => return Ok(emoji),
+                None => return Ok(pattern_replaced),
+            };
+        }
+
+        Ok(pattern_replaced)
+    } else {
+        Ok(format!(":regional_indicator_{}:", &char_lower))
+    }
 }
 
-pub fn emojify_string(message: &str) -> String {
+pub async fn emojify_string(message: &str) -> Result<String, Error> {
     let mut new_string = "".to_string();
 
     for char in message.chars() {
-        new_string = new_string + &emojify_char(&char) + " ";
+        new_string = new_string + &emojify_char(&char, None, None).await? + " ";
     }
 
-    return new_string.to_string();
+    Ok(new_string.to_string())
 }
 
 pub async fn fetch_message_chain(
