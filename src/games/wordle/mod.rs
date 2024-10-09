@@ -49,9 +49,9 @@ async fn format_wordle(wordle: &Wordle, ctx: Context<'_>) -> Result<String, Erro
                     wordle.word
                 )) == guess_char
                 {
-                    format = "{}_green"
+                    format = ":regional_indicator_{}:" //Char in right position
                 } else {
-                    format = ":regional_indicator_{}:";
+                    format = "{}_yellow";
                 }
             }
 
