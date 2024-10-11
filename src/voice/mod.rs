@@ -5,12 +5,19 @@ use crate::common::HTTP_CLIENT;
 
 use reqwest;
 
+use crate::serenity::async_trait;
 use crate::serenity::ChannelId;
 use crate::serenity::GuildId;
 
 use std::fmt;
 
 use songbird::input::YoutubeDl;
+use songbird::Call;
+
+use songbird::events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent};
+
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub enum VoiceError {
@@ -30,26 +37,50 @@ impl std::fmt::Display for VoiceError {
 }
 impl std::error::Error for VoiceError {}
 
+struct TrackErrorNotifier;
+
+#[async_trait]
+impl VoiceEventHandler for TrackErrorNotifier {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        if let EventContext::Track(track_list) = ctx {
+            for (state, handle) in *track_list {
+                println!(
+                    "Track {:?} encountered an error: {:?}",
+                    handle.uuid(),
+                    state.playing
+                );
+            }
+        }
+
+        None
+    }
+}
+
 pub async fn join_internal(
     ctx: Context<'_>,
     guild_id: GuildId,
     channel_id: ChannelId,
-) -> Result<(), Error> {
+) -> Result<Arc<Mutex<Call>>, Error> {
     let manager_option = songbird::get(ctx.serenity_context()).await.clone();
 
     if let Some(manager) = manager_option {
         if let Ok(handler_lock) = manager.join(guild_id, channel_id).await {
             // Attach an event handler to see notifications of all track errors.
             println!("Succesfully joined voice channel!");
+
+            let mut handler = handler_lock.lock().await;
+            handler.add_global_event(TrackEvent::Error.into(), TrackErrorNotifier);
+
+            return Ok(handler_lock.clone());
         } else {
             return Err(Box::new(VoiceError::FailedToAcquireLock));
         }
+    } else {
+        return Err(Box::new(VoiceError::FailedToAcquireManager));
     }
-
-    Ok(())
 }
 
-pub async fn join_user_channel(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn join_user_channel(ctx: Context<'_>) -> Result<Arc<Mutex<Call>>, Error> {
     let (guild_id, channel_id) = {
         let guild = ctx.guild().unwrap();
         let channel_id = guild
@@ -67,9 +98,7 @@ pub async fn join_user_channel(ctx: Context<'_>) -> Result<(), Error> {
         }
     };
 
-    join_internal(ctx, guild_id, connect_to).await?;
-
-    Ok(())
+    Ok(join_internal(ctx, guild_id, connect_to).await?)
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -89,27 +118,26 @@ pub async fn play_music(ctx: Context<'_>, url: String) -> Result<(), Error> {
 
     let guild_id = ctx.guild_id().unwrap();
 
-    let http_client = reqwest::Client::new();
+    let http_client = HTTP_CLIENT.clone();
 
     let manager = songbird::get(ctx.serenity_context())
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
 
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
+    let handler_lock = join_user_channel(ctx).await?;
 
-        let mut src = if do_search {
-            YoutubeDl::new_search(http_client, url)
-        } else {
-            YoutubeDl::new(http_client, url)
-        };
-        let _ = handler.play_input(src.clone().into());
+    let mut handler = handler_lock.lock().await;
 
-        ctx.reply("Playing song").await?;
+    let src = if do_search {
+        YoutubeDl::new_search(http_client, url)
     } else {
-        return Err(Box::new(VoiceError::UserNotInVoiceChannel));
-    }
+        YoutubeDl::new(http_client, url)
+    };
+
+    let _ = handler.play_input(src.clone().into());
+
+    ctx.reply("Playing song").await?;
 
     Ok(())
 }
