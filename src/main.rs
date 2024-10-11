@@ -1,4 +1,3 @@
-use std::sync::Arc;
 
 use meval::eval_str;
 
@@ -8,7 +7,6 @@ use dotenv::dotenv;
 use poise::async_trait;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::EventHandler;
-use poise::serenity_prelude::Message;
 use poise::serenity_prelude::Ready;
 mod common;
 use crate::common::Context;
@@ -20,6 +18,9 @@ mod dice;
 // use dice::roll;
 
 mod db;
+
+mod voice;
+use voice::join_vc;
 
 use songbird::SerenityInit;
 
@@ -170,41 +171,7 @@ fn get_random(vec: &Vec<&str>) -> String {
 
 
 
-#[poise::command(slash_command, prefix_command)]
-async fn join_vc(ctx: Context<'_>) -> Result<(), Error> {
 
-    let (guild_id, channel_id) = {
-        let guild = ctx.guild().unwrap();
-        let channel_id = guild
-            .voice_states
-            .get(&ctx.author().id)
-            .and_then(|voice_state| voice_state.channel_id);
-
-        (guild.id, channel_id)
-    };
-
-    let connect_to = match channel_id {
-        Some(channel) => channel,
-        None => {
-            ctx.reply("Not in a voice channel").await;
-
-            return Ok(());
-        },
-    };
-
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
-
-    if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
-        // Attach an event handler to see notifications of all track errors.
-        println!("Success!");
-    }
-  
-        
-    Ok(())
-}
 
 
 #[poise::command(slash_command, prefix_command)]
