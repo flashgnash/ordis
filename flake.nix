@@ -81,7 +81,8 @@
 
             build-and-debug
 
-            cmake
+            cmake # For songbird build
+            libopus # For songbird runtime
           ];
 
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
