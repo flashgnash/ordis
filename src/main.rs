@@ -275,7 +275,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(), calc(), ask(), draw(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),select_character(),create_character(),level_up()],
+            commands: vec![ping(),roll(), calc(), ask(), draw(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),select_character(),create_character(),level_up(),join_vc()],
 
             ..Default::default()
         })
