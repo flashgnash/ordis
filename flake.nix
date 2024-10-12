@@ -4,6 +4,7 @@
   inputs = {
     nixpkgs.url = "nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+
   };
 
   outputs =
@@ -55,6 +56,8 @@
           '';
         };
 
+        rustPkgs = import ./Cargo.nix { inherit pkgs; };
+
       in
       {
         devShells.default = pkgs.mkShell {
@@ -66,6 +69,8 @@
             clippy
             sqlite
             sqlite-web
+
+            crate2nix
 
             diesel-cli
             openssl.dev
@@ -87,22 +92,21 @@
           RUST_BACKTRACE = "full";
         };
 
-        packages.default = pkgs.rustPlatform.buildRustPackage {
-          pname = "Ordis";
-          version = "0.0.1";
-          src = ./.;
-
-          cargoLock = {
-            lockFile = ./Cargo.lock;
-          };
-
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-            openssl.dev
-            sqlite
-          ];
+        packages.default = rustPkgs.workspaceMembers."ordis".build.overrideAttrs (old: rec {
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-        };
+          OUT_DIR = "./src/db";
+          RUST_BACKTRACE = "full";
+
+          # preBuild = ''
+          #   pkgs.crate2nix generate
+          # '';
+
+          buildInputs = old.buildInputs or [ ] ++ [
+            pkgs.sqlite
+            pkgs.openssl.dev
+          ];
+        });
+
       }
     );
 }
