@@ -70,6 +70,8 @@
             sqlite
             sqlite-web
 
+            cachix
+
             crate2nix
 
             diesel-cli
