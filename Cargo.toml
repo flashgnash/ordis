@@ -19,5 +19,5 @@ meval = "0.2.0"
 diesel = { version = "2.1.0", features = ["sqlite"]}
 sha2 = "0.10.8"
 dotenv = "0.15.0"
-songbird = "0.4.3"
+songbird = { version = "0.4.3", features = ["builtin-queue"] }
 symphonia = { version = "0.5.4", features = ["aac", "mp3", "isomp4", "alac"] }

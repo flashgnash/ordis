@@ -1,20 +1,14 @@
+pub mod music;
+
 use crate::common::Context;
 use crate::common::Error;
-
-use crate::common::HTTP_CLIENT;
-
-use reqwest;
 
 use crate::serenity::async_trait;
 use crate::serenity::ChannelId;
 use crate::serenity::GuildId;
 
-use std::fmt;
-
-use songbird::input::YoutubeDl;
-use songbird::Call;
-
 use songbird::events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent};
+use songbird::Call;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -108,36 +102,6 @@ pub async fn join_vc(ctx: Context<'_>) -> Result<(), Error> {
     join_user_channel(ctx).await?;
 
     ctx.reply("Succesfully joined your channel.").await?;
-
-    Ok(())
-}
-
-#[poise::command(slash_command, prefix_command)]
-pub async fn play_music(ctx: Context<'_>, url: String) -> Result<(), Error> {
-    let do_search = !url.starts_with("http");
-
-    let guild_id = ctx.guild_id().unwrap();
-
-    let http_client = HTTP_CLIENT.clone();
-
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
-
-    let handler_lock = join_user_channel(ctx).await?;
-
-    let mut handler = handler_lock.lock().await;
-
-    let src = if do_search {
-        YoutubeDl::new_search(http_client, url)
-    } else {
-        YoutubeDl::new(http_client, url)
-    };
-
-    let _ = handler.play_input(src.clone().into());
-
-    ctx.reply("Playing song").await?;
 
     Ok(())
 }
