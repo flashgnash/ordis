@@ -1,3 +1,4 @@
+
 use meval::eval_str;
 
 
@@ -17,6 +18,15 @@ mod dice;
 // use dice::roll;
 
 mod db;
+
+mod voice;
+use voice::join_vc;
+use voice::music::play_music;
+use voice::music::stop_music;
+use voice::music::pause_music;
+use voice::music::resume_music;
+
+use songbird::SerenityInit;
 
 
 mod stat_puller;
@@ -163,6 +173,11 @@ fn get_random(vec: &Vec<&str>) -> String {
     return vec[index].to_string();
 }
 
+
+
+
+
+
 #[poise::command(slash_command, prefix_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let quotes : Vec<&str> = vec![
@@ -231,7 +246,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(), calc(), ask(), draw(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),select_character(),create_character(),level_up()],
+            commands: vec![ping(),roll(), calc(), ask(), draw(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),select_character(),create_character(),level_up(),join_vc(),play_music(),stop_music(),pause_music(),resume_music()],
 
             ..Default::default()
         })
@@ -246,6 +261,7 @@ async fn main() {
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .event_handler(Handler)
+        .register_songbird()        
         .await;
     println!("Starting framework...");
     client.unwrap().start().await.unwrap();

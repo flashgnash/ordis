@@ -2,7 +2,6 @@ use crate::common::Error as Error;
 use crate::common::Context;
 use reqwest;
 use reqwest::header::AUTHORIZATION;
-use lazy_static::lazy_static;
 use serde::{Serialize, Deserialize};
 use serde;
 use std::convert::From;
@@ -11,11 +10,7 @@ use chrono::Utc;
 use poise::CreateReply;
 
 
-
-lazy_static! {                                                                                                                                                                   
-    static ref CLIENT: reqwest::Client = reqwest::Client::new();                                                                                                                                   
-}  
-
+use crate::common::HTTP_CLIENT;
 
 
 #[derive(Serialize, Deserialize)]
@@ -89,7 +84,7 @@ pub async fn generate_to_string(model:&str,messages:Vec<Message>) -> Result<Stri
 pub async fn generate_image(prompt: &str) -> Result<String, Error> {
     let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
     
-    let client = &CLIENT;
+    let client = &HTTP_CLIENT;
 
     let request = DallERequest {
         prompt: prompt.to_string(),
@@ -115,7 +110,7 @@ pub async fn generate_image(prompt: &str) -> Result<String, Error> {
 pub async fn generate(model:&str, messages:Vec<Message>) -> Result<OpenAIResponse, Error> {                                       
     let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
     
-    let client = &CLIENT;
+    let client = &HTTP_CLIENT;
         let request = OpenAIRequest {
         model: model.to_string(),
         messages: messages 

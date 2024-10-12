@@ -3,7 +3,12 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 use poise::serenity_prelude::Message;
 
+use lazy_static::lazy_static;
 use poise::serenity_prelude as serenity;
+
+lazy_static! {
+    pub static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::new();
+}
 
 pub async fn check_admin(
     ctx: Context<'_>,
