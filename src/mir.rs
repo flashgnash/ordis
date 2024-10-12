@@ -16,14 +16,11 @@ use regex::Regex;
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
-
-
     let placeholder = CreateReply::default()
         .content("*Thinking, please wait...*")
         .ephemeral(true);
 
     _ = ctx.send(placeholder).await?;
-
 
     let stat_block_result = stat_puller::get_stat_block_json(&ctx).await;
 
@@ -79,7 +76,19 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let results = dice::roll_internal(&str_replaced).await?;
 
-    dice::output_roll_messages(ctx, results).await?;
+    dice::output_roll_messages(
+        ctx,
+        results,
+        ctx.author()
+            .nick_in(
+                ctx,
+                ctx.guild_id()
+                    .expect("Tried to roll in non-guild - TODO remove this issue"),
+            )
+            .await
+            .unwrap_or(ctx.author().name.to_string()),
+    )
+    .await?;
 
     if nag_user_about_character_sheet {
         let character_sheet_missing_message = CreateReply::default()
