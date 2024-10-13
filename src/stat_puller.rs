@@ -96,6 +96,53 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
     return Ok(response);
 }
 
+#[allow(dead_code)]
+pub async fn generate_spellpuller(message: &str) -> Result<String, Error> {
+    let model = "gpt-4o-mini";
+
+    let schema = r#"
+        {
+            "spells": [
+                {
+                    "name": "Fireball",
+                    "cost": 150
+                },
+                {
+                    "name": "Teleport",
+                    "cost": 500
+                }
+            ]
+        }        
+    "#;
+
+    let preprompt = format!(
+        "You are a spell list pulling program. 
+                Following this prompt you will receive a block of spells and their costs.
+                Use the following schema:
+                {schema}
+                If there are missing values, interpret them as null
+                If you are expecting a value in a specific format but it is incorrect, instead set the value as 'ERROR - (explanation)'
+                You should translate these stats into a json dictionary.
+                All keys should be lower case and spell corrected. Respond with only valid json"
+    )
+    .to_string();
+
+    let messages = vec![
+        Message {
+            role: Role::system,
+            content: preprompt,
+        },
+        Message {
+            role: Role::user,
+            content: message.to_string(),
+        },
+    ];
+
+    let response = generate_to_string(model, messages).await?;
+
+    return Ok(response);
+}
+
 pub async fn get_stat_block_json_from_message(
     ctx: &Context<'_>,
     channel_id: ChannelId,
