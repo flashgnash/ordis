@@ -41,30 +41,35 @@ pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
         {
             "name": (string),
             "level": (number),
+            "hunger": (number),
+
+           
             "actions": (number),
             "reactions": (number),
+            
             "speed": (number),
             "armor": (number),
             "hp": (number),
             "current_hp": (number),
             "hpr": (number),
+
+            "energy_pool": (number),            
+            
             "hit_die_per_level": (number)d(number),
             "stat_die_per_level": (number)d(number),
             "spell_die_per_level": (number)d(number),
             "stat_points_saved": (number)d(number),
             "spell_points_saved": (number)d(number),
+
+            
             "stats": {
                 "str": (number),
                 "agl": (number),
                 "con": (number),
                 "wis": (number),
                 "int": (number),
-                "cha": (number)
-            },
-            "tags": {
-                "something": "1%",
-                "something else": "2%",
-                "another_tag": "3%"
+                "cha": (number),
+                "kno": (number),
             }
         }        
     "#;
@@ -103,20 +108,21 @@ pub async fn generate_spellpuller(message: &str) -> Result<String, Error> {
 
     let schema = r#"
         {
-
-            "max-mana": 150,
-
             "spells": {
                 fireball": {
                     "type": "single",
-                    "cost": 150,
+                    "cost": -150,
                     "cast_time": "1 turn"
                 },
                 "invisibility": {
                     "type": "toggle"
-                    "cost": 50,
+                    "cost": -50,
                     "cast_time": "instant"
-                    "interval": "every 5 seconds"
+                },
+                "regen": {
+                    "type": "toggle",
+                    "cost": 50,
+                    "cast_time": "1 turn"
                 }
             }
         }        
@@ -128,7 +134,8 @@ pub async fn generate_spellpuller(message: &str) -> Result<String, Error> {
                 Use the following schema:
                 {schema}
                 If there are missing values, interpret them as null
-                If there are spaces in spell names, remove them
+                For cast time, use the middle value that should look like '2 actions'
+                If there are spaces in spell names, remove them, replacing them with underscores
                 If you are expecting a value in a specific format but it is incorrect, instead set the value as 'ERROR - (explanation)'
                 You should translate these spells into a json dictionary.
                 All keys should be lower case and spell corrected. Respond with only valid json"

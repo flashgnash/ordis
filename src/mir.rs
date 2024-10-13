@@ -23,55 +23,62 @@ pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error
 
     _ = ctx.send(placeholder).await?;
 
+    let (stat_block_result, _) = stat_puller::get_stat_block_json(&ctx).await?;
+
+    let stat_block: Value = serde_json::from_str(&stat_block_result)?;
+
     let (spell_block_result, _) = stat_puller::get_spell_block_json(&ctx).await?;
 
     let spell_block: Value = serde_json::from_str(&spell_block_result)?;
 
-    if let Some(max_mana) = spell_block.get("max-mana") {
-        ctx.reply(format!("Maximum Mana: {max_mana}")).await?;
+    if let Some(energy_pool) = stat_block.get("energy_pool") {
+        ctx.reply(format!("Maximum Energy: {energy_pool}")).await?;
     }
 
     if let Some(spell_list) = spell_block.get("spells") {
-        if let Some(spell) = spell_list.get(spell_name) {
-            if let Some(spell_type) = spell.get("type") {
-                let msg = match spell_type.to_string().as_str() {
-                    "single" => {
-                        format!(
-                            "Single cast spell {}: \nMana Cost: {}\nCast time: {}",
-                            spell.get("name").expect("No name found"),
-                            spell.get("cost").expect("No cost found"),
-                            spell.get("cast_time").expect("No cast time found"),
-                        )
-                    }
-                    "toggle" => format!(
-                        "Toggle spell {}: \nMana Cost: {} every {}\nCast time: {}\n",
-                        spell.get("name").expect("No name found"),
-                        spell.get("cost").expect("No cost found"),
-                        spell.get("interval").expect("No interval found"),
-                        spell.get("cast_time").expect("No cast time found"),
-                    ),
-                    _ => format!(
-                        "Unknown spell type {}: \nMana Cost: {}\nCast time: {}\n",
-                        spell.get("name").expect("No name found"),
-                        spell.get("cost").expect("No cost found"),
-                        spell.get("cast_time").expect("No cast time found"),
-                    ),
-                };
+        if let Some(spell) = spell_list.get(&spell_name) {
+            let mut spell_cost_word = "Cost";
+            let mut spell_cost_string = "unknown".to_string();
 
-                ctx.reply(msg).await?;
-            } else {
-                ctx.reply(format!(
-                    "Spell type could not be determined... {}",
-                    spell.to_string()
-                ))
-                .await?;
+            if let Some(spell_cost) = spell.get("cost") {
+                if let Some(spell_cost_i64) = spell_cost.as_i64() {
+                    spell_cost_string = spell_cost_i64.to_string();
+
+                    if spell_cost_i64 > 0 {
+                        spell_cost_word = "Gain";
+                    }
+                }
             }
+
+            let spell_type = spell
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("{unknown}");
+
+            let cast_time = spell
+                .get("cast_time")
+                .and_then(|v| v.as_str())
+                .unwrap_or("No cast time found");
+
+            let spell_name = common::capitalize_first_letter(&spell_name);
+
+            let msg = format!(
+                "**{spell_name}**:\n> Type: {spell_type}\n> Energy {spell_cost_word}: {spell_cost_string}\n> Cast time: {cast_time}\n",
+            );
+
+            ctx.reply(msg).await?;
         } else {
-            ctx.reply(format!(
-                "No spell found by that name. Available spells: {}",
-                spell_list
-            ))
-            .await?;
+            let mut spell_list_message = "Spell not found. Available Spells: \n".to_string();
+
+            for (spell_name, _) in spell_list.as_object().expect("No spell list") {
+                spell_list_message += &format!("- {spell_name} \n");
+            }
+
+            let spell_list_reply = CreateReply::default()
+                .content(spell_list_message)
+                .ephemeral(true);
+
+            ctx.send(spell_list_reply).await?;
             // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
         }
     }
