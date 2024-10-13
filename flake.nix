@@ -87,10 +87,6 @@
             gen-down
 
             build-and-debug
-
-            cmake # For songbird build
-            libopus # For songbird runtime
-            yt-dlp # For songbird youtube interface
           ];
 
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
