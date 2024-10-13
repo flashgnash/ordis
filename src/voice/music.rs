@@ -29,11 +29,14 @@ pub async fn play_music(ctx: Context<'_>, url: String) -> Result<(), Error> {
 
     let track_name = src.aux_metadata().await?.source_url;
 
+    let queue_length = handler.queue().len();
+
     msg.edit(
         ctx,
         CreateReply::default().content(format!(
-            "Playing {}",
-            track_name.unwrap_or("{no track name}".to_string())
+            "Adding {} to the queue in position {}",
+            track_name.unwrap_or("{no track url}".to_string()),
+            queue_length
         )),
     )
     .await?;
@@ -79,12 +82,12 @@ pub async fn resume_music(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn stop_music(ctx: Context<'_>, url: String) -> Result<(), Error> {
+pub async fn stop_music(ctx: Context<'_>) -> Result<(), Error> {
     let handler_lock = super::join_user_channel(ctx).await?;
 
-    let mut handler = handler_lock.lock().await;
+    let handler = handler_lock.lock().await;
 
-    let _ = handler.stop();
+    handler.queue().stop();
 
     ctx.reply("Stopped music").await?;
 
