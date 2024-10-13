@@ -9,21 +9,83 @@ use crate::dice;
 use crate::stat_puller;
 use crate::stat_puller::StatPullerError;
 
+use diesel::expression::AsExpression;
 use poise::CreateReply;
 use serde_json::Value;
 
 use regex::Regex;
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
-
-
+pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error> {
     let placeholder = CreateReply::default()
         .content("*Thinking, please wait...*")
         .ephemeral(true);
 
     _ = ctx.send(placeholder).await?;
 
+    let (spell_block_result, _) = stat_puller::get_spell_block_json(&ctx).await?;
+
+    let spell_block: Value = serde_json::from_str(&spell_block_result)?;
+
+    if let Some(max_mana) = spell_block.get("max-mana") {
+        ctx.reply(format!("Maximum Mana: {max_mana}")).await?;
+    }
+
+    if let Some(spell_list) = spell_block.get("spells") {
+        if let Some(spell) = spell_list.get(spell_name) {
+            if let Some(spell_type) = spell.get("type") {
+                let msg = match spell_type.to_string().as_str() {
+                    "single" => {
+                        format!(
+                            "Single cast spell {}: \nMana Cost: {}\nCast time: {}",
+                            spell.get("name").expect("No name found"),
+                            spell.get("cost").expect("No cost found"),
+                            spell.get("cast_time").expect("No cast time found"),
+                        )
+                    }
+                    "toggle" => format!(
+                        "Toggle spell {}: \nMana Cost: {} every {}\nCast time: {}\n",
+                        spell.get("name").expect("No name found"),
+                        spell.get("cost").expect("No cost found"),
+                        spell.get("interval").expect("No interval found"),
+                        spell.get("cast_time").expect("No cast time found"),
+                    ),
+                    _ => format!(
+                        "Unknown spell type {}: \nMana Cost: {}\nCast time: {}\n",
+                        spell.get("name").expect("No name found"),
+                        spell.get("cost").expect("No cost found"),
+                        spell.get("cast_time").expect("No cast time found"),
+                    ),
+                };
+
+                ctx.reply(msg).await?;
+            } else {
+                ctx.reply(format!(
+                    "Spell type could not be determined... {}",
+                    spell.to_string()
+                ))
+                .await?;
+            }
+        } else {
+            ctx.reply(format!(
+                "No spell found by that name. Available spells: {}",
+                spell_list
+            ))
+            .await?;
+            // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
+        }
+    }
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+
+    _ = ctx.send(placeholder).await?;
 
     let stat_block_result = stat_puller::get_stat_block_json(&ctx).await;
 
@@ -170,6 +232,11 @@ pub async fn create_character(
 
             stat_block_message_id: Some(msg.id.to_string()),
             stat_block_channel_id: Some(msg.channel_id.to_string()),
+
+            spell_block: None,
+            spell_block_hash: None,
+            spell_block_message_id: None,
+            spell_block_channel_id: None,
         };
 
         let _ = db::characters::create(db_connection, &new_character)?;
@@ -306,6 +373,32 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
         }
     }
 }
+
+#[poise::command(context_menu_command = "Set Spell Message")]
+pub async fn set_spells(ctx: Context<'_>, msg: crate::serenity::Message) -> Result<(), Error> {
+    let author = &ctx.author();
+    let user_id = author.id.get();
+    let db_connection = &mut db::establish_connection();
+    let user = db::users::get_or_create(db_connection, user_id)?;
+
+    if let Some(character_id) = user.selected_character {
+        let mut character = db::characters::get(db_connection, character_id)?;
+
+        character.spell_block_message_id = Some(msg.id.to_string());
+        character.spell_block_channel_id = Some(msg.channel_id.to_string());
+
+        db::characters::update(db_connection, &character)?;
+
+        ctx.reply("Set your spell block successfully").await?;
+    } else {
+        return Err(Box::new(
+            crate::stat_puller::StatPullerError::NoCharacterSheet,
+        ));
+    }
+
+    Ok(())
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
@@ -342,6 +435,7 @@ pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {
 
     Ok(())
 }
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
     let original_stat_block_message = ctx

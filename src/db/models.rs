@@ -27,4 +27,10 @@ pub struct Character {
 
     pub stat_block_message_id: Option<String>,
     pub stat_block_channel_id: Option<String>,
+
+    pub spell_block: Option<String>,
+    pub spell_block_hash: Option<String>,
+
+    pub spell_block_message_id: Option<String>,
+    pub spell_block_channel_id: Option<String>,
 }
