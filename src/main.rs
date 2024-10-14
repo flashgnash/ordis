@@ -30,11 +30,12 @@ use voice::music::skip_song;
 use songbird::SerenityInit;
 
 
-mod stat_puller;
-use stat_puller::pull_stats;
-use stat_puller::pull_stat;
 
 mod mir;
+
+use mir::stat_puller::pull_stats;
+use mir::stat_puller::pull_stat;
+
 use mir::level_up;
 use mir::create_character;
 use mir::get_characters;

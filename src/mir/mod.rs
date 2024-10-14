@@ -1,3 +1,12 @@
+pub mod stat_puller;
+
+pub mod spell_sheet;
+pub mod stat_block;
+
+use spell_sheet::SpellSheet;
+use stat_block::StatBlock;
+use stat_puller::FromDiscordMessage;
+
 use crate::common;
 use crate::common::safe_to_number;
 use crate::common::Context;
@@ -6,10 +15,8 @@ use crate::db;
 use crate::db::models::Character;
 
 use crate::dice;
-use crate::stat_puller;
-use crate::stat_puller::StatPullerError;
+use stat_puller::StatPullerError;
 
-use diesel::expression::AsExpression;
 use poise::CreateReply;
 use serde_json::Value;
 
@@ -203,8 +210,10 @@ pub async fn create_character(
         }
     }
 
-    let response_message =
-        stat_puller::get_stat_block_json_from_message(&ctx, msg.channel_id, msg.id).await?;
+    let response_message = StatBlock::from_message(ctx, msg.channel_id, msg.id)
+        .await?
+        .jsonified_message
+        .expect("Stat block failed to construct");
 
     println!("{}", response_message);
 
@@ -398,9 +407,7 @@ pub async fn set_spells(ctx: Context<'_>, msg: crate::serenity::Message) -> Resu
 
         ctx.reply("Set your spell block successfully").await?;
     } else {
-        return Err(Box::new(
-            crate::stat_puller::StatPullerError::NoCharacterSheet,
-        ));
+        return Err(Box::new(stat_puller::StatPullerError::NoCharacterSheet));
     }
 
     Ok(())

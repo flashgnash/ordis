@@ -1,9 +1,7 @@
 use crate::common::fetch_message_poise;
 use crate::common::Context;
 use crate::common::Error;
-use crate::gpt::generate_to_string;
-use crate::gpt::Message;
-use crate::gpt::Role;
+
 use sha2::{Digest, Sha256};
 
 use crate::db;
@@ -16,6 +14,88 @@ use std::fmt;
 use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::MessageId;
 use poise::CreateReply;
+
+use super::spell_sheet::SpellSheet;
+use super::stat_block::StatBlock;
+
+use crate::gpt::generate_to_string;
+use crate::gpt::Message;
+use crate::gpt::Role;
+
+pub trait FromDiscordMessage: Sized {
+    const PROMPT: &'static str;
+
+    fn new() -> Self;
+
+    fn jsonified_message_mut(&mut self) -> &mut Option<String>;
+    fn original_message_mut(&mut self) -> &mut Option<String>;
+
+    async fn from_string(message: &str) -> Result<Self, Error> {
+        let mut instance = Self::new();
+
+        *instance.original_message_mut() = Some(message.to_string());
+
+        let model = "gpt-4o-mini";
+
+        let preprompt = Self::PROMPT.to_string();
+
+        let messages = vec![
+            Message {
+                role: Role::system,
+                content: preprompt,
+            },
+            Message {
+                role: Role::user,
+                content: message.to_string(),
+            },
+        ];
+
+        let response = generate_to_string(model, messages).await?;
+
+        *instance.jsonified_message_mut() = Some(response);
+
+        Ok(instance)
+    }
+
+    #[allow(dead_code)]
+    async fn from_message(
+        ctx: Context<'_>,
+        channel_id: ChannelId,
+        message_id: MessageId,
+    ) -> Result<Self, Error> {
+        let message = fetch_message_poise(&ctx, channel_id, message_id)
+            .await?
+            .content;
+
+        return Ok(Self::from_string(&message).await?);
+    }
+
+    #[allow(dead_code)]
+    async fn from_message_with_cache(
+        ctx: Context<'_>,
+        channel_id: ChannelId,
+        message_id: MessageId,
+    ) -> Result<Self, Error> {
+        let message = fetch_message_poise(&ctx, channel_id, message_id)
+            .await?
+            .content;
+
+        return Ok(Self::from_string(&message).await?);
+    }
+
+    #[allow(dead_code)]
+    async fn from_string_with_cache(
+        ctx: Context<'_>,
+        channel_id: ChannelId,
+        message_id: MessageId,
+    ) -> Result<Self, Error> {
+        let message = fetch_message_poise(&ctx, channel_id, message_id)
+            .await?
+            .content;
+
+        return Ok(Self::from_string(&message).await?);
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -32,155 +112,6 @@ impl fmt::Display for StatPullerError {
 }
 
 impl std::error::Error for StatPullerError {}
-
-#[allow(dead_code)]
-pub async fn generate_statpuller(message: &str) -> Result<String, Error> {
-    let model = "gpt-4o-mini";
-
-    let schema = r#"
-        {
-            "name": (string),
-            "level": (number),
-            "hunger": (number),
-
-           
-            "actions": (number),
-            "reactions": (number),
-            
-            "speed": (number),
-            "armor": (number),
-            "hp": (number),
-            "current_hp": (number),
-            "hpr": (number),
-
-            "energy_pool": (number),            
-            
-            "hit_die_per_level": (number)d(number),
-            "stat_die_per_level": (number)d(number),
-            "spell_die_per_level": (number)d(number),
-            "stat_points_saved": (number)d(number),
-            "spell_points_saved": (number)d(number),
-
-            
-            "stats": {
-                "str": (number),
-                "agl": (number),
-                "con": (number),
-                "wis": (number),
-                "int": (number),
-                "cha": (number),
-                "kno": (number),
-            }
-        }        
-    "#;
-
-    let preprompt = format!(
-        "You are a stat pulling program. 
-                Following this prompt you will receive a block of stats.
-                Use the following schema:
-                {schema}
-                If there are missing values, interpret them as null
-                If you are expecting a value in a specific format but it is incorrect, instead set the value as 'ERROR - (explanation)'
-                You should translate these stats into a json dictionary.
-                All keys should be lower case and spell corrected. Respond with only valid json"
-    )
-    .to_string();
-
-    let messages = vec![
-        Message {
-            role: Role::system,
-            content: preprompt,
-        },
-        Message {
-            role: Role::user,
-            content: message.to_string(),
-        },
-    ];
-
-    let response = generate_to_string(model, messages).await?;
-
-    return Ok(response);
-}
-
-#[allow(dead_code)]
-pub async fn generate_spellpuller(message: &str) -> Result<String, Error> {
-    let model = "gpt-4o-mini";
-
-    let schema = r#"
-        {
-            "spells": {
-                fireball": {
-                    "type": "single",
-                    "cost": -150,
-                    "cast_time": "1 turn"
-                },
-                "invisibility": {
-                    "type": "toggle"
-                    "cost": -50,
-                    "cast_time": "instant"
-                },
-                "regen": {
-                    "type": "toggle",
-                    "cost": 50,
-                    "cast_time": "1 turn"
-                }
-            }
-        }        
-    "#;
-
-    let preprompt = format!(
-        "You are a spell list pulling program. 
-                Following this prompt you will receive a block of spells and their costs.
-                Use the following schema:
-                {schema}
-                If there are missing values, interpret them as null
-                For cast time, use the middle value that should look like '2 actions'
-                If there are spaces in spell names, remove them, replacing them with underscores
-                If you are expecting a value in a specific format but it is incorrect, instead set the value as 'ERROR - (explanation)'
-                You should translate these spells into a json dictionary.
-                All keys should be lower case and spell corrected. Respond with only valid json"
-    )
-    .to_string();
-
-    let messages = vec![
-        Message {
-            role: Role::system,
-            content: preprompt,
-        },
-        Message {
-            role: Role::user,
-            content: message.to_string(),
-        },
-    ];
-
-    let response = generate_to_string(model, messages).await?;
-
-    return Ok(response);
-}
-
-pub async fn get_stat_block_json_from_message(
-    ctx: &Context<'_>,
-    channel_id: ChannelId,
-    message_id: MessageId,
-) -> Result<String, Error> {
-    let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
-
-    let response_message = generate_statpuller(&stat_message.content).await?;
-
-    Ok(response_message)
-}
-
-pub async fn get_spell_block_json_from_message(
-    ctx: &Context<'_>,
-    channel_id: ChannelId,
-    message_id: MessageId,
-) -> Result<String, Error> {
-    let spell_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
-
-    let response_message = generate_spellpuller(&spell_message.content).await?;
-
-    Ok(response_message)
-}
 
 pub async fn get_spell_block_json(ctx: &Context<'_>) -> Result<(String, String), Error> {
     let author = &ctx.author();
@@ -228,7 +159,11 @@ pub async fn get_spell_block_json(ctx: &Context<'_>) -> Result<(String, String),
                 let response_message: String;
 
                 if generate_new_json {
-                    response_message = generate_spellpuller(&spell_message.content).await?;
+                    response_message = SpellSheet::from_string(&spell_message.content)
+                        .await?
+                        .jsonified_message
+                        .expect("Spell sheet did not generate json");
+
                     println!("Generated new json");
                     character.spell_block = Some(response_message.clone());
 
@@ -302,7 +237,11 @@ pub async fn get_stat_block_json(ctx: &Context<'_>) -> Result<(String, String), 
                 let response_message: String;
 
                 if generate_new_json {
-                    response_message = generate_statpuller(&stat_message.content).await?;
+                    response_message = StatBlock::from_string(&stat_message.content)
+                        .await?
+                        .jsonified_message
+                        .expect("Statblock did not generate json");
+
                     println!("Generated new json");
                     character.stat_block = Some(response_message.clone());
 
