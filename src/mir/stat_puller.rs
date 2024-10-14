@@ -176,82 +176,56 @@ pub async fn get_spell_block_json(ctx: &Context<'_>) -> Result<SpellSheet, Error
         return Ok(spell_sheet);
     }
     return Err(Box::new(StatPullerError::NoCharacterSheet));
-    // let message_id_u64: u64 = user
-    //     .stat_block_message_id
-    //     .clone()
-    //     .expect("No message ID saved")
-    //     .parse()
-    //     .expect("Invalid MessageId");
 }
 
-pub async fn get_stat_block_json(ctx: &Context<'_>) -> Result<(String, String), Error> {
-    let author = &ctx.author();
-    let user_id = author.id.get();
+pub async fn get_stat_block_json(ctx: &Context<'_>) -> Result<StatBlock, Error> {
     let db_connection = &mut db::establish_connection();
-    let user = db::users::get_or_create(db_connection, user_id)?;
 
-    if let Some(character_id) = user.selected_character {
-        let mut character = db::characters::get(db_connection, character_id)?;
-        // let channel_id_u64: u64 = user
-        //     .stat_block_channel_id
-        //     .clone()
-        //     .expect("No channel ID saved")
+    let mut character = get_user_character(ctx, db_connection).await?;
 
-        if let Some(channel_id_u64) = character.stat_block_channel_id.clone() {
-            let channel_id_parsed = channel_id_u64.parse().expect("Invalid ChannelID");
-            let channel_id = ChannelId::new(channel_id_parsed);
+    if let (Some(channel_id_u64), Some(message_id_u64)) = (
+        character.stat_block_channel_id.clone(),
+        character.stat_block_message_id.clone(),
+    ) {
+        let channel_id = ChannelId::new(channel_id_u64.parse().expect("Invalid ChannelID"));
+        let message_id = MessageId::new(message_id_u64.parse().expect("Invalid MessageID"));
 
-            if let Some(message_id_u64) = character.stat_block_message_id.clone() {
-                let message_id_parsed = message_id_u64.parse().expect("Invalid MessageID");
-                let message_id = MessageId::new(message_id_parsed);
+        let stat_block_hash = &character.stat_block_hash;
 
-                let stat_block_hash = &character.stat_block_hash;
+        let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+        let hash_hex = crate::common::hash(&stat_message.content);
 
-                let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+        let generate_new_json = match stat_block_hash {
+            Some(value) => value != &hash_hex,
+            None => true,
+        };
 
-                let mut generate_new_json: bool = false;
+        let stat_sheet: StatBlock;
 
-                let mut hasher = Sha256::new();
-                hasher.update(&stat_message.content);
-                let result = hasher.finalize();
-                let hash_hex = format!("{:x}", result);
+        if generate_new_json {
+            stat_sheet = StatBlock::from_string(&stat_message.content).await?;
 
-                match stat_block_hash {
-                    Some(value) => {
-                        if value != &hash_hex {
-                            generate_new_json = true;
-                        }
-                    }
-                    None => {
-                        generate_new_json = true;
-                    }
-                }
+            let json = stat_sheet
+                .jsonified_message
+                .clone()
+                .expect("stat sheet should always contain json");
 
-                let response_message: String;
+            println!("Generated new json");
+            character.stat_block = Some(json);
+            character.stat_block_hash = Some(hash_hex);
 
-                if generate_new_json {
-                    response_message = StatBlock::from_string(&stat_message.content)
-                        .await?
-                        .jsonified_message
-                        .expect("Statblock did not generate json");
-
-                    println!("Generated new json");
-                    character.stat_block = Some(response_message.clone());
-
-                    character.stat_block_hash = Some(hash_hex);
-                } else {
-                    response_message = character
-                        .stat_block
-                        .clone()
-                        .expect("Error: Stat block hash was present but stat block was not!");
-                    println!("Got cached stat block")
-                }
-
-                let _ = db::characters::update(db_connection, &character);
-
-                return Ok((response_message, stat_message.content));
-            }
+            let _ = db::characters::update(db_connection, &character);
+        } else {
+            println!("Got cached stat block");
+            stat_sheet = StatBlock::from_cache(
+                &stat_message.content,
+                &character
+                    .stat_block
+                    .expect("stat block hash has been checked"),
+            )
         }
+
+        return Ok(stat_sheet);
     }
     return Err(Box::new(StatPullerError::NoCharacterSheet));
     // let message_id_u64: u64 = user
@@ -262,10 +236,7 @@ pub async fn get_stat_block_json(ctx: &Context<'_>) -> Result<(String, String), 
     //     .expect("Invalid MessageId");
 }
 
-#[poise::command(
-    slash_command,
-    // description_localized = "Pull all stats from your character sheet (only you will be able to see the result of this command)"
-)]
+#[poise::command(slash_command)]
 pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
     let thinking_message = CreateReply::default()
         .content("*Thinking, please wait...*")
@@ -273,9 +244,13 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
 
     let msg = ctx.send(thinking_message).await?;
 
-    let (response_message, _) = get_stat_block_json(&ctx).await?;
+    let stat_block = get_stat_block_json(&ctx).await?;
 
-    let reply = CreateReply::default().content(response_message);
+    let reply = CreateReply::default().content(
+        stat_block
+            .jsonified_message
+            .expect("Stat block should always generate json"),
+    );
     msg.edit(ctx, reply).await?;
 
     return Ok(());
@@ -294,9 +269,13 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
 
     // let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
 
-    let (response_message, _) = get_stat_block_json(&ctx).await?;
+    let stat_block = get_stat_block_json(&ctx).await?;
 
-    let stats: Value = serde_json::from_str(&response_message)?;
+    let stats: Value = serde_json::from_str(
+        &stat_block
+            .jsonified_message
+            .expect("Stat block should always generate json"),
+    )?;
 
     // println!("```json\n{}```", response_message);
 

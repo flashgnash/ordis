@@ -22,8 +22,6 @@ use serde_json::Value;
 
 use regex::Regex;
 
-use poise::serenity_prelude::User;
-
 #[poise::command(slash_command, prefix_command)]
 pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error> {
     let placeholder = CreateReply::default()
@@ -32,9 +30,13 @@ pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error
 
     _ = ctx.send(placeholder).await?;
 
-    let (stat_block_result, _) = stat_puller::get_stat_block_json(&ctx).await?;
+    let stat_block = stat_puller::get_stat_block_json(&ctx).await?;
 
-    let stat_block: Value = serde_json::from_str(&stat_block_result)?;
+    let stat_block: Value = serde_json::from_str(
+        &stat_block
+            .jsonified_message
+            .expect("Stat block should always generate json"),
+    )?;
 
     let spell_block_result = stat_puller::get_spell_block_json(&ctx).await?;
 
@@ -125,10 +127,14 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
     let mut nag_user_about_character_sheet = false;
 
     match stat_block_result {
-        Ok((response_message, _)) => {
-            let stat_block: Value = serde_json::from_str(&response_message)?;
+        Ok(stat_block) => {
+            let stat_block_deserialized: Value = serde_json::from_str(
+                &stat_block
+                    .jsonified_message
+                    .expect("Stat block should always generate json"),
+            )?;
 
-            if let Some(stats) = stat_block.get("stats") {
+            if let Some(stats) = stat_block_deserialized.get("stats") {
                 if let Some(stats_object) = stats.as_object() {
                     for (stat, value) in stats_object {
                         println!("{stat}: {value}");
@@ -468,14 +474,20 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let (response_message, stat_message_raw) = stat_puller::get_stat_block_json(&ctx).await?;
+    let stat_block = stat_puller::get_stat_block_json(&ctx).await?;
 
-    let stats: Value = serde_json::from_str(&response_message)?;
+    let stats: Value = serde_json::from_str(
+        &stat_block
+            .jsonified_message
+            .expect("Stat block should always generate json"),
+    )?;
 
     let reply = CreateReply::default()
         .content(format!(
             "Original stat block text:\n```{}```",
-            stat_message_raw
+            stat_block
+                .original_message
+                .expect("Stat block should always have an original message")
         ))
         .ephemeral(true);
 
