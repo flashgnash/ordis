@@ -22,6 +22,8 @@ use serde_json::Value;
 
 use regex::Regex;
 
+use poise::serenity_prelude::User;
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error> {
     let placeholder = CreateReply::default()
@@ -34,9 +36,13 @@ pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error
 
     let stat_block: Value = serde_json::from_str(&stat_block_result)?;
 
-    let (spell_block_result, _) = stat_puller::get_spell_block_json(&ctx).await?;
+    let spell_block_result = stat_puller::get_spell_block_json(&ctx).await?;
 
-    let spell_block: Value = serde_json::from_str(&spell_block_result)?;
+    let spell_block: Value = serde_json::from_str(
+        &spell_block_result
+            .jsonified_message
+            .expect("SpellBlock should always have json generated on construction"),
+    )?;
 
     if let Some(energy_pool) = stat_block.get("energy_pool") {
         ctx.reply(format!("Maximum Energy: {energy_pool}")).await?;

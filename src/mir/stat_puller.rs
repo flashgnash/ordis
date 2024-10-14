@@ -5,6 +5,9 @@ use crate::common::Error;
 use sha2::{Digest, Sha256};
 
 use crate::db;
+use crate::db::models::Character;
+use crate::db::models::User;
+use diesel::sqlite::SqliteConnection;
 
 use serde_json::Value;
 
@@ -29,6 +32,8 @@ pub trait FromDiscordMessage: Sized {
 
     fn jsonified_message_mut(&mut self) -> &mut Option<String>;
     fn original_message_mut(&mut self) -> &mut Option<String>;
+
+    // fn get_message_reference_from_db(connection: SqliteConnection) -> u64;
 
     async fn from_string(message: &str) -> Result<Self, Error> {
         let mut instance = Self::new();
@@ -70,30 +75,13 @@ pub trait FromDiscordMessage: Sized {
         return Ok(Self::from_string(&message).await?);
     }
 
-    #[allow(dead_code)]
-    async fn from_message_with_cache(
-        ctx: Context<'_>,
-        channel_id: ChannelId,
-        message_id: MessageId,
-    ) -> Result<Self, Error> {
-        let message = fetch_message_poise(&ctx, channel_id, message_id)
-            .await?
-            .content;
+    fn from_cache(message: &str, json: &str) -> Self {
+        let mut instance = Self::new();
 
-        return Ok(Self::from_string(&message).await?);
-    }
+        *instance.original_message_mut() = Some(message.to_string());
+        *instance.jsonified_message_mut() = Some(json.to_string());
 
-    #[allow(dead_code)]
-    async fn from_string_with_cache(
-        ctx: Context<'_>,
-        channel_id: ChannelId,
-        message_id: MessageId,
-    ) -> Result<Self, Error> {
-        let message = fetch_message_poise(&ctx, channel_id, message_id)
-            .await?
-            .content;
-
-        return Ok(Self::from_string(&message).await?);
+        return instance;
     }
 }
 
@@ -103,6 +91,7 @@ pub enum StatPullerError {
     Generic,
     NoCharacterSheet,
     SpellNotFound,
+    NoCharacterSelected,
 }
 
 impl fmt::Display for StatPullerError {
@@ -113,74 +102,78 @@ impl fmt::Display for StatPullerError {
 
 impl std::error::Error for StatPullerError {}
 
-pub async fn get_spell_block_json(ctx: &Context<'_>) -> Result<(String, String), Error> {
+pub async fn get_user(
+    ctx: &Context<'_>,
+    db_connection: &mut SqliteConnection,
+) -> Result<User, Error> {
     let author = &ctx.author();
+
     let user_id = author.id.get();
-    let db_connection = &mut db::establish_connection();
-    let user = db::users::get_or_create(db_connection, user_id)?;
+
+    Ok(db::users::get_or_create(db_connection, user_id)?)
+}
+
+pub async fn get_user_character(
+    ctx: &Context<'_>,
+    db_connection: &mut SqliteConnection,
+) -> Result<db::models::Character, Error> {
+    let user = get_user(ctx, db_connection).await?;
 
     if let Some(character_id) = user.selected_character {
-        let mut character = db::characters::get(db_connection, character_id)?;
-        // let channel_id_u64: u64 = user
-        //     .spell_block_channel_id
-        //     .clone()
-        //     .expect("No channel ID saved")
+        return Ok(db::characters::get(db_connection, character_id)?);
+    }
 
-        if let Some(channel_id_u64) = character.spell_block_channel_id.clone() {
-            let channel_id_parsed = channel_id_u64.parse().expect("Invalid ChannelID");
-            let channel_id = ChannelId::new(channel_id_parsed);
+    Err(Box::new(StatPullerError::NoCharacterSelected))
+}
 
-            if let Some(message_id_u64) = character.spell_block_message_id.clone() {
-                let message_id_parsed = message_id_u64.parse().expect("Invalid MessageID");
-                let message_id = MessageId::new(message_id_parsed);
+pub async fn get_spell_block_json(ctx: &Context<'_>) -> Result<SpellSheet, Error> {
+    let db_connection = &mut db::establish_connection();
 
-                let spell_block_hash = &character.spell_block_hash;
+    let mut character = get_user_character(ctx, db_connection).await?;
 
-                let spell_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+    if let (Some(channel_id_u64), Some(message_id_u64)) = (
+        character.spell_block_channel_id.clone(),
+        character.spell_block_message_id.clone(),
+    ) {
+        let channel_id = ChannelId::new(channel_id_u64.parse().expect("Invalid ChannelID"));
+        let message_id = MessageId::new(message_id_u64.parse().expect("Invalid MessageID"));
 
-                let mut generate_new_json: bool = false;
+        let spell_block_hash = &character.spell_block_hash;
 
-                let mut hasher = Sha256::new();
-                hasher.update(&spell_message.content);
-                let result = hasher.finalize();
-                let hash_hex = format!("{:x}", result);
+        let spell_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+        let hash_hex = crate::common::hash(&spell_message.content);
 
-                match spell_block_hash {
-                    Some(value) => {
-                        if value != &hash_hex {
-                            generate_new_json = true;
-                        }
-                    }
-                    None => {
-                        generate_new_json = true;
-                    }
-                }
+        let generate_new_json = match spell_block_hash {
+            Some(value) => value != &hash_hex,
+            None => true,
+        };
 
-                let response_message: String;
+        let spell_sheet: SpellSheet;
 
-                if generate_new_json {
-                    response_message = SpellSheet::from_string(&spell_message.content)
-                        .await?
-                        .jsonified_message
-                        .expect("Spell sheet did not generate json");
+        if generate_new_json {
+            spell_sheet = SpellSheet::from_string(&spell_message.content).await?;
 
-                    println!("Generated new json");
-                    character.spell_block = Some(response_message.clone());
+            let json = spell_sheet
+                .jsonified_message
+                .clone()
+                .expect("Spell sheet should always contain json");
 
-                    character.spell_block_hash = Some(hash_hex);
-                } else {
-                    response_message = character
-                        .spell_block
-                        .clone()
-                        .expect("Error: spell block hash was present but spell block was not!");
-                    println!("Got cached spell block")
-                }
+            println!("Generated new json");
+            character.spell_block = Some(json);
+            character.spell_block_hash = Some(hash_hex);
 
-                let _ = db::characters::update(db_connection, &character);
-
-                return Ok((response_message, spell_message.content));
-            }
+            let _ = db::characters::update(db_connection, &character);
+        } else {
+            println!("Got cached spell block");
+            spell_sheet = SpellSheet::from_cache(
+                &spell_message.content,
+                &character
+                    .spell_block
+                    .expect("Spell block hash has been checked"),
+            )
         }
+
+        return Ok(spell_sheet);
     }
     return Err(Box::new(StatPullerError::NoCharacterSheet));
     // let message_id_u64: u64 = user

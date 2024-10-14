@@ -6,8 +6,18 @@ use poise::serenity_prelude::Message;
 use lazy_static::lazy_static;
 use poise::serenity_prelude as serenity;
 
+use sha2::{Digest, Sha256};
+
 lazy_static! {
     pub static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::new();
+}
+
+pub fn hash(content: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(content);
+    let result = hasher.finalize();
+
+    format!("{:x}", result)
 }
 
 pub fn capitalize_first_letter(s: &str) -> String {
