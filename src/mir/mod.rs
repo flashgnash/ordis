@@ -35,6 +35,7 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
 
     let stat_block: Value = serde_json::from_str(
         &stat_block
+            .sheet_info
             .jsonified_message
             .expect("Stat block should always generate json"),
     )?;
@@ -43,6 +44,7 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
 
     let spell_block: Value = serde_json::from_str(
         &spell_block_result
+            .sheet_info
             .jsonified_message
             .expect("SpellBlock should always have json generated on construction"),
     )?;
@@ -69,16 +71,17 @@ pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error
 
     let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
 
-    let stat_block: Value = serde_json::from_str(
-        &stat_block
-            .jsonified_message
-            .expect("Stat block should always generate json"),
-    )?;
+    println!("{stat_block}");
+
+    let json = stat_block.get_json()?;
+
+    let stat_block: Value = serde_json::from_str(&json)?;
 
     let spell_block_result: SpellSheet = stat_puller::get_sheet(&ctx).await?;
 
     let spell_block: Value = serde_json::from_str(
         &spell_block_result
+            .sheet_info
             .jsonified_message
             .expect("SpellBlock should always have json generated on construction"),
     )?;
@@ -167,6 +170,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         Ok(stat_block) => {
             let stat_block_deserialized: Value = serde_json::from_str(
                 &stat_block
+                    .sheet_info
                     .jsonified_message
                     .expect("Stat block should always generate json"),
             )?;
@@ -261,6 +265,7 @@ pub async fn create_character(
 
     let response_message = StatBlock::from_message(&ctx, msg.channel_id, msg.id)
         .await?
+        .sheet_info
         .jsonified_message
         .expect("Stat block failed to construct");
 
@@ -515,6 +520,7 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     let stats: Value = serde_json::from_str(
         &stat_block
+            .sheet_info
             .jsonified_message
             .expect("Stat block should always generate json"),
     )?;
@@ -523,6 +529,7 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
         .content(format!(
             "Original stat block text:\n```{}```",
             stat_block
+                .sheet_info
                 .original_message
                 .expect("Stat block should always have an original message")
         ))

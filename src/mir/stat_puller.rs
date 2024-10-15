@@ -25,29 +25,53 @@ use crate::gpt::generate_to_string;
 use crate::gpt::Message;
 use crate::gpt::Role;
 
-pub struct SheetMessage {
-    channel_id: u64,
-    message_id: u64,
+impl fmt::Display for SheetInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(json) = self.jsonified_message.as_ref() {
+            return write!(f, "{json}");
+        }
+        if let Some(message) = self.original_message.as_ref() {
+            return write!(f, "{message}");
+        }
+
+        write!(f, "No stat sheet found")
+    }
 }
 
-pub trait CharacterSheetable: Sized {
+pub struct SheetInfo {
+    pub original_message: Option<String>,
+    pub jsonified_message: Option<String>,
+    pub message_hash: Option<String>,
+    pub changed: bool,
+    pub character: Option<Character>,
+}
+impl SheetInfo {
+    fn get_json(&self) -> Result<String, Error> {
+        if let Some(json) = self.jsonified_message.clone() {
+            Ok(json)
+        } else {
+            Err(Box::new(StatPullerError::JsonNotInitialised))
+        }
+    }
+}
+
+pub trait CharacterSheetable: Sized + std::fmt::Display {
     const PROMPT: &'static str;
 
     fn new() -> Self;
 
-    fn jsonified_message_mut(&mut self) -> &mut Option<String>;
-    fn original_message_mut(&mut self) -> &mut Option<String>;
-
-    fn get_hash(&self) -> Option<String>;
-    fn set_hash(&mut self, hash: String);
-
-    fn get_changed(&self) -> bool;
-    fn set_changed(&mut self, value: bool);
-
     fn update_character(&mut self);
 
-    fn set_character(&mut self, char: Character);
-    fn get_character(&self) -> Option<Character>;
+    fn mut_sheet_info(&mut self) -> &mut SheetInfo;
+    fn sheet_info(&self) -> &SheetInfo;
+
+    fn get_json(self) -> Result<String, Error> {
+        let sheet_info = self.sheet_info();
+
+        println!("sheet info {sheet_info}");
+
+        Ok(sheet_info.get_json()?)
+    }
 
     async fn get_sheet_message(
         ctx: &Context<'_>,
@@ -59,8 +83,21 @@ pub trait CharacterSheetable: Sized {
     async fn from_string(message: &str) -> Result<Self, Error> {
         let mut instance = Self::new();
 
-        *instance.original_message_mut() = Some(message.to_string());
+        let sheet_info = instance.mut_sheet_info();
 
+        if let Some(original_message) = &sheet_info.original_message {
+            println!("Original: {}", &original_message);
+        } else {
+            println!("Null!");
+        }
+
+        sheet_info.original_message = Some(message.to_string());
+
+        if let Some(original_message) = &sheet_info.original_message {
+            println!("Modified: {}", &original_message);
+        } else {
+            println!("Also Null!");
+        }
         let model = "gpt-4o-mini";
 
         let preprompt = Self::PROMPT.to_string();
@@ -78,7 +115,7 @@ pub trait CharacterSheetable: Sized {
 
         let response = generate_to_string(model, messages).await?;
 
-        *instance.jsonified_message_mut() = Some(response);
+        sheet_info.jsonified_message = Some(response);
 
         Ok(instance)
     }
@@ -98,9 +135,10 @@ pub trait CharacterSheetable: Sized {
 
     fn from_cache(message: &str, json: &str) -> Self {
         let mut instance = Self::new();
+        let sheet_info = instance.mut_sheet_info();
 
-        *instance.original_message_mut() = Some(message.to_string());
-        *instance.jsonified_message_mut() = Some(json.to_string());
+        sheet_info.original_message = Some(message.to_string());
+        sheet_info.jsonified_message = Some(json.to_string());
 
         return instance;
     }
@@ -109,7 +147,8 @@ pub trait CharacterSheetable: Sized {
         let message = Self::get_sheet_message(ctx, &character).await?;
         let mut sheet = Self::from_message(ctx, message.channel_id, message.id).await?;
 
-        sheet.set_character(character.clone());
+        let sheet_info = sheet.mut_sheet_info();
+        sheet_info.character = Some(character.clone());
 
         return Ok(sheet);
     }
@@ -129,23 +168,21 @@ pub trait CharacterSheetable: Sized {
             None => true,
         };
 
-        let mut sheet: Self;
-
         if generate_new_json {
             println!("Generating new json via openai");
-            sheet = Self::from_string(&stat_message.content).await?;
+            let mut sheet = Self::from_string(&stat_message.content).await?;
+            let sheet_info = sheet.mut_sheet_info();
 
-            sheet.set_hash(crate::common::hash(&stat_message.content));
-
-            sheet.set_character(character.clone());
-            sheet.set_changed(true);
+            sheet_info.message_hash = Some(crate::common::hash(&stat_message.content));
+            sheet_info.character = Some(character.clone());
+            sheet_info.changed = true;
             sheet.update_character();
 
             Ok(sheet)
         } else {
             println!("Got cached stat block");
 
-            sheet = Self::from_cache(
+            let mut sheet = Self::from_cache(
                 &stat_message.content,
                 &character
                     .stat_block
@@ -153,7 +190,9 @@ pub trait CharacterSheetable: Sized {
                     .expect("stat block hash has been checked"),
             );
 
-            sheet.set_character(character.clone());
+            let sheet_info = sheet.mut_sheet_info();
+
+            sheet_info.character = Some(character.clone());
 
             Ok(sheet)
         }
@@ -167,6 +206,7 @@ pub enum StatPullerError {
     NoCharacterSheet,
     SpellNotFound,
     NoCharacterSelected,
+    JsonNotInitialised,
 }
 
 impl fmt::Display for StatPullerError {
@@ -197,9 +237,11 @@ pub async fn get_sheet<T: CharacterSheetable>(ctx: &Context<'_>) -> Result<T, Er
 
     let character_sheet = T::from_character_with_cache(ctx, &character).await?;
 
-    if character_sheet.get_changed() == true {
-        let new_char = character_sheet
-            .get_character()
+    let sheet_info = character_sheet.sheet_info();
+
+    if sheet_info.changed == true {
+        let new_char = sheet_info
+            .character
             .clone()
             .expect("Tried to update a non existent character?!");
 
@@ -221,6 +263,7 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
 
     let reply = CreateReply::default().content(
         stat_block
+            .sheet_info
             .jsonified_message
             .expect("Stat block should always generate json"),
     );
@@ -246,6 +289,7 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
 
     let stats: Value = serde_json::from_str(
         &stat_block
+            .sheet_info
             .jsonified_message
             .expect("Stat block should always generate json"),
     )?;
