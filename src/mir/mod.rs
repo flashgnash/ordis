@@ -98,14 +98,6 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     Ok(())
 }
 
-fn draw_bar(current: i32, max: i32, length: usize) -> String {
-    let fraction = current as f32 / max as f32;
-
-    let current_length = (fraction as f32 * length as f32).round() as usize;
-
-    return "🟦".repeat(current_length) + &"⬛".repeat(current_length - length);
-}
-
 async fn update_mana_readout(
     ctx: Context<'_>,
     character: &Character,
@@ -114,19 +106,19 @@ async fn update_mana_readout(
     let mut modified_character = character.clone();
 
     let mana_message_content = format!(
-        "> **Current Energy:**
+        "> Current Energy 
 > ``{} / 1000``
 {}
         ",
         character.mana.unwrap_or(0),
-        draw_bar(20, 30, 40)
+        crate::common::draw_bar(character.mana.unwrap_or(0), 1000, 40, "🟦", "⬛")
     );
 
     if let (Some(channel_id), Some(message_id)) = (
         &character.mana_readout_channel_id,
         &character.mana_readout_message_id,
     ) {
-        println!("Using existing gague");
+        println!("Using existing gauge");
         let channel: ChannelId = channel_id.parse().unwrap();
         let message: MessageId = message_id.parse().unwrap();
 

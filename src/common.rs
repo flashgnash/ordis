@@ -15,6 +15,21 @@ lazy_static! {
     pub static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::new();
 }
 
+pub fn draw_bar(
+    current: i32,
+    max: i32,
+    length: usize,
+    foreground: &str,
+    background: &str,
+) -> String {
+    let fraction = current as f32 / max as f32;
+
+    let current_length = (fraction as f32 * length as f32).round() as usize;
+
+    return foreground.repeat(current_length)
+        + &background.repeat(length - current_length.clamp(0, length));
+}
+
 pub async fn get_user(
     ctx: &Context<'_>,
     db_connection: &mut SqliteConnection,
