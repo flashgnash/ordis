@@ -82,7 +82,7 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
             return Ok(message);
         }
 
-        Err(Box::new(stat_puller::StatPullerError::NoCharacterSheet))
+        Err(Box::new(stat_puller::StatPullerError::NoSpellSheet))
     }
 
     const PROMPT: &'static str = r#"

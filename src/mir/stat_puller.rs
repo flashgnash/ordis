@@ -203,9 +203,13 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
 #[derive(Debug)]
 pub enum StatPullerError {
     Generic,
+
     NoCharacterSheet,
-    SpellNotFound,
     NoCharacterSelected,
+
+    NoSpellSheet,
+    SpellNotFound,
+
     JsonNotInitialised,
 }
 
