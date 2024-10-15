@@ -12,6 +12,24 @@ pub struct User {
     pub selected_character: Option<i32>,
 }
 
+impl Character {
+    pub fn new_empty() -> Character {
+        Character {
+            id: None,
+            user_id: None,
+            name: None,
+            stat_block: None,
+            stat_block_hash: None,
+            stat_block_message_id: None,
+            stat_block_channel_id: None,
+            spell_block: None,
+            spell_block_hash: None,
+            spell_block_message_id: None,
+            spell_block_channel_id: None,
+        }
+    }
+}
+
 #[derive(Queryable, Selectable, AsChangeset)]
 #[diesel(table_name = schema::characters)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]

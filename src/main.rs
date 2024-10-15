@@ -35,6 +35,7 @@ mod mir;
 
 use mir::stat_puller::pull_stats;
 use mir::stat_puller::pull_stat;
+use mir::pull_spellsheet;
 
 use mir::level_up;
 use mir::create_character;
@@ -255,7 +256,7 @@ async fn main() {
 
                 ask(), draw(), translate(),translate_context(),
 
-                pull_stat(), pull_stats(),
+                pull_stat(), pull_stats(), pull_spellsheet(),
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 

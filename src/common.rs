@@ -3,6 +3,9 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 use poise::serenity_prelude::Message;
 
+use crate::db;
+use diesel::sqlite::SqliteConnection;
+
 use lazy_static::lazy_static;
 use poise::serenity_prelude as serenity;
 
@@ -10,6 +13,17 @@ use sha2::{Digest, Sha256};
 
 lazy_static! {
     pub static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::new();
+}
+
+pub async fn get_user(
+    ctx: &Context<'_>,
+    db_connection: &mut SqliteConnection,
+) -> Result<db::models::User, Error> {
+    let author = &ctx.author();
+
+    let user_id = author.id.get();
+
+    Ok(db::users::get_or_create(db_connection, user_id)?)
 }
 
 pub fn hash(content: &str) -> String {

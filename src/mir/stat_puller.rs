@@ -25,7 +25,12 @@ use crate::gpt::generate_to_string;
 use crate::gpt::Message;
 use crate::gpt::Role;
 
-pub trait FromDiscordMessage: Sized {
+pub struct SheetMessage {
+    channel_id: u64,
+    message_id: u64,
+}
+
+pub trait CharacterSheetable: Sized {
     const PROMPT: &'static str;
 
     fn new() -> Self;
@@ -33,7 +38,23 @@ pub trait FromDiscordMessage: Sized {
     fn jsonified_message_mut(&mut self) -> &mut Option<String>;
     fn original_message_mut(&mut self) -> &mut Option<String>;
 
-    // fn get_message_reference_from_db(connection: SqliteConnection) -> u64;
+    fn get_hash(&self) -> Option<String>;
+    fn set_hash(&mut self, hash: String);
+
+    fn get_changed(&self) -> bool;
+    fn set_changed(&mut self, value: bool);
+
+    fn update_character(&mut self);
+
+    fn set_character(&mut self, char: Character);
+    fn get_character(&self) -> Option<Character>;
+
+    async fn get_sheet_message(
+        ctx: &Context<'_>,
+        character: &Character,
+    ) -> Result<poise::serenity_prelude::Message, Error>;
+
+    fn get_previous_hash(character: &Character) -> Option<String>;
 
     async fn from_string(message: &str) -> Result<Self, Error> {
         let mut instance = Self::new();
@@ -64,7 +85,7 @@ pub trait FromDiscordMessage: Sized {
 
     #[allow(dead_code)]
     async fn from_message(
-        ctx: Context<'_>,
+        ctx: &Context<'_>,
         channel_id: ChannelId,
         message_id: MessageId,
     ) -> Result<Self, Error> {
@@ -82,6 +103,60 @@ pub trait FromDiscordMessage: Sized {
         *instance.jsonified_message_mut() = Some(json.to_string());
 
         return instance;
+    }
+
+    async fn from_character(ctx: &Context<'_>, character: &Character) -> Result<Self, Error> {
+        let message = Self::get_sheet_message(ctx, &character).await?;
+        let mut sheet = Self::from_message(ctx, message.channel_id, message.id).await?;
+
+        sheet.set_character(character.clone());
+
+        return Ok(sheet);
+    }
+
+    async fn from_character_with_cache(
+        ctx: &Context<'_>,
+        character: &Character,
+    ) -> Result<Self, Error> {
+        let stat_message = Self::get_sheet_message(ctx, &character).await?;
+
+        let hash_hex = crate::common::hash(&stat_message.content);
+
+        let previous_hash = Self::get_previous_hash(character);
+
+        let generate_new_json = match previous_hash {
+            Some(value) => value != hash_hex,
+            None => true,
+        };
+
+        let mut sheet: Self;
+
+        if generate_new_json {
+            println!("Generating new json via openai");
+            sheet = Self::from_string(&stat_message.content).await?;
+
+            sheet.set_hash(crate::common::hash(&stat_message.content));
+
+            sheet.set_character(character.clone());
+            sheet.set_changed(true);
+            sheet.update_character();
+
+            Ok(sheet)
+        } else {
+            println!("Got cached stat block");
+
+            sheet = Self::from_cache(
+                &stat_message.content,
+                &character
+                    .stat_block
+                    .clone()
+                    .expect("stat block hash has been checked"),
+            );
+
+            sheet.set_character(character.clone());
+
+            Ok(sheet)
+        }
     }
 }
 
@@ -102,22 +177,11 @@ impl fmt::Display for StatPullerError {
 
 impl std::error::Error for StatPullerError {}
 
-pub async fn get_user(
-    ctx: &Context<'_>,
-    db_connection: &mut SqliteConnection,
-) -> Result<User, Error> {
-    let author = &ctx.author();
-
-    let user_id = author.id.get();
-
-    Ok(db::users::get_or_create(db_connection, user_id)?)
-}
-
 pub async fn get_user_character(
     ctx: &Context<'_>,
     db_connection: &mut SqliteConnection,
 ) -> Result<db::models::Character, Error> {
-    let user = get_user(ctx, db_connection).await?;
+    let user = crate::common::get_user(ctx, db_connection).await?;
 
     if let Some(character_id) = user.selected_character {
         return Ok(db::characters::get(db_connection, character_id)?);
@@ -126,114 +190,23 @@ pub async fn get_user_character(
     Err(Box::new(StatPullerError::NoCharacterSelected))
 }
 
-pub async fn get_spell_block_json(ctx: &Context<'_>) -> Result<SpellSheet, Error> {
+pub async fn get_sheet<T: CharacterSheetable>(ctx: &Context<'_>) -> Result<T, Error> {
     let db_connection = &mut db::establish_connection();
 
-    let mut character = get_user_character(ctx, db_connection).await?;
+    let character = get_user_character(ctx, db_connection).await?;
 
-    if let (Some(channel_id_u64), Some(message_id_u64)) = (
-        character.spell_block_channel_id.clone(),
-        character.spell_block_message_id.clone(),
-    ) {
-        let channel_id = ChannelId::new(channel_id_u64.parse().expect("Invalid ChannelID"));
-        let message_id = MessageId::new(message_id_u64.parse().expect("Invalid MessageID"));
+    let character_sheet = T::from_character_with_cache(ctx, &character).await?;
 
-        let spell_block_hash = &character.spell_block_hash;
+    if character_sheet.get_changed() == true {
+        let new_char = character_sheet
+            .get_character()
+            .clone()
+            .expect("Tried to update a non existent character?!");
 
-        let spell_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
-        let hash_hex = crate::common::hash(&spell_message.content);
-
-        let generate_new_json = match spell_block_hash {
-            Some(value) => value != &hash_hex,
-            None => true,
-        };
-
-        let spell_sheet: SpellSheet;
-
-        if generate_new_json {
-            spell_sheet = SpellSheet::from_string(&spell_message.content).await?;
-
-            let json = spell_sheet
-                .jsonified_message
-                .clone()
-                .expect("Spell sheet should always contain json");
-
-            println!("Generated new json");
-            character.spell_block = Some(json);
-            character.spell_block_hash = Some(hash_hex);
-
-            let _ = db::characters::update(db_connection, &character);
-        } else {
-            println!("Got cached spell block");
-            spell_sheet = SpellSheet::from_cache(
-                &spell_message.content,
-                &character
-                    .spell_block
-                    .expect("Spell block hash has been checked"),
-            )
-        }
-
-        return Ok(spell_sheet);
+        let _ = db::characters::update(db_connection, &new_char);
     }
-    return Err(Box::new(StatPullerError::NoCharacterSheet));
-}
 
-pub async fn get_stat_block_json(ctx: &Context<'_>) -> Result<StatBlock, Error> {
-    let db_connection = &mut db::establish_connection();
-
-    let mut character = get_user_character(ctx, db_connection).await?;
-
-    if let (Some(channel_id_u64), Some(message_id_u64)) = (
-        character.stat_block_channel_id.clone(),
-        character.stat_block_message_id.clone(),
-    ) {
-        let channel_id = ChannelId::new(channel_id_u64.parse().expect("Invalid ChannelID"));
-        let message_id = MessageId::new(message_id_u64.parse().expect("Invalid MessageID"));
-
-        let stat_block_hash = &character.stat_block_hash;
-
-        let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
-        let hash_hex = crate::common::hash(&stat_message.content);
-
-        let generate_new_json = match stat_block_hash {
-            Some(value) => value != &hash_hex,
-            None => true,
-        };
-
-        let stat_sheet: StatBlock;
-
-        if generate_new_json {
-            stat_sheet = StatBlock::from_string(&stat_message.content).await?;
-
-            let json = stat_sheet
-                .jsonified_message
-                .clone()
-                .expect("stat sheet should always contain json");
-
-            println!("Generated new json");
-            character.stat_block = Some(json);
-            character.stat_block_hash = Some(hash_hex);
-
-            let _ = db::characters::update(db_connection, &character);
-        } else {
-            println!("Got cached stat block");
-            stat_sheet = StatBlock::from_cache(
-                &stat_message.content,
-                &character
-                    .stat_block
-                    .expect("stat block hash has been checked"),
-            )
-        }
-
-        return Ok(stat_sheet);
-    }
-    return Err(Box::new(StatPullerError::NoCharacterSheet));
-    // let message_id_u64: u64 = user
-    //     .stat_block_message_id
-    //     .clone()
-    //     .expect("No message ID saved")
-    //     .parse()
-    //     .expect("Invalid MessageId");
+    Ok(character_sheet)
 }
 
 #[poise::command(slash_command)]
@@ -244,7 +217,7 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
 
     let msg = ctx.send(thinking_message).await?;
 
-    let stat_block = get_stat_block_json(&ctx).await?;
+    let stat_block: StatBlock = get_sheet(&ctx).await?;
 
     let reply = CreateReply::default().content(
         stat_block
@@ -265,11 +238,11 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
         .content("*Thinking, please wait...*")
         .ephemeral(true);
 
-    let msg = ctx.say("*Thinking, please wait...*").await?;
+    let msg = ctx.send(stat_block_thinking_message).await?;
 
     // let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
 
-    let stat_block = get_stat_block_json(&ctx).await?;
+    let stat_block: StatBlock = get_sheet(&ctx).await?;
 
     let stats: Value = serde_json::from_str(
         &stat_block

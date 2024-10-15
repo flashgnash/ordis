@@ -5,7 +5,8 @@ pub mod stat_block;
 
 use spell_sheet::SpellSheet;
 use stat_block::StatBlock;
-use stat_puller::FromDiscordMessage;
+use stat_puller::get_sheet;
+use stat_puller::CharacterSheetable;
 
 use crate::common;
 use crate::common::safe_to_number;
@@ -23,14 +24,14 @@ use serde_json::Value;
 use regex::Regex;
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error> {
+pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
     let placeholder = CreateReply::default()
         .content("*Thinking, please wait...*")
         .ephemeral(true);
 
-    _ = ctx.send(placeholder).await?;
+    let placeholder_msg = ctx.send(placeholder).await?;
 
-    let stat_block = stat_puller::get_stat_block_json(&ctx).await?;
+    let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
 
     let stat_block: Value = serde_json::from_str(
         &stat_block
@@ -38,7 +39,43 @@ pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error
             .expect("Stat block should always generate json"),
     )?;
 
-    let spell_block_result = stat_puller::get_spell_block_json(&ctx).await?;
+    let spell_block_result: SpellSheet = stat_puller::get_sheet(&ctx).await?;
+
+    let spell_block: Value = serde_json::from_str(
+        &spell_block_result
+            .jsonified_message
+            .expect("SpellBlock should always have json generated on construction"),
+    )?;
+
+    placeholder_msg
+        .edit(
+            ctx,
+            CreateReply::default()
+                .content(spell_block.to_string())
+                .ephemeral(true),
+        )
+        .await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+
+    let placeholder_message = ctx.send(placeholder).await?;
+
+    let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
+
+    let stat_block: Value = serde_json::from_str(
+        &stat_block
+            .jsonified_message
+            .expect("Stat block should always generate json"),
+    )?;
+
+    let spell_block_result: SpellSheet = stat_puller::get_sheet(&ctx).await?;
 
     let spell_block: Value = serde_json::from_str(
         &spell_block_result
@@ -93,7 +130,7 @@ pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error
                 .content(spell_list_message)
                 .ephemeral(true);
 
-            ctx.send(spell_list_reply).await?;
+            placeholder_message.edit(ctx, spell_list_reply).await?;
             // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
         }
     }
@@ -109,7 +146,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     _ = ctx.send(placeholder).await?;
 
-    let stat_block_result = stat_puller::get_stat_block_json(&ctx).await;
+    let stat_block_result: Result<StatBlock, Error> = get_sheet(&ctx).await;
 
     //TODO make this default configurable per server
     let mut dice = dice_expression.unwrap_or("1d100".to_string());
@@ -222,7 +259,7 @@ pub async fn create_character(
         }
     }
 
-    let response_message = StatBlock::from_message(ctx, msg.channel_id, msg.id)
+    let response_message = StatBlock::from_message(&ctx, msg.channel_id, msg.id)
         .await?
         .jsonified_message
         .expect("Stat block failed to construct");
@@ -474,7 +511,7 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let stat_block = stat_puller::get_stat_block_json(&ctx).await?;
+    let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
 
     let stats: Value = serde_json::from_str(
         &stat_block
