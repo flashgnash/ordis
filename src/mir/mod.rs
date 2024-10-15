@@ -6,6 +6,7 @@ pub mod stat_block;
 use spell_sheet::SpellSheet;
 use stat_block::StatBlock;
 use stat_puller::get_sheet;
+use stat_puller::get_user_character;
 use stat_puller::CharacterSheetable;
 
 use crate::common;
@@ -57,6 +58,114 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
                 .ephemeral(true),
         )
         .await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
+    let db_connection = &mut db::establish_connection();
+
+    let character = get_user_character(&ctx, db_connection).await?;
+
+    ctx.reply(format!("Current mana: {}", character.mana.unwrap_or(-1)))
+        .await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
+    let db_connection = &mut db::establish_connection();
+
+    let mut character = get_user_character(&ctx, db_connection).await?;
+
+    character.mana = Some(mana);
+
+    db::characters::update(db_connection, &character)?;
+
+    ctx.reply(format!("Set mana to: {}", character.mana.unwrap_or(-1)))
+        .await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
+    let db_connection = &mut db::establish_connection();
+
+    let mut character = get_user_character(&ctx, db_connection).await?;
+
+    let old_mana = character.mana.unwrap_or(0);
+
+    let calc_result = old_mana + modifier;
+
+    character.mana = Some(calc_result);
+
+    db::characters::update(db_connection, &character)?;
+
+    ctx.reply(format!(
+        "Modified mana from {} to {}",
+        old_mana,
+        character.mana.unwrap_or(0)
+    ))
+    .await?;
+
+    Ok(())
+}
+#[poise::command(slash_command, prefix_command)]
+pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
+    let db_connection = &mut db::establish_connection();
+
+    let mut character = get_user_character(&ctx, db_connection).await?;
+
+    let old_mana = character.mana.unwrap_or(0);
+
+    let calc_result = old_mana - modifier;
+
+    character.mana = Some(calc_result);
+
+    db::characters::update(db_connection, &character)?;
+
+    ctx.reply(format!(
+        "Modified mana from {} to {}",
+        old_mana,
+        character.mana.unwrap_or(0)
+    ))
+    .await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
+    if (!modifier.contains("n")) {
+        ctx.reply("Your modification should include the letter N to represent your current mana (use add_mana if you just want to add or subtract)")
+            .await?;
+
+        return Ok(());
+    }
+
+    let db_connection = &mut db::establish_connection();
+
+    let mut character = get_user_character(&ctx, db_connection).await?;
+
+    let old_mana = character.mana.unwrap_or(0);
+
+    let expression = modifier.replace("n", &character.mana.unwrap_or(0).to_string());
+
+    let calc_result = meval::eval_str(expression)? as i32;
+
+    character.mana = Some(calc_result);
+
+    db::characters::update(db_connection, &character)?;
+
+    ctx.reply(format!(
+        "Modified mana from {} to {}",
+        old_mana,
+        character.mana.unwrap_or(0)
+    ))
+    .await?;
 
     Ok(())
 }
@@ -307,6 +416,7 @@ pub async fn create_character(
             spell_block_hash: None,
             spell_block_message_id: None,
             spell_block_channel_id: None,
+            mana: None,
         };
 
         let _ = db::characters::create(db_connection, &new_character)?;

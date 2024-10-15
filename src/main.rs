@@ -37,6 +37,12 @@ use mir::stat_puller::pull_stats;
 use mir::stat_puller::pull_stat;
 use mir::pull_spellsheet;
 
+use mir::get_mana;
+use mir::set_mana;
+use mir::mod_mana;
+use mir::add_mana;
+use mir::sub_mana;
+
 use mir::level_up;
 use mir::create_character;
 use mir::get_characters;
@@ -257,6 +263,7 @@ async fn main() {
                 ask(), draw(), translate(),translate_context(),
 
                 pull_stat(), pull_stats(), pull_spellsheet(),
+                get_mana(), set_mana(), mod_mana(), add_mana(), sub_mana(),
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 

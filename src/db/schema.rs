@@ -13,6 +13,7 @@ diesel::table! {
         spell_block_message_id -> Nullable<Text>,
         spell_block -> Nullable<Text>,
         spell_block_hash -> Nullable<Text>,
+        mana -> Nullable<Integer>,
     }
 }
 

@@ -26,6 +26,7 @@ impl Character {
             spell_block_hash: None,
             spell_block_message_id: None,
             spell_block_channel_id: None,
+            mana: None,
         }
     }
 }
@@ -51,4 +52,5 @@ pub struct Character {
 
     pub spell_block_message_id: Option<String>,
     pub spell_block_channel_id: Option<String>,
+    pub mana: Option<i32>,
 }
