@@ -16,13 +16,20 @@ use crate::common::Error;
 use crate::db;
 use crate::db::models::Character;
 
+use diesel::SqliteConnection;
+
 use crate::dice;
 use stat_puller::StatPullerError;
 
+use poise::serenity_prelude::CreateMessage;
+use poise::serenity_prelude::EditMessage;
 use poise::CreateReply;
 use serde_json::Value;
 
 use regex::Regex;
+
+use poise::serenity_prelude::ChannelId;
+use poise::serenity_prelude::MessageId;
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
@@ -68,7 +75,7 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    ctx.reply(format!("Current mana: {}", character.mana.unwrap_or(-1)))
+    ctx.reply(format!("Current energy: {}", character.mana.unwrap_or(-1)))
         .await?;
 
     Ok(())
@@ -78,36 +85,115 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
-    let mut character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection).await?;
 
-    character.mana = Some(mana);
+    let new_character = set_mana_internal(ctx, db_connection, character, mana).await?;
 
-    db::characters::update(db_connection, &character)?;
-
-    ctx.reply(format!("Set mana to: {}", character.mana.unwrap_or(-1)))
-        .await?;
+    ctx.reply(format!(
+        "Set energy to: {}",
+        new_character.mana.unwrap_or(-1)
+    ))
+    .await?;
 
     Ok(())
+}
+
+fn draw_bar(current: i32, max: i32, length: usize) -> String {
+    let fraction = current as f32 / max as f32;
+
+    let current_length = (fraction as f32 * length as f32).round() as usize;
+
+    return "🟦".repeat(current_length) + &"⬛".repeat(current_length - length);
+}
+
+async fn update_mana_readout(
+    ctx: Context<'_>,
+    character: &Character,
+    db_connection: &mut SqliteConnection,
+) -> Result<Character, Error> {
+    let mut modified_character = character.clone();
+
+    let mana_message_content = format!(
+        "> **Current Energy:**
+> ``{} / 1000``
+{}
+        ",
+        character.mana.unwrap_or(0),
+        draw_bar(20, 30, 40)
+    );
+
+    if let (Some(channel_id), Some(message_id)) = (
+        &character.mana_readout_channel_id,
+        &character.mana_readout_message_id,
+    ) {
+        println!("Using existing gague");
+        let channel: ChannelId = channel_id.parse().unwrap();
+        let message: MessageId = message_id.parse().unwrap();
+
+        channel
+            .edit_message(
+                ctx,
+                message,
+                EditMessage::default().content(mana_message_content),
+            )
+            .await?;
+        return Ok(modified_character);
+    } else {
+        if let Some(channel_id) = &character.spell_block_channel_id {
+            println!("Making new gague in channel {channel_id}");
+
+            modified_character.mana_readout_channel_id = Some(channel_id.to_string());
+
+            let channel: ChannelId = channel_id.parse().unwrap();
+
+            let message = channel
+                .send_message(ctx, CreateMessage::default().content(mana_message_content))
+                .await?;
+
+            modified_character.mana_readout_message_id = Some(message.id.to_string());
+
+            db::characters::update(db_connection, &modified_character)?;
+
+            return Ok(modified_character);
+        }
+
+        return Err(Box::new(StatPullerError::NoSpellSheet));
+    }
+}
+
+async fn set_mana_internal(
+    ctx: Context<'_>,
+    db_connection: &mut SqliteConnection,
+    character: Character,
+    mana: i32,
+) -> Result<Character, Error> {
+    let mut new_character = character.clone();
+
+    new_character.mana = Some(mana);
+
+    db::characters::update(db_connection, &new_character)?;
+
+    update_mana_readout(ctx, &new_character, db_connection).await?;
+
+    Ok(new_character)
 }
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
-    let mut character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection).await?;
 
     let old_mana = character.mana.unwrap_or(0);
 
     let calc_result = old_mana + modifier;
 
-    character.mana = Some(calc_result);
-
-    db::characters::update(db_connection, &character)?;
+    let modified_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
 
     ctx.reply(format!(
-        "Modified mana from {} to {}",
+        "Modified energy from {} to {}",
         old_mana,
-        character.mana.unwrap_or(0)
+        modified_character.mana.unwrap_or(0)
     ))
     .await?;
 
@@ -117,20 +203,22 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
-    let mut character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection).await?;
 
     let old_mana = character.mana.unwrap_or(0);
 
     let calc_result = old_mana - modifier;
 
-    character.mana = Some(calc_result);
+    let new_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
 
-    db::characters::update(db_connection, &character)?;
+    // character.mana = Some(calc_result);
+
+    // db::characters::update(db_connection, &character)?;
 
     ctx.reply(format!(
-        "Modified mana from {} to {}",
+        "Modified energy from {} to {}",
         old_mana,
-        character.mana.unwrap_or(0)
+        new_character.mana.unwrap_or(0)
     ))
     .await?;
 
@@ -140,7 +228,7 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 #[poise::command(slash_command, prefix_command)]
 pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
     if (!modifier.contains("n")) {
-        ctx.reply("Your modification should include the letter N to represent your current mana (use add_mana if you just want to add or subtract)")
+        ctx.reply("Your modification should include the letter N to represent your current energy (use add_mana if you just want to add or subtract)")
             .await?;
 
         return Ok(());
@@ -148,7 +236,7 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
 
     let db_connection = &mut db::establish_connection();
 
-    let mut character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection).await?;
 
     let old_mana = character.mana.unwrap_or(0);
 
@@ -156,14 +244,12 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
 
     let calc_result = meval::eval_str(expression)? as i32;
 
-    character.mana = Some(calc_result);
-
-    db::characters::update(db_connection, &character)?;
+    let new_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
 
     ctx.reply(format!(
-        "Modified mana from {} to {}",
+        "Modified energy from {} to {}",
         old_mana,
-        character.mana.unwrap_or(0)
+        new_character.mana.unwrap_or(0)
     ))
     .await?;
 
@@ -416,7 +502,10 @@ pub async fn create_character(
             spell_block_hash: None,
             spell_block_message_id: None,
             spell_block_channel_id: None,
+
             mana: None,
+            mana_readout_channel_id: None,
+            mana_readout_message_id: None,
         };
 
         let _ = db::characters::create(db_connection, &new_character)?;

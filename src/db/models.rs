@@ -18,15 +18,20 @@ impl Character {
             id: None,
             user_id: None,
             name: None,
+
             stat_block: None,
             stat_block_hash: None,
             stat_block_message_id: None,
             stat_block_channel_id: None,
+
             spell_block: None,
             spell_block_hash: None,
             spell_block_message_id: None,
             spell_block_channel_id: None,
+
             mana: None,
+            mana_readout_channel_id: None,
+            mana_readout_message_id: None,
         }
     }
 }
@@ -52,5 +57,8 @@ pub struct Character {
 
     pub spell_block_message_id: Option<String>,
     pub spell_block_channel_id: Option<String>,
+
     pub mana: Option<i32>,
+    pub mana_readout_channel_id: Option<String>,
+    pub mana_readout_message_id: Option<String>,
 }
