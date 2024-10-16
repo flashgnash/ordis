@@ -93,15 +93,12 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
 
     let mut health_message_content = "Current health unknown.".to_string();
 
-    if let Some(health) = health {
-        health_message_content = format!("♥️ {health}/unknown");
-
-        if let Some(max_health) = max_health {
-            health_message_content = format!(
-                "♥️ ``{} {health}/{max_health}``",
-                crate::common::draw_bar(health as i32, max_health as i32, 13, "🟥", "⬛")
-            );
-        }
+    if let Some(max_health) = max_health {
+        let health = health.unwrap_or(max_health);
+        health_message_content = format!(
+            "♥️ ``{} {health}/{max_health}``",
+            crate::common::draw_bar(health as i32, max_health as i32, 13, "🟥", "⬛")
+        );
     }
 
     let mut hunger_message_content = "Hunger unknown.".to_string();
