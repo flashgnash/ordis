@@ -94,11 +94,11 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     let mut health_message_content = "Current health unknown.".to_string();
 
     if let Some(health) = health {
-        health_message_content = format!("HP: {health}/unknown");
+        health_message_content = format!("♥️ HP: {health}/unknown");
 
         if let Some(max_health) = max_health {
             health_message_content = format!(
-                "> HP ``{health}/{max_health}``\n{}",
+                "♥️ HP ``{health}/{max_health}``\n{}",
                 crate::common::draw_bar(health as i32, max_health as i32, 15, "🟥", "⬛")
             );
         }
@@ -107,7 +107,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     let mut hunger_message_content = "Hunger unknown.".to_string();
     if let Some(hunger) = stat_block.hunger {
         hunger_message_content = format!(
-            "> Hunger: ``{hunger} / 10``\n{}",
+            "🍖 Hunger ``{hunger} / 10``\n{}",
             crate::common::draw_bar(hunger as i32, 10, 15, "🟨", "⬛")
         );
     }
@@ -116,7 +116,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .edit(
             ctx,
             CreateReply::default().content(format!(
-                "**{character_name}** (<#{character_channel}>)\n\n{health_message_content}\n\n{mana_message_content}\n\n{hunger_message_content}"
+                "**{character_name}** (<#{character_channel}>)\n\n{health_message_content}\n\n{mana_message_content}\n\n{hunger_message_content}\n\n> Active spells:\n> - Invisibility: -50 energy/turn\n> - Meditation: +50 energy/turn"
             )),
         )
         .await?;
@@ -177,7 +177,7 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
 
 fn get_mana_bar_message(stat_block: &StatBlock, character: &Character) -> String {
     return format!(
-        "> Energy ``{} / 1000``\n{}",
+        "🪄 Energy ``{} / 1000``\n{}",
         character.mana.unwrap_or(0),
         crate::common::draw_bar(
             character.mana.unwrap_or(0),
