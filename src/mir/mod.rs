@@ -69,6 +69,11 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+pub async fn get_status(ctx: Context<'_>) {
+    let db_connection = &mut db::establish_connection();
+    let char = get_user_character(&ctx, db_connection);
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
@@ -87,15 +92,46 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    let new_character = set_mana_internal(ctx, db_connection, character, mana).await?;
+    let old_mana = character.mana.unwrap_or(0);
+
+    let modified_character = set_mana_internal(ctx, db_connection, character, mana).await?;
 
     ctx.reply(format!(
-        "Set energy to: {}",
-        new_character.mana.unwrap_or(-1)
+        "Modified energy. Change: {}",
+        modified_character.mana.unwrap_or(0) - old_mana
     ))
     .await?;
 
+    let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character);
+
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+    let placeholder_message = ctx.send(placeholder).await?;
+
+    placeholder_message
+        .edit(ctx, CreateReply::default().content(mana_message_content))
+        .await?;
+
     Ok(())
+}
+
+fn get_mana_bar_message(stat_block: &StatBlock, character: &Character) -> String {
+    return format!(
+        "> Current Energy
+> ``{} / 1000``
+{}
+        ",
+        character.mana.unwrap_or(0),
+        crate::common::draw_bar(
+            character.mana.unwrap_or(0),
+            stat_block.energy_pool.unwrap_or(0) as i32,
+            15,
+            "🟦",
+            "⬛"
+        )
+    );
 }
 
 async fn update_mana_readout(
@@ -105,14 +141,9 @@ async fn update_mana_readout(
 ) -> Result<Character, Error> {
     let mut modified_character = character.clone();
 
-    let mana_message_content = format!(
-        "> Current Energy 
-> ``{} / 1000``
-{}
-        ",
-        character.mana.unwrap_or(0),
-        crate::common::draw_bar(character.mana.unwrap_or(0), 1000, 40, "🟦", "⬛")
-    );
+    let stat_block = StatBlock::from_character_with_cache(&ctx, character).await?;
+
+    let mana_message_content = get_mana_bar_message(&stat_block, &character);
 
     if let (Some(channel_id), Some(message_id)) = (
         &character.mana_readout_channel_id,
@@ -132,7 +163,7 @@ async fn update_mana_readout(
         return Ok(modified_character);
     } else {
         if let Some(channel_id) = &character.spell_block_channel_id {
-            println!("Making new gague in channel {channel_id}");
+            println!("Making new gauge in channel {channel_id}");
 
             modified_character.mana_readout_channel_id = Some(channel_id.to_string());
 
@@ -172,6 +203,11 @@ async fn set_mana_internal(
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+    let placeholder_message = ctx.send(placeholder).await?;
+
     let db_connection = &mut db::establish_connection();
 
     let character = get_user_character(&ctx, db_connection).await?;
@@ -183,16 +219,27 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     let modified_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
 
     ctx.reply(format!(
-        "Modified energy from {} to {}",
-        old_mana,
-        modified_character.mana.unwrap_or(0)
+        "Modified energy. Change: {}",
+        modified_character.mana.unwrap_or(0) - old_mana
     ))
     .await?;
+
+    let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character);
+
+    placeholder_message
+        .edit(ctx, CreateReply::default().content(mana_message_content))
+        .await?;
 
     Ok(())
 }
 #[poise::command(slash_command, prefix_command)]
 pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+    let placeholder_message = ctx.send(placeholder).await?;
+
     let db_connection = &mut db::establish_connection();
 
     let character = get_user_character(&ctx, db_connection).await?;
@@ -201,18 +248,24 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 
     let calc_result = old_mana - modifier;
 
-    let new_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
+    let modified_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
 
     // character.mana = Some(calc_result);
 
     // db::characters::update(db_connection, &character)?;
 
     ctx.reply(format!(
-        "Modified energy from {} to {}",
-        old_mana,
-        new_character.mana.unwrap_or(0)
+        "Modified energy. Change: {}",
+        modified_character.mana.unwrap_or(0) - old_mana
     ))
     .await?;
+
+    let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character);
+
+    placeholder_message
+        .edit(ctx, CreateReply::default().content(mana_message_content))
+        .await?;
 
     Ok(())
 }
@@ -226,6 +279,11 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
         return Ok(());
     }
 
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+    let placeholder_message = ctx.send(placeholder).await?;
+
     let db_connection = &mut db::establish_connection();
 
     let character = get_user_character(&ctx, db_connection).await?;
@@ -236,14 +294,20 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
 
     let calc_result = meval::eval_str(expression)? as i32;
 
-    let new_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
+    let modified_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
 
     ctx.reply(format!(
-        "Modified energy from {} to {}",
-        old_mana,
-        new_character.mana.unwrap_or(0)
+        "Modified energy. Change: {}",
+        modified_character.mana.unwrap_or(0) - old_mana
     ))
     .await?;
+
+    let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character);
+
+    placeholder_message
+        .edit(ctx, CreateReply::default().content(mana_message_content))
+        .await?;
 
     Ok(())
 }
@@ -253,29 +317,15 @@ pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error
     let placeholder = CreateReply::default()
         .content("*Thinking, please wait...*")
         .ephemeral(true);
-
     let placeholder_message = ctx.send(placeholder).await?;
 
     let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
 
-    println!("{stat_block}");
-
-    let json = stat_block.get_json()?;
-
-    let stat_block: Value = serde_json::from_str(&json)?;
-
     let spell_block_result: SpellSheet = stat_puller::get_sheet(&ctx).await?;
-
-    let spell_block: Value = serde_json::from_str(
-        &spell_block_result
-            .sheet_info
-            .jsonified_message
-            .expect("SpellBlock should always have json generated on construction"),
-    )?;
-
-    if let Some(energy_pool) = stat_block.get("energy_pool") {
-        ctx.reply(format!("Maximum Energy: {energy_pool}")).await?;
-    }
+    let spell_block: Value = spell_block_result
+        .sheet_info
+        .deserialized_message
+        .expect("This should always be generated");
 
     if let Some(spell_list) = spell_block.get("spells") {
         if let Some(spell) = spell_list.get(&spell_name) {
@@ -355,21 +405,16 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     match stat_block_result {
         Ok(stat_block) => {
-            let stat_block_deserialized: Value = serde_json::from_str(
-                &stat_block
-                    .sheet_info
-                    .jsonified_message
-                    .expect("Stat block should always generate json"),
-            )?;
-
-            if let Some(stats) = stat_block_deserialized.get("stats") {
-                if let Some(stats_object) = stats.as_object() {
-                    for (stat, value) in stats_object {
-                        println!("{stat}: {value}");
-                        if let Some(int_value) = value.as_i64() {
-                            let stat_mod = int_value / 10;
-                            str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
-                        }
+            if let Some(stats_object) = stat_block
+                .stats
+                .as_ref()
+                .and_then(|stats| stats.as_object())
+            {
+                for (stat, value) in stats_object {
+                    println!("{stat}: {value}");
+                    if let Some(int_value) = value.as_i64() {
+                        let stat_mod = int_value / 10;
+                        str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
                     }
                 }
             }

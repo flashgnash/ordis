@@ -36,8 +36,13 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
                 message_hash: None,
                 changed: false,
                 character: None,
+                deserialized_message: None,
             },
         };
+    }
+
+    fn post_init(&mut self) -> Result<(), Error> {
+        Ok(())
     }
 
     fn update_character(&mut self) {

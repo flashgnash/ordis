@@ -41,18 +41,11 @@ impl fmt::Display for SheetInfo {
 pub struct SheetInfo {
     pub original_message: Option<String>,
     pub jsonified_message: Option<String>,
+    pub deserialized_message: Option<Value>,
+
     pub message_hash: Option<String>,
     pub changed: bool,
     pub character: Option<Character>,
-}
-impl SheetInfo {
-    fn get_json(&self) -> Result<String, Error> {
-        if let Some(json) = self.jsonified_message.clone() {
-            Ok(json)
-        } else {
-            Err(Box::new(StatPullerError::JsonNotInitialised))
-        }
-    }
 }
 
 pub trait CharacterSheetable: Sized + std::fmt::Display {
@@ -60,18 +53,12 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
 
     fn new() -> Self;
 
+    fn post_init(&mut self) -> Result<(), Error>;
+
     fn update_character(&mut self);
 
     fn mut_sheet_info(&mut self) -> &mut SheetInfo;
     fn sheet_info(&self) -> &SheetInfo;
-
-    fn get_json(self) -> Result<String, Error> {
-        let sheet_info = self.sheet_info();
-
-        println!("sheet info {sheet_info}");
-
-        Ok(sheet_info.get_json()?)
-    }
 
     async fn get_sheet_message(
         ctx: &Context<'_>,
@@ -117,6 +104,15 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
 
         sheet_info.jsonified_message = Some(response);
 
+        sheet_info.deserialized_message = Some(serde_json::from_str(
+            &sheet_info
+                .jsonified_message
+                .clone()
+                .expect("This property was literally just set"),
+        )?);
+
+        instance.post_init()?;
+
         Ok(instance)
     }
 
@@ -133,14 +129,23 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
         return Ok(Self::from_string(&message).await?);
     }
 
-    fn from_cache(message: &str, json: &str) -> Self {
+    fn from_cache(message: &str, json: &str) -> Result<Self, Error> {
         let mut instance = Self::new();
         let sheet_info = instance.mut_sheet_info();
 
         sheet_info.original_message = Some(message.to_string());
         sheet_info.jsonified_message = Some(json.to_string());
 
-        return instance;
+        sheet_info.deserialized_message = Some(serde_json::from_str(
+            &sheet_info
+                .jsonified_message
+                .clone()
+                .expect("This property was literally just set"),
+        )?);
+
+        instance.post_init()?;
+
+        Ok(instance)
     }
 
     async fn from_character(ctx: &Context<'_>, character: &Character) -> Result<Self, Error> {
@@ -188,7 +193,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
                     .stat_block
                     .clone()
                     .expect("stat block hash has been checked"),
-            );
+            )?;
 
             let sheet_info = sheet.mut_sheet_info();
 

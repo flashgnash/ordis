@@ -12,6 +12,8 @@ use poise::serenity_prelude::Message;
 
 pub struct StatBlock {
     pub sheet_info: SheetInfo,
+    pub stats: Option<serde_json::Value>,
+    pub energy_pool: Option<i64>,
 }
 
 impl fmt::Display for StatBlock {
@@ -36,8 +38,29 @@ impl super::stat_puller::CharacterSheetable for StatBlock {
                 message_hash: None,
                 changed: false,
                 character: None,
+                deserialized_message: None,
             },
+            stats: None,
+            energy_pool: None,
         };
+    }
+
+    fn post_init(&mut self) -> Result<(), Error> {
+        let deserialized_message = self
+            .sheet_info
+            .deserialized_message
+            .as_ref()
+            .expect("This should be set before calling post_init");
+
+        if let Some(stats) = deserialized_message.get("stats") {
+            self.stats = Some(stats.clone());
+        }
+
+        self.energy_pool = deserialized_message
+            .get("energy_pool")
+            .and_then(|v| v.as_i64());
+
+        Ok(())
     }
 
     fn update_character(&mut self) {
