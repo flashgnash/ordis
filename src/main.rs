@@ -43,6 +43,9 @@ use mir::mod_mana;
 use mir::add_mana;
 use mir::sub_mana;
 
+
+use mir::status;
+
 use mir::level_up;
 use mir::create_character;
 use mir::get_characters;
@@ -264,6 +267,7 @@ async fn main() {
 
                 pull_stat(), pull_stats(), pull_spellsheet(),
                 get_mana(), set_mana(), mod_mana(), add_mana(), sub_mana(),
+                status(),
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 

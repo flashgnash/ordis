@@ -14,6 +14,9 @@ pub struct StatBlock {
     pub sheet_info: SheetInfo,
     pub stats: Option<serde_json::Value>,
     pub energy_pool: Option<i64>,
+    pub hp: Option<i64>,
+    pub max_hp: Option<i64>,
+    pub hunger: Option<i64>,
 }
 
 impl fmt::Display for StatBlock {
@@ -42,6 +45,9 @@ impl super::stat_puller::CharacterSheetable for StatBlock {
             },
             stats: None,
             energy_pool: None,
+            max_hp: None,
+            hp: None,
+            hunger: None,
         };
     }
 
@@ -59,6 +65,13 @@ impl super::stat_puller::CharacterSheetable for StatBlock {
         self.energy_pool = deserialized_message
             .get("energy_pool")
             .and_then(|v| v.as_i64());
+
+        self.hp = deserialized_message
+            .get("current_hp")
+            .and_then(|v| v.as_i64());
+        self.max_hp = deserialized_message.get("hp").and_then(|v| v.as_i64());
+
+        self.hunger = deserialized_message.get("hunger").and_then(|v| v.as_i64());
 
         Ok(())
     }

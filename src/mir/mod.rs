@@ -69,18 +69,76 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn get_status(ctx: Context<'_>) {
-    let db_connection = &mut db::establish_connection();
-    let char = get_user_character(&ctx, db_connection);
-}
-
 #[poise::command(slash_command, prefix_command)]
-pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+    let placeholder_message = ctx.send(placeholder).await?;
     let db_connection = &mut db::establish_connection();
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    ctx.reply(format!("Current energy: {}", character.mana.unwrap_or(-1)))
+    let character_name = &character.name.clone().unwrap_or("No name?".to_string());
+    let character_channel = &character
+        .stat_block_channel_id
+        .clone()
+        .unwrap_or("".to_string());
+
+    let stat_block = StatBlock::from_character_with_cache(&ctx, &character).await?;
+    let mana_message_content = get_mana_bar_message(&stat_block, &character);
+
+    let max_health = stat_block.max_hp;
+    let health = stat_block.hp;
+
+    let mut health_message_content = "Current health unknown.".to_string();
+
+    if let Some(health) = health {
+        health_message_content = format!("HP: {health}/unknown");
+
+        if let Some(max_health) = max_health {
+            health_message_content = format!(
+                "> HP ``{health}/{max_health}``\n{}",
+                crate::common::draw_bar(health as i32, max_health as i32, 15, "🟥", "⬛")
+            );
+        }
+    }
+
+    let mut hunger_message_content = "Hunger unknown.".to_string();
+    if let Some(hunger) = stat_block.hunger {
+        hunger_message_content = format!(
+            "> Hunger: ``{hunger} / 10``\n{}",
+            crate::common::draw_bar(hunger as i32, 10, 15, "🟨", "⬛")
+        );
+    }
+
+    placeholder_message
+        .edit(
+            ctx,
+            CreateReply::default().content(format!(
+                "**{character_name}** (<#{character_channel}>)\n\n{health_message_content}\n\n{mana_message_content}\n\n{hunger_message_content}"
+            )),
+        )
+        .await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+    let placeholder_message = ctx.send(placeholder).await?;
+    let db_connection = &mut db::establish_connection();
+
+    let character = get_user_character(&ctx, db_connection).await?;
+
+    let stat_block = StatBlock::from_character_with_cache(&ctx, &character).await?;
+    let mana_message_content = get_mana_bar_message(&stat_block, &character);
+
+    placeholder_message
+        .edit(ctx, CreateReply::default().content(mana_message_content))
         .await?;
 
     Ok(())
@@ -119,10 +177,7 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
 
 fn get_mana_bar_message(stat_block: &StatBlock, character: &Character) -> String {
     return format!(
-        "> Current Energy
-> ``{} / 1000``
-{}
-        ",
+        "> Energy ``{} / 1000``\n{}",
         character.mana.unwrap_or(0),
         crate::common::draw_bar(
             character.mana.unwrap_or(0),
