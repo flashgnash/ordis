@@ -65,7 +65,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
         character: &Character,
     ) -> Result<poise::serenity_prelude::Message, Error>;
 
-    fn get_previous_hash(character: &Character) -> Option<String>;
+    fn get_previous_block(character: &Character) -> (Option<String>, Option<String>); //Hash, message
 
     async fn from_string(message: &str) -> Result<Self, Error> {
         let mut instance = Self::new();
@@ -166,7 +166,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
 
         let hash_hex = crate::common::hash(&stat_message.content);
 
-        let previous_hash = Self::get_previous_hash(character);
+        let (previous_hash, previous_block) = Self::get_previous_block(character);
 
         let generate_new_json = match previous_hash {
             Some(value) => value != hash_hex,
@@ -188,11 +188,8 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
             println!("Got cached stat block");
 
             let mut sheet = Self::from_cache(
-                &stat_message.content,
-                &character
-                    .stat_block
-                    .clone()
-                    .expect("stat block hash has been checked"),
+                &stat_message.content, //FUCK
+                &previous_block.expect("stat block hash has been checked"),
             )?;
 
             let sheet_info = sheet.mut_sheet_info();
@@ -214,6 +211,8 @@ pub enum StatPullerError {
 
     NoSpellSheet,
     SpellNotFound,
+    NoSpellCost,
+    NoMaxEnergy,
 
     JsonNotInitialised,
 }
@@ -245,6 +244,8 @@ pub async fn get_sheet<T: CharacterSheetable>(ctx: &Context<'_>) -> Result<T, Er
     let character = get_user_character(ctx, db_connection).await?;
 
     let character_sheet = T::from_character_with_cache(ctx, &character).await?;
+
+    // println!("{}", character_sheet);
 
     let sheet_info = character_sheet.sheet_info();
 

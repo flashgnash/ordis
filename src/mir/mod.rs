@@ -4,6 +4,7 @@ pub mod spell_sheet;
 pub mod stat_block;
 
 use spell_sheet::SpellSheet;
+use spell_sheet::SpellType;
 use stat_block::StatBlock;
 use stat_puller::get_sheet;
 use stat_puller::get_user_character;
@@ -366,66 +367,89 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn get_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error> {
+pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error> {
     let placeholder = CreateReply::default()
         .content("*Thinking, please wait...*")
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
 
     let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
+    let spell_sheet: SpellSheet = stat_puller::get_sheet(&ctx).await?;
 
-    let spell_block_result: SpellSheet = stat_puller::get_sheet(&ctx).await?;
-    let spell_block: Value = spell_block_result
-        .sheet_info
-        .deserialized_message
-        .expect("This should always be generated");
+    let max_mana = stat_block.energy_pool;
 
-    if let Some(spell_list) = spell_block.get("spells") {
-        if let Some(spell) = spell_list.get(&spell_name) {
-            let mut spell_cost_word = "Cost";
-            let mut spell_cost_string = "unknown".to_string();
+    let spells = spell_sheet.spells.ok_or(StatPullerError::NoSpellSheet)?;
 
-            if let Some(spell_cost) = spell.get("cost") {
-                if let Some(spell_cost_i64) = spell_cost.as_i64() {
-                    spell_cost_string = spell_cost_i64.to_string();
+    if let Some(spell) = spells.get(&spell_name) {
+        let spell_cost = spell.mana_change.ok_or(StatPullerError::NoSpellCost)?;
 
-                    if spell_cost_i64 > 0 {
-                        spell_cost_word = "Gain";
-                    }
+        let spell_cost_string = spell_cost.to_string();
+
+        let mut spell_cost_word = "Cost";
+        if spell_cost > 0 {
+            spell_cost_word = "Gain";
+        }
+
+        let spell_type = spell.spell_type.as_ref().unwrap_or(&SpellType::Unknown);
+
+        let cast_time = &spell
+            .cast_time
+            .as_ref()
+            .and_then(|s| Some(s.to_string()))
+            .unwrap_or("No cast time found".to_string());
+
+        let spell_name = common::capitalize_first_letter(&spell_name);
+
+        match spell_type {
+            SpellType::Single => {
+                let db_connection = &mut db::establish_connection();
+
+                let character = get_user_character(&ctx, db_connection).await?;
+
+                let mana = character
+                    .mana
+                    .unwrap_or(max_mana.ok_or(StatPullerError::NoMaxEnergy)? as i32);
+
+                let new_mana = mana + spell.mana_change.ok_or(StatPullerError::NoSpellCost)? as i32;
+
+                if new_mana >= 0 {
+                    let modified_char =
+                        set_mana_internal(ctx, db_connection, character, new_mana).await?;
+
+                    ctx.reply(format!(
+                        "{} casts **{spell_name}**: (Cast time: {cast_time})\n",
+                        &modified_char
+                            .name
+                            .as_ref()
+                            .unwrap_or(&"Unknown name".to_string())
+                    ))
+                    .await?;
+                } else {
+                    ctx.reply(format!(
+                        "Failed to cast **{spell_name}** (not enough mana)\n",
+                    ))
+                    .await?;
                 }
             }
+            _ => {
+                let msg = format!("Only single cast spells are supported right now, sorry!");
 
-            let spell_type = spell
-                .get("type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("{unknown}");
-
-            let cast_time = spell
-                .get("cast_time")
-                .and_then(|v| v.as_str())
-                .unwrap_or("No cast time found");
-
-            let spell_name = common::capitalize_first_letter(&spell_name);
-
-            let msg = format!(
-                "**{spell_name}**:\n> Type: {spell_type}\n> Energy {spell_cost_word}: {spell_cost_string}\n> Cast time: {cast_time}\n",
-            );
-
-            ctx.reply(msg).await?;
-        } else {
-            let mut spell_list_message = "Spell not found. Available Spells: \n".to_string();
-
-            for (spell_name, _) in spell_list.as_object().expect("No spell list") {
-                spell_list_message += &format!("- {spell_name} \n");
+                ctx.reply(msg).await?;
             }
-
-            let spell_list_reply = CreateReply::default()
-                .content(spell_list_message)
-                .ephemeral(true);
-
-            placeholder_message.edit(ctx, spell_list_reply).await?;
-            // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
         }
+    } else {
+        let mut spell_list_message = "Spell not found. Available Spells: \n".to_string();
+
+        for (spell_name, _) in spells {
+            spell_list_message += &format!("- {spell_name} \n");
+        }
+
+        let spell_list_reply = CreateReply::default()
+            .content(spell_list_message)
+            .ephemeral(true);
+
+        placeholder_message.edit(ctx, spell_list_reply).await?;
+        // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
     }
 
     Ok(())
@@ -450,7 +474,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     dice = re.replace_all(&dice, "1d$11d$2").to_string();
 
-    println!("{}", dice);
+    // println!("{}", dice);
 
     let mut str_replaced = dice;
 
@@ -680,7 +704,7 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
     let character = db::characters::get(db_connection, character_id);
 
     match character {
-        Ok((char)) => {
+        Ok(char) => {
             let comparison_user_id = Some(user.id.clone());
 
             if char.user_id.eq(&comparison_user_id) {

@@ -101,8 +101,11 @@ impl super::stat_puller::CharacterSheetable for StatBlock {
         &self.sheet_info
     }
 
-    fn get_previous_hash(character: &Character) -> Option<String> {
-        return character.stat_block_hash.clone();
+    fn get_previous_block(character: &Character) -> (Option<String>, Option<String>) {
+        return (
+            character.stat_block_hash.clone(),
+            character.stat_block.clone(),
+        );
     }
 
     async fn get_sheet_message(ctx: &Context<'_>, character: &Character) -> Result<Message, Error> {

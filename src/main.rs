@@ -52,7 +52,9 @@ use mir::get_characters;
 use mir::roll;
 use mir::delete_character;
 use mir::select_character;
-use mir::get_spell;
+
+
+use mir::cast_spell;
 use mir::set_spells;
 
 mod gpt;
@@ -271,7 +273,7 @@ async fn main() {
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 
-                get_spell(), level_up(), roll(), 
+                cast_spell(), level_up(), roll(), 
 
                 join_vc(),
                 play_music(),stop_music(),pause_music(),resume_music(),skip_song()

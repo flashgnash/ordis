@@ -1,5 +1,8 @@
 use std::fmt;
 
+use std::collections::HashMap;
+use std::str::FromStr;
+
 use crate::common::Context;
 use crate::common::Error;
 
@@ -7,11 +10,51 @@ use crate::db::models::Character;
 
 use super::stat_puller;
 use super::stat_puller::SheetInfo;
+use super::stat_puller::StatPullerError;
 
 use poise::serenity_prelude::Message;
 
+pub enum SpellType {
+    Single,
+    Toggle,
+    Summon,
+    Unknown,
+}
+
+impl FromStr for SpellType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "single" => Ok(SpellType::Single),
+            "toggle" => Ok(SpellType::Toggle),
+            "summon" => Ok(SpellType::Summon),
+            _ => Ok(SpellType::Unknown),
+        }
+    }
+}
+
+impl std::fmt::Display for SpellType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            SpellType::Single => "single",
+            SpellType::Toggle => "toggle",
+            SpellType::Summon => "summon",
+            SpellType::Unknown => "unknown",
+        };
+        write!(f, "{}", s)
+    }
+}
+pub struct Spell {
+    pub mana_change: Option<i64>,
+    pub name: Option<String>,
+    pub cast_time: Option<String>,
+    pub spell_type: Option<SpellType>,
+}
+
 pub struct SpellSheet {
     pub sheet_info: SheetInfo,
+    pub spells: Option<HashMap<String, Spell>>,
 }
 
 impl fmt::Display for SpellSheet {
@@ -38,10 +81,46 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
                 character: None,
                 deserialized_message: None,
             },
+            spells: None,
         };
     }
 
     fn post_init(&mut self) -> Result<(), Error> {
+        let deserialized_message = self.sheet_info.deserialized_message.clone();
+
+        if let Some(spell_data) = deserialized_message {
+            let mut spells: HashMap<String, Spell> = HashMap::new();
+
+            for (spell_name, spell_data) in spell_data
+                .get("spells")
+                .ok_or(StatPullerError::NoSpellSheet)?
+                .as_object()
+                .ok_or(StatPullerError::NoSpellSheet)?
+            {
+                let mut spell_type_enum: Option<SpellType> = None;
+
+                if let Some(spell_type_value) = spell_data.get("type") {
+                    spell_type_enum = Some(
+                        SpellType::from_str(&spell_type_value.as_str().unwrap_or("unknown"))
+                            .expect("This cannot fail"),
+                    );
+                }
+
+                let spell = Spell {
+                    name: Some(spell_name.to_string()),
+                    cast_time: spell_data
+                        .get("cast_time")
+                        .and_then(|c| Some(c.to_string())),
+                    spell_type: spell_type_enum,
+                    mana_change: spell_data.get("cost").and_then(|c| c.as_i64()),
+                };
+
+                spells.insert(spell_name.to_string(), spell);
+            }
+
+            self.spells = Some(spells);
+        }
+
         Ok(())
     }
 
@@ -70,8 +149,11 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
         &self.sheet_info
     }
 
-    fn get_previous_hash(character: &Character) -> Option<String> {
-        return character.spell_block_hash.clone();
+    fn get_previous_block(character: &Character) -> (Option<String>, Option<String>) {
+        return (
+            character.spell_block_hash.clone(),
+            character.spell_block.clone(),
+        );
     }
 
     async fn get_sheet_message(ctx: &Context<'_>, character: &Character) -> Result<Message, Error> {
@@ -116,7 +198,7 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
     }    
 
     If there are missing values, interpret them as null
-    For cast time, use the middle value that should look like '2 actions'
+    For cast time, use the middle value that should look like '2 actions', 'entire turn', '3 turns' etc
     If there are spaces in spell names, remove them, replacing them with underscores
     If you are expecting a value in a specific format but it is incorrect, instead set the value as 'ERROR - (explanation)'
     You should translate these spells into a json dictionary.
