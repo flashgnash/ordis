@@ -127,6 +127,7 @@ pub async fn roll_internal(dice: &String) -> Result<Vec<(String, f64)>, Error> {
 pub async fn output_roll_messages(
     ctx: Context<'_>,
     rolls: Vec<(String, f64)>,
+    username: String,
 ) -> Result<(), Error> {
     let mut longest_line = 0;
     let mut message_lines: Vec<String> = vec![];
@@ -146,8 +147,7 @@ pub async fn output_roll_messages(
 
     let underline = format!("__{}__", pad_string("", longest_line - 8));
     ctx.say(format!(
-        "\n**Rolling...**\n\n{}\n{}\nTotal: {}",
-        message, underline, grand_total
+        "\n**Rolling for {username}...**\n\n{message}\n{underline}\nTotal: {grand_total}"
     ))
     .await?;
 
@@ -158,7 +158,19 @@ pub async fn output_roll_messages(
 pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
     let results = roll_internal(&dice).await?;
 
-    output_roll_messages(ctx, results).await?;
+    output_roll_messages(
+        ctx,
+        results,
+        ctx.author()
+            .nick_in(
+                ctx,
+                ctx.guild_id()
+                    .expect("Tried to roll in non-guild - TODO remove this issue"),
+            )
+            .await
+            .unwrap_or(ctx.author().name.to_string()),
+    )
+    .await?;
 
     Ok(())
 }
