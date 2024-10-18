@@ -864,33 +864,33 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     println!("{}", stats);
 
-    let hit_die = stats.get("hit_die_per_level").unwrap().to_string();
-    let stat_die = stats.get("stat_die_per_level").unwrap().to_string();
-    let spell_die = stats.get("spell_die_per_level").unwrap().to_string();
+    let energy_die = stats.get("energy_die_per_level").unwrap().to_string();
+    let magic_die = stats.get("magic_die_per_level").unwrap().to_string();
+    let training_die = stats.get("training_die_per_level").unwrap().to_string();
 
-    let mut hit_die_sum: i32 = 0;
-    let mut stat_die_sum: i32 = 0;
-    let mut spell_die_sum: i32 = 0;
+    let mut energy_die_sum: i32 = 0;
+    let mut magic_die_sum: i32 = 0;
+    let mut training_die_sum: i32 = 0;
 
     let mut message = format!(
-        "Per Level: \nHit: {hit_die} \\| Stat: {stat_die} \\| Spell: {spell_die}\n------------------------------------\nRolls:"
+        "Per Level: \nEnergy: {energy_die} \\| Magic: {magic_die} \\| Training: {training_die}\n\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\nRolls:"
     );
 
     for i in 1..num_levels + 1 {
-        let (hit_die_result, _) = dice::roll_replace(&hit_die.as_str())?;
-        let (stat_die_result, _) = dice::roll_replace(&stat_die.as_str())?;
-        let (spell_die_result, _) = dice::roll_replace(&spell_die.as_str())?;
+        let (energy_die_result, _) = dice::roll_replace(&energy_die.as_str())?;
+        let (magic_die_result, _) = dice::roll_replace(&magic_die.as_str())?;
+        let (training_die_result, _) = dice::roll_replace(&training_die.as_str())?;
 
-        hit_die_sum = hit_die_sum + safe_to_number(&hit_die_result);
-        stat_die_sum = stat_die_sum + safe_to_number(&stat_die_result);
-        spell_die_sum = spell_die_sum + safe_to_number(&spell_die_result);
+        energy_die_sum = energy_die_sum + safe_to_number(&energy_die_result);
+        magic_die_sum = magic_die_sum + safe_to_number(&magic_die_result);
+        training_die_sum = training_die_sum + safe_to_number(&training_die_result);
 
         message = format!(
-            "{message}\n\n{i})       :heart: {hit_die_result}         :hash: {stat_die_result}         :magic_wand: {spell_die_result}"
+            "{message}\n{i}.  ⚡️ {energy_die_result}    🐇 {magic_die_result}    🏋 {training_die_result}"
         );
     }
     message = message.replace('"', "");
-    message = format!("{message}\n\n**Total**:\n           :heart: {hit_die_sum}         :hash: {stat_die_sum}         :magic_wand: {spell_die_sum}");
+    message = format!("{message}\n\n**Total**:\n    ⚡️ {energy_die_sum}    🐇 {magic_die_sum}    🏋 {training_die_sum}");
     let reply = CreateReply::default().content(message);
     msg.edit(ctx, reply).await?;
 

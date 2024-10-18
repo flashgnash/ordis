@@ -144,11 +144,9 @@ impl super::stat_puller::CharacterSheetable for StatBlock {
 
             "energy_pool": (number),            
     
-            "hit_die_per_level": (number)d(number),
-            "stat_die_per_level": (number)d(number),
-            "spell_die_per_level": (number)d(number),
-            "stat_points_saved": (number)d(number),
-            "spell_points_saved": (number)d(number),
+            "energy_die_per_level": (number)d(number),
+            "magic_die_per_level": (number)d(number),
+            "training_die_per_level": (number)d(number),
 
     
             "stats": {
