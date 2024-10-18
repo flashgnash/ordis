@@ -197,7 +197,10 @@ async fn update_mana_readout(
 
     let stat_block = StatBlock::from_character_with_cache(&ctx, character).await?;
 
-    let mana_message_content = get_mana_bar_message(&stat_block, &character);
+    let mana_message_content = format!(
+        "Current Energy: \n\n{}",
+        get_mana_bar_message(&stat_block, &character)
+    );
 
     if let (Some(channel_id), Some(message_id)) = (
         &character.mana_readout_channel_id,
@@ -205,38 +208,51 @@ async fn update_mana_readout(
     ) {
         println!("Using existing gauge");
         let channel: ChannelId = channel_id.parse()?;
-
         let message: MessageId = message_id.parse()?;
 
-        channel
+        let edit_result = channel
             .edit_message(
                 ctx,
                 message,
-                EditMessage::default().content(mana_message_content),
+                EditMessage::default().content(&mana_message_content),
             )
+            .await;
+
+        match edit_result {
+            Ok(_) => {
+                return Ok(modified_character);
+            }
+            Err(_) => {
+                println!("Message was deleted. Clearing saved message ID and trying again");
+                modified_character.mana_readout_channel_id = None;
+
+                // db::characters::update(db_connection, &modified_character);
+
+                // return update_mana_readout(ctx, &modified_character, db_connection).await;
+            }
+        };
+    };
+
+    if let Some(channel_id) = &character.spell_block_channel_id {
+        println!("Making new gauge in channel {channel_id}");
+
+        modified_character.mana_readout_channel_id = Some(channel_id.to_string());
+
+        let channel: ChannelId = channel_id.parse().unwrap();
+
+        let message = channel
+            .send_message(ctx, CreateMessage::default().content(&mana_message_content))
             .await?;
+
+        modified_character.mana_readout_message_id = Some(message.id.to_string());
+
+        db::characters::update(db_connection, &modified_character)?;
+
         return Ok(modified_character);
-    } else {
-        if let Some(channel_id) = &character.spell_block_channel_id {
-            println!("Making new gauge in channel {channel_id}");
-
-            modified_character.mana_readout_channel_id = Some(channel_id.to_string());
-
-            let channel: ChannelId = channel_id.parse().unwrap();
-
-            let message = channel
-                .send_message(ctx, CreateMessage::default().content(mana_message_content))
-                .await?;
-
-            modified_character.mana_readout_message_id = Some(message.id.to_string());
-
-            db::characters::update(db_connection, &modified_character)?;
-
-            return Ok(modified_character);
-        }
-
-        return Err(Box::new(StatPullerError::NoSpellSheet));
     }
+
+    println!("No channel id or message id - no spell message?");
+    return Err(Box::new(StatPullerError::NoSpellSheet));
 }
 
 async fn set_mana_internal(
@@ -778,6 +794,14 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
 
 #[poise::command(context_menu_command = "Set Spell Message")]
 pub async fn set_spells(ctx: Context<'_>, msg: crate::serenity::Message) -> Result<(), Error> {
+    let placeholder = ctx
+        .send(
+            CreateReply::default()
+                .content("Thinking... please wait")
+                .ephemeral(true),
+        )
+        .await?;
+
     let author = &ctx.author();
     let user_id = author.id.get();
     let db_connection = &mut db::establish_connection();
@@ -791,7 +815,12 @@ pub async fn set_spells(ctx: Context<'_>, msg: crate::serenity::Message) -> Resu
 
         db::characters::update(db_connection, &character)?;
 
-        ctx.reply("Set your spell block successfully").await?;
+        placeholder
+            .edit(
+                ctx,
+                CreateReply::default().content("Set your spell block successfully"),
+            )
+            .await?;
     } else {
         return Err(Box::new(stat_puller::StatPullerError::NoCharacterSheet));
     }
