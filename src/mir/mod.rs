@@ -204,8 +204,9 @@ async fn update_mana_readout(
         &character.mana_readout_message_id,
     ) {
         println!("Using existing gauge");
-        let channel: ChannelId = channel_id.parse().unwrap();
-        let message: MessageId = message_id.parse().unwrap();
+        let channel: ChannelId = channel_id.parse()?;
+
+        let message: MessageId = message_id.parse()?;
 
         channel
             .edit_message(
@@ -606,7 +607,13 @@ pub async fn create_character(
 
             return Ok(());
         }
-        println!("{}", stats.get("name").unwrap());
+        println!(
+            "{}",
+            &stats
+                .get("name")
+                .and_then(|n| Some(n.to_string()))
+                .unwrap_or("name unknown".to_string())
+        );
 
         let character_name_stringified = character_name
             .as_str()
@@ -864,9 +871,18 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     println!("{}", stats);
 
-    let energy_die = stats.get("energy_die_per_level").unwrap().to_string();
-    let magic_die = stats.get("magic_die_per_level").unwrap().to_string();
-    let training_die = stats.get("training_die_per_level").unwrap().to_string();
+    let energy_die = stats
+        .get("energy_die_per_level")
+        .ok_or(StatPullerError::NoEnergyDie)?
+        .to_string();
+    let magic_die = stats
+        .get("magic_die_per_level")
+        .ok_or(StatPullerError::NoMagicDie)?
+        .to_string();
+    let training_die = stats
+        .get("training_die_per_level")
+        .ok_or(StatPullerError::NoTrainingDie)?
+        .to_string();
 
     let mut energy_die_sum: i32 = 0;
     let mut magic_die_sum: i32 = 0;

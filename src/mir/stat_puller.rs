@@ -213,6 +213,11 @@ pub enum StatPullerError {
     SpellNotFound,
     NoSpellCost,
     NoMaxEnergy,
+    GaugeMessageMissing,
+
+    NoEnergyDie,
+    NoMagicDie,
+    NoTrainingDie,
 
     JsonNotInitialised,
 }
