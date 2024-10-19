@@ -536,19 +536,19 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let results = dice::roll_internal(&str_replaced).await?;
 
-    dice::output_roll_messages(
-        ctx,
-        results,
-        ctx.author()
-            .nick_in(
-                ctx,
-                ctx.guild_id()
-                    .expect("Tried to roll in non-guild - TODO remove this issue"),
-            )
-            .await
-            .unwrap_or(ctx.author().name.to_string()),
-    )
-    .await?;
+    let author = ctx.author();
+
+    let mut nick = author.name.to_string();
+
+    if let Some(guild_id) = ctx.guild_id() {
+        let author_nick = author.nick_in(ctx, guild_id).await;
+
+        if let Some(author_nick) = author_nick {
+            nick = author_nick;
+        }
+    }
+
+    dice::output_roll_messages(ctx, results, nick).await?;
 
     if nag_user_about_character_sheet {
         let character_sheet_missing_message = CreateReply::default()
