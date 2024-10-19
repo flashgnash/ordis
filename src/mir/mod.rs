@@ -484,7 +484,9 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
     let stat_block_result: Result<StatBlock, Error> = get_sheet(&ctx).await;
 
     //TODO make this default configurable per server
-    let mut dice = dice_expression.unwrap_or("1d100".to_string());
+    let mut dice = dice_expression
+        .unwrap_or("1d100".to_string())
+        .to_lowercase();
 
     //Replace d100 with 1d100, d6 with 1d6 etc
 
@@ -506,7 +508,6 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
                 .and_then(|stats| stats.as_object())
             {
                 for (stat, value) in stats_object {
-                    println!("{stat}: {value}");
                     if let Some(int_value) = value.as_i64() {
                         let stat_mod = int_value / 10;
                         str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
