@@ -3,12 +3,18 @@ pub mod stat_puller;
 pub mod spell_sheet;
 pub mod stat_block;
 
+use lazy_static::lazy_static;
+use tokio::sync::Mutex;
+
+use spell_sheet::Spell;
 use spell_sheet::SpellSheet;
 use spell_sheet::SpellType;
 use stat_block::StatBlock;
 use stat_puller::get_sheet;
 use stat_puller::get_user_character;
 use stat_puller::CharacterSheetable;
+
+use std::collections::HashMap;
 
 use crate::common;
 use crate::common::safe_to_number;
@@ -384,6 +390,46 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
     Ok(())
 }
 
+lazy_static! {
+    static ref ACTIVE_SPELLS: Mutex<HashMap<i32, Vec<Spell>>> = Mutex::new(HashMap::new());
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+    let placeholder_message = ctx.send(placeholder).await?;
+
+    let db_connection = &mut db::establish_connection();
+    let character = get_user_character(&ctx, db_connection).await?;
+
+    let active_spells_map = ACTIVE_SPELLS.lock().await;
+
+    if let Some(active_spells) =
+        active_spells_map.get(&character.id.expect("Character ID should never be null"))
+    {
+        for spell in active_spells.into_iter() {
+            let mut name = "unknown spell name";
+
+            if let Some(spell_name) = &spell.name {
+                name = spell_name;
+            }
+
+            ctx.say(format!("Casting spell {}", name)).await?;
+        }
+
+        placeholder_message
+            .edit(ctx, CreateReply::default().content("Turn ended"))
+            .await?;
+    } else {
+        placeholder_message
+            .edit(ctx, CreateReply::default().content("No active spells"))
+            .await?;
+    }
+
+    Ok(())
+}
 #[poise::command(slash_command, prefix_command)]
 pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error> {
     let placeholder = CreateReply::default()
@@ -418,16 +464,16 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
 
         let spell_name = common::capitalize_first_letter(&spell_name);
 
+        let db_connection = &mut db::establish_connection();
+
+        let character = get_user_character(&ctx, db_connection).await?;
+
+        let mana = character
+            .mana
+            .unwrap_or(max_mana.ok_or(StatPullerError::NoMaxEnergy)? as i32);
+
         match spell_type {
             SpellType::Single => {
-                let db_connection = &mut db::establish_connection();
-
-                let character = get_user_character(&ctx, db_connection).await?;
-
-                let mana = character
-                    .mana
-                    .unwrap_or(max_mana.ok_or(StatPullerError::NoMaxEnergy)? as i32);
-
                 let new_mana = mana + spell.mana_change.ok_or(StatPullerError::NoSpellCost)? as i32;
 
                 if new_mana >= 0 {
@@ -449,10 +495,56 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
                     .await?;
                 }
             }
-            _ => {
-                let msg = format!("Only single cast spells are supported right now, sorry!");
+            SpellType::Toggle => {
+                let mut active_spells_map = ACTIVE_SPELLS.lock().await;
 
-                ctx.reply(msg).await?;
+                let character_id = character.id.expect("Character ID should never be null");
+
+                if !active_spells_map.contains_key(&character_id) {
+                    println!("Inserting new active spell list for {}", ctx.author().name);
+                    active_spells_map.insert(character_id, Vec::new());
+                }
+
+                let mut is_spell_active: bool = false;
+
+                let active_spells = active_spells_map
+                    .get(&character.id.expect("Character ID should never be null"))
+                    .expect("Just set this");
+
+                for active_spell in active_spells {
+                    if &spell.name == &active_spell.name {
+                        let msg = format!(
+                            "{} disabled spell {}",
+                            &ctx.author().name,
+                            &spell.name.clone().unwrap_or("Unnamed spell".to_string())
+                        );
+                        ctx.reply(msg).await?;
+
+                        is_spell_active = true;
+                    }
+                }
+
+                if !is_spell_active {
+                    let active_spells_mut = active_spells_map
+                        .get_mut(&character.id.expect("Character ID should never be null"))
+                        .expect("Just set this");
+
+                    active_spells_mut.push((*spell).clone());
+
+                    let msg = format!(
+                        "{} enabled spell {}",
+                        &ctx.author().name,
+                        &spell.name.clone().unwrap_or("Unnamed spell".to_string())
+                    );
+                    ctx.reply(msg).await?;
+                }
+            }
+            SpellType::Summon => {
+                ctx.reply("Summon spells are currently not supported")
+                    .await?;
+            }
+            _ => {
+                ctx.reply("Unknown spell type").await?;
             }
         }
     } else {
@@ -469,6 +561,33 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
         placeholder_message.edit(ctx, spell_list_reply).await?;
         // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
     }
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+    let placeholder_message = ctx.send(placeholder).await?;
+
+    let spell_sheet: SpellSheet = stat_puller::get_sheet(&ctx).await?;
+
+    let spells = spell_sheet.spells.ok_or(StatPullerError::NoSpellSheet)?;
+
+    let mut spell_list_message = "Available Spells: \n".to_string();
+
+    for (spell_name, _) in spells {
+        spell_list_message += &format!("- {spell_name} \n");
+    }
+
+    let spell_list_reply = CreateReply::default()
+        .content(spell_list_message)
+        .ephemeral(true);
+
+    placeholder_message.edit(ctx, spell_list_reply).await?;
+    // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
 
     Ok(())
 }

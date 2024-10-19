@@ -56,6 +56,8 @@ use mir::select_character;
 
 use mir::cast_spell;
 use mir::set_spells;
+use mir::list_spells;
+use mir::end_turn;
 
 mod gpt;
 use gpt::ask;
@@ -273,7 +275,7 @@ async fn main() {
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 
-                cast_spell(), level_up(), roll(), 
+                cast_spell(), list_spells(), level_up(), roll(), end_turn(),
 
                 join_vc(),
                 play_music(),stop_music(),pause_music(),resume_music(),skip_song()

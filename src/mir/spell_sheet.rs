@@ -14,6 +14,7 @@ use super::stat_puller::StatPullerError;
 
 use poise::serenity_prelude::Message;
 
+#[derive(Clone)]
 pub enum SpellType {
     Single,
     Toggle,
@@ -45,6 +46,7 @@ impl std::fmt::Display for SpellType {
         write!(f, "{}", s)
     }
 }
+#[derive(Clone)]
 pub struct Spell {
     pub mana_change: Option<i64>,
     pub name: Option<String>,
@@ -198,8 +200,8 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
     }    
 
     If there are missing values, interpret them as null
-    For cast time, use the middle value that should look like '2 actions', 'entire turn', '3 turns' etc
-    If there are spaces in spell names, remove them, replacing them with underscores
+    For cast time, use the middle value that should look like '2 actions', 'entire turn', '3 turns', '1 action', '1 turn' etc
+    If there are spaces in spell names, replace them with underscores
     If you are expecting a value in a specific format but it is incorrect, instead set the value as 'ERROR - (explanation)'
     You should translate these spells into a json dictionary.
     All keys should be lower case and spell corrected. Respond with only valid json, anything else will break the program"                    
