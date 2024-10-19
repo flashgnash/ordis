@@ -72,19 +72,8 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
 
         let sheet_info = instance.mut_sheet_info();
 
-        if let Some(original_message) = &sheet_info.original_message {
-            println!("Original: {}", &original_message);
-        } else {
-            println!("Null!");
-        }
-
         sheet_info.original_message = Some(message.to_string());
 
-        if let Some(original_message) = &sheet_info.original_message {
-            println!("Modified: {}", &original_message);
-        } else {
-            println!("Also Null!");
-        }
         let model = "gpt-4o-mini";
 
         let preprompt = Self::PROMPT.to_string();
@@ -204,7 +193,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum StatPullerError {
-    Generic,
+    NoGuildId,
 
     NoCharacterSheet,
     NoCharacterSelected,
@@ -224,10 +213,26 @@ pub enum StatPullerError {
 
 impl fmt::Display for StatPullerError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            StatPullerError::NoGuildId => write!(f, "Guild ID is missing - Are you in a DM?"),
+            StatPullerError::NoCharacterSheet => {
+                write!(f, "Character sheet is missing - Was it deleted?")
+            }
+            StatPullerError::NoCharacterSelected => write!(f, 
+                "No character selected (please select one with /get_characters and /select_character (id))"
+            ),
+            StatPullerError::NoSpellSheet => write!(f, "Spell sheet is missing - please set one with the Set Spell Message button"),
+            StatPullerError::SpellNotFound => write!(f, "Spell not found"),
+            StatPullerError::NoSpellCost => write!(f, "Spell cost appears to be missing from your spell block"),
+            StatPullerError::NoMaxEnergy => write!(f, "Energy pool appears to be missing from your stat block"),
+            StatPullerError::GaugeMessageMissing => write!(f, "Gauge message is missing - was it deleted?"),
+            StatPullerError::NoEnergyDie => write!(f, "Energy die per level appears to be missing from your stat block"),
+            StatPullerError::NoMagicDie => write!(f, "Magic die per level appears to be missing from your stat block"),
+            StatPullerError::NoTrainingDie => write!(f, "Training die per level appears to be missing from your stat block"),
+            StatPullerError::JsonNotInitialised => write!(f, "JSON is not initialised - this should never happen"),
+        }
     }
 }
-
 impl std::error::Error for StatPullerError {}
 
 pub async fn get_user_character(

@@ -15,6 +15,7 @@ use crate::common::safe_to_number;
 use crate::common::Context;
 use crate::common::Error;
 use crate::db;
+use crate::db::characters::get_from_user_id;
 use crate::db::models::Character;
 
 use diesel::SqliteConnection;
@@ -697,6 +698,12 @@ pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(),
     let author = &ctx.author();
     let user_id = author.id.get();
 
+    let mut user = db::users::get(db_connection, user_id)?;
+    if user.selected_character == Some(character_id) {
+        println!("Removing selected character");
+        db::users::unset_character(db_connection, &user)?;
+    }
+
     let is_admin = common::check_admin(
         ctx,
         ctx.guild_id().expect("No guild ID found???!??!?!?"),
@@ -742,7 +749,14 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
         Ok(char) => {
             let comparison_user_id = Some(user.id.clone());
 
-            if char.user_id.eq(&comparison_user_id) {
+            if char.user_id.eq(&comparison_user_id)
+                || common::check_admin(
+                    ctx,
+                    ctx.guild_id().ok_or(StatPullerError::NoGuildId)?,
+                    ctx.author().id,
+                )
+                .await
+            {
                 user.selected_character = Some(character_id);
                 db::users::update(db_connection, &user)?;
                 let char_name = char.name.unwrap_or("No Name".to_string());
@@ -897,8 +911,6 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
         .ephemeral(true);
 
     let _ = original_stat_block_message.edit(ctx, reply).await;
-
-    println!("{}", stats);
 
     let energy_die = stats
         .get("energy_die_per_level")
