@@ -15,6 +15,23 @@ lazy_static! {
     pub static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::new();
 }
 
+pub fn is_author_on_mobile(ctx: &Context<'_>) -> bool {
+    if let Some(guild) = ctx.guild() {
+        let presence = guild.presences.get(&ctx.author().id);
+        if let Some(presence) = presence {
+            if let Some(client_status) = &presence.client_status {
+                if let Some(mobile_status) = client_status.mobile {
+                    if mobile_status == poise::serenity_prelude::OnlineStatus::Online {
+                        println!("User detected on mobile");
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 pub fn draw_bar(
     current: i32,
     max: i32,

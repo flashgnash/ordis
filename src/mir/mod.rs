@@ -4,6 +4,8 @@ pub mod spell_sheet;
 pub mod stat_block;
 
 use lazy_static::lazy_static;
+use poise::serenity_prelude::CreateEmbed;
+use poise::serenity_prelude::Embed;
 use tokio::sync::Mutex;
 
 use spell_sheet::Spell;
@@ -14,6 +16,7 @@ use stat_puller::get_sheet;
 use stat_puller::get_user_character;
 use stat_puller::CharacterSheetable;
 
+use std::any::Any;
 use std::collections::HashMap;
 
 use crate::common;
@@ -21,7 +24,6 @@ use crate::common::safe_to_number;
 use crate::common::Context;
 use crate::common::Error;
 use crate::db;
-use crate::db::characters::get_from_user_id;
 use crate::db::models::Character;
 
 use diesel::SqliteConnection;
@@ -77,6 +79,8 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+static BAR_LENGTH: i32 = 17;
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     let placeholder = CreateReply::default()
@@ -84,6 +88,8 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
     let db_connection = &mut db::establish_connection();
+
+    let bar_length = BAR_LENGTH;
 
     let character = get_user_character(&ctx, db_connection).await?;
 
@@ -94,7 +100,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .unwrap_or("".to_string());
 
     let stat_block = StatBlock::from_character_with_cache(&ctx, &character).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &character);
+    let mana_message_content = get_mana_bar_message(&stat_block, &character, &bar_length);
 
     let max_health = stat_block.max_hp;
     let health = stat_block.hp;
@@ -104,25 +110,68 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     if let Some(max_health) = max_health {
         let health = health.unwrap_or(max_health);
         health_message_content = format!(
-            "♥️ ``{} {health}/{max_health}``",
-            crate::common::draw_bar(health as i32, max_health as i32, 13, "🟥", "⬛")
+            "♥️ {} ``{health} / {max_health}``",
+            crate::common::draw_bar(
+                health as i32,
+                max_health as i32,
+                BAR_LENGTH as usize,
+                "🟥",
+                "⬛"
+            )
         );
     }
 
     let mut hunger_message_content = "Hunger unknown.".to_string();
     if let Some(hunger) = stat_block.hunger {
         hunger_message_content = format!(
-            "🍖 ``{} {hunger} / 10``",
-            crate::common::draw_bar(hunger as i32, 10, 13, "🟨", "⬛")
+            "🍖 {} ``{hunger} / 10``",
+            crate::common::draw_bar(hunger as i32, 10, BAR_LENGTH as usize, "🟨", "⬛")
         );
     }
+
+    let mut active_spells_content: String = "".to_string();
+
+    let active_spells_map = ACTIVE_SPELLS.lock().await;
+
+    if let Some(active_spells) =
+        active_spells_map.get(&character.id.expect("Character ID should never be null"))
+    {
+        active_spells_content = "Active Spells:\n".to_string();
+
+        let mut total_mana_diff: i64 = 0;
+
+        for spell in active_spells {
+            active_spells_content = active_spells_content
+                + &format!(
+                    "- {}: {} per turn\n",
+                    &spell.name.clone().unwrap_or("No spell name".to_string()),
+                    &spell
+                        .mana_change
+                        .and_then(|c| Some(c.to_string()))
+                        .unwrap_or("No mana cost".to_string())
+                );
+
+            if let Some(mana_change) = &spell.mana_change {
+                total_mana_diff = total_mana_diff + mana_change;
+            }
+        }
+
+        active_spells_content =
+            active_spells_content + &format!("\nNet mana change: {total_mana_diff} per turn");
+    }
+
+    let embed = CreateEmbed::default().title(format!("{character_name}\n<#{character_channel}>\n​\n")).description(format!(
+                "\n\n{health_message_content}\n\n{mana_message_content}\n\n{hunger_message_content}\n​\n{active_spells_content}\n"
+            ));
+    // embed.description("Test");
 
     placeholder_message
         .edit(
             ctx,
-            CreateReply::default().content(format!(
-                "**{character_name}** (<#{character_channel}>)\n\n{health_message_content}\n\n{mana_message_content}\n\n{hunger_message_content}\n\n**📔 Active spells**\n> - Invisibility: -50/turn\n> - Meditation: +25/turn\n> Net: -25/turn"
-            )),
+            CreateReply::default()
+                .content("")
+                .embed(embed)
+                .ephemeral(true),
         )
         .await?;
 
@@ -140,7 +189,7 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
     let character = get_user_character(&ctx, db_connection).await?;
 
     let stat_block = StatBlock::from_character_with_cache(&ctx, &character).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &character);
+    let mana_message_content = get_mana_bar_message(&stat_block, &character, &BAR_LENGTH);
 
     placeholder_message
         .edit(ctx, CreateReply::default().content(mana_message_content))
@@ -166,7 +215,7 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     .await?;
 
     let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character);
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     let placeholder = CreateReply::default()
         .content("*Thinking, please wait...*")
@@ -180,13 +229,13 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     Ok(())
 }
 
-fn get_mana_bar_message(stat_block: &StatBlock, character: &Character) -> String {
+fn get_mana_bar_message(stat_block: &StatBlock, character: &Character, bar_length: &i32) -> String {
     return format!(
-        "🪄 ``{} {} / {}`` ",
+        "🪄 {} ``{} / {}`` ",
         crate::common::draw_bar(
             character.mana.unwrap_or(0),
             stat_block.energy_pool.unwrap_or(0) as i32,
-            13,
+            BAR_LENGTH as usize,
             "🟦",
             "⬛"
         ),
@@ -206,7 +255,7 @@ async fn update_mana_readout(
 
     let mana_message_content = format!(
         "Current Energy: \n\n{}",
-        get_mana_bar_message(&stat_block, &character)
+        get_mana_bar_message(&stat_block, &character, &BAR_LENGTH)
     );
 
     if let (Some(channel_id), Some(message_id)) = (
@@ -303,7 +352,7 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     .await?;
 
     let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character);
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     placeholder_message
         .edit(ctx, CreateReply::default().content(mana_message_content))
@@ -339,7 +388,7 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     .await?;
 
     let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character);
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     placeholder_message
         .edit(ctx, CreateReply::default().content(mana_message_content))
@@ -381,7 +430,7 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
     .await?;
 
     let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character);
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     placeholder_message
         .edit(ctx, CreateReply::default().content(mana_message_content))
@@ -409,6 +458,9 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
     if let Some(active_spells) =
         active_spells_map.get(&character.id.expect("Character ID should never be null"))
     {
+        let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
+        let max_mana = stat_block.energy_pool;
+
         for spell in active_spells.into_iter() {
             let mut name = "unknown spell name";
 
@@ -416,7 +468,38 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
                 name = spell_name;
             }
 
-            ctx.say(format!("Casting spell {}", name)).await?;
+            let mut cur_mana = max_mana.ok_or(StatPullerError::NoMaxEnergy)? as i32;
+
+            if let Some(mana) = character.mana {
+                cur_mana = mana;
+            }
+
+            let new_mana = cur_mana + spell.mana_change.ok_or(StatPullerError::NoSpellCost)? as i32;
+
+            if new_mana >= 0 {
+                let modified_char =
+                    set_mana_internal(ctx, db_connection, character.clone(), new_mana).await?;
+
+                let cast_time = &spell
+                    .cast_time
+                    .as_ref()
+                    .and_then(|s| Some(s.to_string()))
+                    .unwrap_or("No cast time found".to_string());
+
+                ctx.reply(format!(
+                    "{} casts **{name}**: (Cast time: {cast_time})\n",
+                    &modified_char
+                        .name
+                        .as_ref()
+                        .unwrap_or(&"Unknown name".to_string())
+                ))
+                .await?;
+
+                // ctx.say(format!("Casting spell {}", name)).await?;
+            } else {
+                ctx.say(format!("Spell {} failed due to lack of mana", name))
+                    .await?;
+            }
         }
 
         placeholder_message
@@ -432,9 +515,7 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
 }
 #[poise::command(slash_command, prefix_command)]
 pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Error> {
-    let placeholder = CreateReply::default()
-        .content("*Thinking, please wait...*")
-        .ephemeral(true);
+    let placeholder = CreateReply::default().content("*Thinking, please wait...*");
     let placeholder_message = ctx.send(placeholder).await?;
 
     let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
@@ -472,27 +553,39 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
             .mana
             .unwrap_or(max_mana.ok_or(StatPullerError::NoMaxEnergy)? as i32);
 
+        let mut modified_char: Option<Character> = None;
+
         match spell_type {
             SpellType::Single => {
                 let new_mana = mana + spell.mana_change.ok_or(StatPullerError::NoSpellCost)? as i32;
 
                 if new_mana >= 0 {
-                    let modified_char =
-                        set_mana_internal(ctx, db_connection, character, new_mana).await?;
+                    modified_char =
+                        Some(set_mana_internal(ctx, db_connection, character, new_mana).await?);
 
-                    ctx.reply(format!(
-                        "{} casts **{spell_name}**: (Cast time: {cast_time})\n",
-                        &modified_char
-                            .name
-                            .as_ref()
-                            .unwrap_or(&"Unknown name".to_string())
-                    ))
-                    .await?;
+                    placeholder_message
+                        .edit(
+                            ctx,
+                            CreateReply::default().content(format!(
+                                "{} casts **{spell_name}**: (Cast time: {cast_time})\n",
+                                &modified_char
+                                    .as_ref()
+                                    .expect("Just set this")
+                                    .name
+                                    .as_ref()
+                                    .unwrap_or(&"Unknown name".to_string())
+                            )),
+                        )
+                        .await?;
                 } else {
-                    ctx.reply(format!(
-                        "Failed to cast **{spell_name}** (not enough mana)\n",
-                    ))
-                    .await?;
+                    placeholder_message
+                        .edit(
+                            ctx,
+                            CreateReply::default().content(format!(
+                                "Failed to cast **{spell_name}** (not enough mana)\n",
+                            )),
+                        )
+                        .await?;
                 }
             }
             SpellType::Toggle => {
@@ -547,6 +640,18 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
                 ctx.reply("Unknown spell type").await?;
             }
         }
+
+        if let Some(modified_char) = modified_char {
+            let mana_message_content =
+                get_mana_bar_message(&stat_block, &modified_char, &BAR_LENGTH);
+
+            ctx.send(
+                CreateReply::default()
+                    .content(format!("New mana: \n{mana_message_content}"))
+                    .ephemeral(true),
+            )
+            .await?;
+        }
     } else {
         let mut spell_list_message = "Spell not found. Available Spells: \n".to_string();
 
@@ -558,7 +663,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
             .content(spell_list_message)
             .ephemeral(true);
 
-        placeholder_message.edit(ctx, spell_list_reply).await?;
+        ctx.send(spell_list_reply).await?;
         // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
     }
 
