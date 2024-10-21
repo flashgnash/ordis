@@ -743,7 +743,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         Err(e) => {
             if let Some(stat_puller_error) = e.downcast_ref::<StatPullerError>() {
                 match stat_puller_error {
-                    StatPullerError::NoCharacterSheet => {
+                    StatPullerError::NoCharacterSelected | StatPullerError::NoCharacterSheet => {
                         // Handle specific error
                         println!("Caught NoCharacterSheet error");
 
@@ -776,7 +776,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     if nag_user_about_character_sheet {
         let character_sheet_missing_message = CreateReply::default()
-                            .content("Hint: if you configure a character sheet you can add stat modifiers to your rolls (e.g /roll 1d100+str )")
+                            .content("Hint: if you configure and select a character sheet you can add stat modifiers to your rolls (e.g /roll 1d100+str )")
                             .ephemeral(true);
 
         let _ = ctx.send(character_sheet_missing_message).await?;
