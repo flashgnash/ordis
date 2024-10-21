@@ -3,11 +3,75 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 use poise::serenity_prelude::Message;
 
+use crate::db;
+use diesel::sqlite::SqliteConnection;
+
 use lazy_static::lazy_static;
 use poise::serenity_prelude as serenity;
 
+use sha2::{Digest, Sha256};
+
 lazy_static! {
     pub static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::new();
+}
+
+pub fn is_author_on_mobile(ctx: &Context<'_>) -> bool {
+    if let Some(guild) = ctx.guild() {
+        let presence = guild.presences.get(&ctx.author().id);
+        if let Some(presence) = presence {
+            if let Some(client_status) = &presence.client_status {
+                if let Some(mobile_status) = client_status.mobile {
+                    if mobile_status == poise::serenity_prelude::OnlineStatus::Online {
+                        println!("User detected on mobile");
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+pub fn draw_bar(
+    current: i32,
+    max: i32,
+    length: usize,
+    foreground: &str,
+    background: &str,
+) -> String {
+    let fraction = current as f32 / max as f32;
+
+    let current_length = (fraction as f32 * length as f32).round() as usize;
+
+    return foreground.repeat(current_length)
+        + &background.repeat(length - current_length.clamp(0, length));
+}
+
+pub async fn get_user(
+    ctx: &Context<'_>,
+    db_connection: &mut SqliteConnection,
+) -> Result<db::models::User, Error> {
+    let author = &ctx.author();
+
+    let user_id = author.id.get();
+
+    Ok(db::users::get_or_create(db_connection, user_id)?)
+}
+
+pub fn hash(content: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(content);
+    let result = hasher.finalize();
+
+    format!("{:x}", result)
+}
+
+pub fn capitalize_first_letter(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
 }
 
 pub async fn check_admin(

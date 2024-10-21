@@ -30,11 +30,22 @@ use voice::music::skip_song;
 use songbird::SerenityInit;
 
 
-mod stat_puller;
-use stat_puller::pull_stats;
-use stat_puller::pull_stat;
 
 mod mir;
+
+use mir::stat_puller::pull_stats;
+use mir::stat_puller::pull_stat;
+use mir::pull_spellsheet;
+
+use mir::get_mana;
+use mir::set_mana;
+use mir::mod_mana;
+use mir::add_mana;
+use mir::sub_mana;
+
+
+use mir::status;
+
 use mir::level_up;
 use mir::create_character;
 use mir::get_characters;
@@ -42,6 +53,11 @@ use mir::roll;
 use mir::delete_character;
 use mir::select_character;
 
+
+use mir::cast_spell;
+use mir::set_spells;
+use mir::list_spells;
+use mir::end_turn;
 
 mod gpt;
 use gpt::ask;
@@ -242,12 +258,30 @@ async fn main() {
     let intents = serenity::GatewayIntents::non_privileged()
         | serenity::GatewayIntents::GUILD_MESSAGES
         | serenity::GatewayIntents::DIRECT_MESSAGES
-        | serenity::GatewayIntents::MESSAGE_CONTENT;
+        | serenity::GatewayIntents::MESSAGE_CONTENT
+        | serenity::GatewayIntents::GUILD_PRESENCES;
+
 
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(),roll(), calc(), ask(), draw(), translate(),translate_context(),pull_stat(),pull_stats(),get_characters(),delete_character(),select_character(),create_character(),level_up(),join_vc(),play_music(),stop_music(),pause_music(),resume_music(),skip_song()],
+            commands: vec![
+                ping(),
+                calc(), 
+
+                ask(), draw(), translate(),translate_context(),
+
+                pull_stat(), pull_stats(), pull_spellsheet(),
+                get_mana(), set_mana(), mod_mana(), add_mana(), sub_mana(),
+                status(),
+                get_characters(), delete_character(),
+                select_character(), create_character(), set_spells(),
+                
+                cast_spell(), list_spells(), level_up(), roll(), end_turn(),
+
+                join_vc(),
+                play_music(),stop_music(),pause_music(),resume_music(),skip_song()
+            ],
 
             ..Default::default()
         })

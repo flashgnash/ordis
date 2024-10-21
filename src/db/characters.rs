@@ -122,9 +122,11 @@ pub fn get_by_char_sheet(
 pub fn update(connection: &mut SqliteConnection, character: &Character) -> Result<(), DbError> {
     use self::schema::characters::dsl::*;
 
-    let character_id = &character.id;
+    let character_id = &character
+        .id
+        .expect("No character ID provided to update method");
 
-    // println!("Updating character {character_id}");
+    println!("Updating character {character_id}");
 
     let _ = diesel::update(characters.filter(id.eq(character_id)))
         .set(character)

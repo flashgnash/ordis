@@ -9,6 +9,13 @@ diesel::table! {
         stat_block -> Nullable<Text>,
         stat_block_message_id -> Nullable<Text>,
         stat_block_channel_id -> Nullable<Text>,
+        spell_block_channel_id -> Nullable<Text>,
+        spell_block_message_id -> Nullable<Text>,
+        spell_block -> Nullable<Text>,
+        spell_block_hash -> Nullable<Text>,
+        mana -> Nullable<Integer>,
+        mana_readout_channel_id -> Nullable<Text>,
+        mana_readout_message_id -> Nullable<Text>,
     }
 }
 

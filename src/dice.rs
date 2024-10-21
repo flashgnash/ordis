@@ -1,3 +1,7 @@
+use poise::serenity_prelude::Colour;
+use poise::serenity_prelude::CreateEmbed;
+use poise::serenity_prelude::Embed;
+use poise::CreateReply;
 use rand::prelude::*;
 
 use crate::common::Context;
@@ -124,6 +128,24 @@ pub async fn roll_internal(dice: &String) -> Result<Vec<(String, f64)>, Error> {
     Ok(result)
 }
 
+fn uid_to_rgb(uid: u64) -> (u8, u8, u8) {
+    let r = (uid & 0xFF) as u8;
+    let g = ((uid >> 8) & 0xFF) as u8;
+    let b = ((uid >> 16) & 0xFF) as u8;
+    (r, g, b)
+}
+
+fn username_to_rgb(s: &str) -> (u8, u8, u8) {
+    let uid = s
+        .as_bytes()
+        .iter()
+        .fold(0u64, |acc, &b| (acc << 8) | b as u64);
+    let r = ((uid & 0xFF) % 128 + 128) as u8; // Brightness adjustment
+    let g = (((uid >> 8) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
+    let b = (((uid >> 16) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
+    (r, g, b)
+}
+
 pub async fn output_roll_messages(
     ctx: Context<'_>,
     rolls: Vec<(String, f64)>,
@@ -146,10 +168,15 @@ pub async fn output_roll_messages(
     let message = message_lines.join("\n");
 
     let underline = format!("__{}__", pad_string("", longest_line - 8));
-    ctx.say(format!(
-        "\n**Rolling for {username}...**\n\n{message}\n{underline}\nTotal: {grand_total}"
-    ))
-    .await?;
+
+    let (r, g, b) = uid_to_rgb(ctx.author().id.try_into()?);
+
+    let embed = CreateEmbed::default()
+        .title(format!("Rolling for {username}..."))
+        .colour(Colour::from_rgb(r, g, b))
+        .description(format!("\n​\n{message}\n{underline}\nTotal: {grand_total}"));
+
+    ctx.send(CreateReply::default().embed(embed)).await?;
 
     Ok(())
 }

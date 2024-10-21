@@ -69,3 +69,20 @@ pub fn update(connection: &mut SqliteConnection, user: &User) -> Result<(), DbEr
 
     return Ok(());
 }
+
+#[allow(dead_code)]
+pub fn unset_character(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
+    use self::schema::users::dsl::*;
+
+    let user_id = &user.id.to_string();
+
+    println!("Removing selected character for user {user_id}");
+
+    let null_value: Option<i32> = None;
+
+    let _ = diesel::update(users.filter(id.eq(user_id)))
+        .set((selected_character.eq(null_value),))
+        .execute(connection);
+
+    return Ok(());
+}
