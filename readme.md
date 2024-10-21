@@ -1,4 +1,5 @@
-![image](https://github.com/user-attachments/assets/66794d5b-328b-4d97-b181-cdc234eaad1c)# Ordis
+# Ordis
+
 Ordis is a discord bot I am creating in order to familiarize myself with rust, and facilitate playing Mir
 
 ## Features
