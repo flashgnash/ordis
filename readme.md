@@ -87,6 +87,7 @@ This is at the moment very specific to Mir's spell system, a reasonable amount o
 Once your stat block is setup, you can run /level_up (number of levels), and the bot will automatically roll the appropriate number of die for the amount of levels you have gained, sum them all and output them in chat
 
 `/level_up 3` results in
+
 ![image](https://github.com/user-attachments/assets/c83e5120-ca0d-4d67-8897-21e9ee71c437)
 
 #### Status command
