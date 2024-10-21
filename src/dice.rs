@@ -65,14 +65,14 @@ pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
 fn roll_matches(input: &str, pattern: &Regex) -> Result<(String, String), DiceError> {
     let mut result = input.to_string();
 
-    let mut message = format!("- ``{input}``").to_string();
+    let mut message = "".to_string();
 
     for mat in pattern.find_iter(input) {
         let (processed, rolls) = roll_one_instance(mat.as_str())?;
 
         let mat_str = mat.as_str();
 
-        message = format!("{message} {mat_str}: [{}] ", join_to_string(&rolls, ","));
+        message = format!("{message}\n- {mat_str}: [{}] ", join_to_string(&rolls, ","));
         result = result.replacen(mat_str, &processed.to_string(), 1);
     }
     Ok((result, message))
@@ -111,19 +111,14 @@ fn pad_string(input: &str, total_len: usize) -> String {
     format!("{:<width$}", input, width = total_len)
 }
 
-pub async fn roll_internal(dice: &String) -> Result<Vec<(String, f64)>, Error> {
-    let instances = dice.split(',');
+pub async fn roll_internal(dice: &String) -> Result<(String, f64), Error> {
+    let (replaced, messages) = roll_replace(dice)?;
 
-    let mut result: Vec<(String, f64)> = vec![];
+    let calc_result = eval_str(&replaced)?;
 
-    for instance in instances {
-        let (replaced, messages) = roll_replace(&instance)?;
-        let calc_result = eval_str(&replaced)?;
+    let message = format!("{dice} {messages}\n\n Result: __{calc_result}__");
 
-        let message = format!("{} = {} = __{}__", &messages, &replaced, &calc_result);
-
-        result.push((message, calc_result));
-    }
+    let result = (message, calc_result);
 
     Ok(result)
 }
@@ -146,35 +141,19 @@ fn username_to_rgb(s: &str) -> (u8, u8, u8) {
     (r, g, b)
 }
 
-pub async fn output_roll_messages(
+pub async fn output_roll_message(
     ctx: Context<'_>,
-    rolls: Vec<(String, f64)>,
+    roll: (String, f64),
     username: String,
 ) -> Result<(), Error> {
-    let mut longest_line = 0;
-    let mut message_lines: Vec<String> = vec![];
-    let mut grand_total = 0.0;
-
-    for (message, calc_result) in rolls {
-        if message.len() > longest_line {
-            longest_line = message.len();
-        }
-
-        grand_total = grand_total + calc_result;
-
-        message_lines.push(message)
-    }
-
-    let message = message_lines.join("\n");
-
-    let underline = format!("__{}__", pad_string("", longest_line - 8));
+    let (message, calc_result) = roll;
 
     let (r, g, b) = uid_to_rgb(ctx.author().id.try_into()?);
 
     let embed = CreateEmbed::default()
         .title(format!("Rolling for {username}..."))
         .colour(Colour::from_rgb(r, g, b))
-        .description(format!("\n​\n{message}\n{underline}\nTotal: {grand_total}"));
+        .description(format!("\n​\n{message}"));
 
     ctx.send(CreateReply::default().embed(embed)).await?;
 
@@ -185,7 +164,7 @@ pub async fn output_roll_messages(
 pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
     let results = roll_internal(&dice).await?;
 
-    output_roll_messages(
+    output_roll_message(
         ctx,
         results,
         ctx.author()

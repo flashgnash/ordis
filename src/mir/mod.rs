@@ -758,7 +758,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         }
     }
 
-    let results = dice::roll_internal(&str_replaced).await?;
+    let result = dice::roll_internal(&str_replaced).await?;
 
     let author = ctx.author();
 
@@ -772,7 +772,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         }
     }
 
-    dice::output_roll_messages(ctx, results, nick).await?;
+    dice::output_roll_message(ctx, result, nick).await?;
 
     if nag_user_about_character_sheet {
         let character_sheet_missing_message = CreateReply::default()
