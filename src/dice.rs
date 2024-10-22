@@ -141,6 +141,23 @@ fn username_to_rgb(s: &str) -> (u8, u8, u8) {
     (r, g, b)
 }
 
+async fn get_user_colour(ctx: Context<'_>) -> Result<Option<Colour>, Error> {
+    if let Some(guild_id) = ctx.guild_id() {
+        let member = guild_id.member(&ctx, ctx.author().id).await?;
+
+        if let Some(mut roles) = member.roles(ctx) {
+            roles.sort_by_key(|r| r.position);
+            roles.reverse();
+            for role in roles {
+                if role.colour.hex() != "000000" {
+                    return Ok(Some(role.colour));
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
 pub async fn output_roll_message(
     ctx: Context<'_>,
     roll: (String, f64),
@@ -148,11 +165,18 @@ pub async fn output_roll_message(
 ) -> Result<(), Error> {
     let (message, calc_result) = roll;
 
-    let (r, g, b) = uid_to_rgb(ctx.author().id.try_into()?);
+    let col: Colour;
+
+    if let Some(colour) = get_user_colour(ctx).await? {
+        col = colour;
+    } else {
+        let (r, g, b) = uid_to_rgb(ctx.author().id.try_into()?);
+        col = Colour::from_rgb(255, g, b);
+    }
 
     let embed = CreateEmbed::default()
         .title(format!("Rolling for {username}..."))
-        .colour(Colour::from_rgb(r, g, b))
+        .colour(col)
         .description(format!("\n​\n{message}"));
 
     ctx.send(CreateReply::default().embed(embed)).await?;
