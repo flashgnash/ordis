@@ -123,41 +123,6 @@ pub async fn roll_internal(dice: &String) -> Result<(String, f64), Error> {
     Ok(result)
 }
 
-fn uid_to_rgb(uid: u64) -> (u8, u8, u8) {
-    let r = (uid & 0xFF) as u8;
-    let g = ((uid >> 8) & 0xFF) as u8;
-    let b = ((uid >> 16) & 0xFF) as u8;
-    (r, g, b)
-}
-
-fn username_to_rgb(s: &str) -> (u8, u8, u8) {
-    let uid = s
-        .as_bytes()
-        .iter()
-        .fold(0u64, |acc, &b| (acc << 8) | b as u64);
-    let r = ((uid & 0xFF) % 128 + 128) as u8; // Brightness adjustment
-    let g = (((uid >> 8) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
-    let b = (((uid >> 16) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
-    (r, g, b)
-}
-
-async fn get_user_colour(ctx: Context<'_>) -> Result<Option<Colour>, Error> {
-    if let Some(guild_id) = ctx.guild_id() {
-        let member = guild_id.member(&ctx, ctx.author().id).await?;
-
-        if let Some(mut roles) = member.roles(ctx) {
-            roles.sort_by_key(|r| r.position);
-            roles.reverse();
-            for role in roles {
-                if role.colour.hex() != "000000" {
-                    return Ok(Some(role.colour));
-                }
-            }
-        }
-    }
-    Ok(None)
-}
-
 pub async fn output_roll_message(
     ctx: Context<'_>,
     roll: (String, f64),
@@ -165,14 +130,7 @@ pub async fn output_roll_message(
 ) -> Result<(), Error> {
     let (message, calc_result) = roll;
 
-    let col: Colour;
-
-    if let Some(colour) = get_user_colour(ctx).await? {
-        col = colour;
-    } else {
-        let (r, g, b) = uid_to_rgb(ctx.author().id.try_into()?);
-        col = Colour::from_rgb(255, g, b);
-    }
+    let col = crate::common::get_author_colour(ctx).await?;
 
     let embed = CreateEmbed::default()
         .title(format!("Rolling for {username}..."))

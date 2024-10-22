@@ -1,7 +1,7 @@
 pub struct Data {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
-use poise::serenity_prelude::Message;
+use poise::serenity_prelude::{Colour, Message};
 
 use crate::db;
 use diesel::sqlite::SqliteConnection;
@@ -13,6 +13,50 @@ use sha2::{Digest, Sha256};
 
 lazy_static! {
     pub static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::new();
+}
+
+pub fn uid_to_rgb(uid: u64) -> (u8, u8, u8) {
+    let r = (uid & 0xFF) as u8;
+    let g = ((uid >> 8) & 0xFF) as u8;
+    let b = ((uid >> 16) & 0xFF) as u8;
+    (r, g, b)
+}
+
+pub fn username_to_rgb(s: &str) -> (u8, u8, u8) {
+    let uid = s
+        .as_bytes()
+        .iter()
+        .fold(0u64, |acc, &b| (acc << 8) | b as u64);
+    let r = ((uid & 0xFF) % 128 + 128) as u8; // Brightness adjustment
+    let g = (((uid >> 8) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
+    let b = (((uid >> 16) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
+    (r, g, b)
+}
+
+pub async fn get_author_role_colour(ctx: Context<'_>) -> Result<Option<Colour>, Error> {
+    if let Some(guild_id) = ctx.guild_id() {
+        let member = guild_id.member(&ctx, ctx.author().id).await?;
+
+        if let Some(mut roles) = member.roles(ctx) {
+            roles.sort_by_key(|r| r.position);
+            roles.reverse();
+            for role in roles {
+                if role.colour.hex() != "000000" {
+                    return Ok(Some(role.colour));
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
+pub async fn get_author_colour(ctx: Context<'_>) -> Result<Colour, Error> {
+    if let Some(colour) = get_author_role_colour(ctx).await? {
+        Ok(colour)
+    } else {
+        let (r, g, b) = uid_to_rgb(ctx.author().id.try_into()?);
+        Ok(Colour::from_rgb(r, g, b))
+    }
 }
 
 pub fn is_author_on_mobile(ctx: &Context<'_>) -> bool {
