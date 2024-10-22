@@ -123,24 +123,6 @@ pub async fn roll_internal(dice: &String) -> Result<(String, f64), Error> {
     Ok(result)
 }
 
-fn uid_to_rgb(uid: u64) -> (u8, u8, u8) {
-    let r = (uid & 0xFF) as u8;
-    let g = ((uid >> 8) & 0xFF) as u8;
-    let b = ((uid >> 16) & 0xFF) as u8;
-    (r, g, b)
-}
-
-fn username_to_rgb(s: &str) -> (u8, u8, u8) {
-    let uid = s
-        .as_bytes()
-        .iter()
-        .fold(0u64, |acc, &b| (acc << 8) | b as u64);
-    let r = ((uid & 0xFF) % 128 + 128) as u8; // Brightness adjustment
-    let g = (((uid >> 8) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
-    let b = (((uid >> 16) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
-    (r, g, b)
-}
-
 pub async fn output_roll_message(
     ctx: Context<'_>,
     roll: (String, f64),
@@ -148,11 +130,11 @@ pub async fn output_roll_message(
 ) -> Result<(), Error> {
     let (message, calc_result) = roll;
 
-    let (r, g, b) = uid_to_rgb(ctx.author().id.try_into()?);
+    let col = crate::common::get_author_colour(ctx).await?;
 
     let embed = CreateEmbed::default()
         .title(format!("Rolling for {username}..."))
-        .colour(Colour::from_rgb(r, g, b))
+        .colour(col)
         .description(format!("\n​\n{message}"));
 
     ctx.send(CreateReply::default().embed(embed)).await?;
