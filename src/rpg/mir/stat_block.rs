@@ -5,8 +5,9 @@ use crate::common::Error;
 
 use crate::db::models::Character;
 
-use super::stat_puller;
-use super::stat_puller::SheetInfo;
+use super::super::CharacterSheetable;
+use super::super::RpgError;
+use super::super::SheetInfo;
 
 use poise::serenity_prelude::Message;
 
@@ -32,7 +33,7 @@ impl fmt::Display for StatBlock {
     }
 }
 
-impl super::stat_puller::CharacterSheetable for StatBlock {
+impl CharacterSheetable for StatBlock {
     fn new() -> Self {
         return Self {
             sheet_info: SheetInfo {
@@ -121,7 +122,7 @@ impl super::stat_puller::CharacterSheetable for StatBlock {
             return Ok(message);
         }
 
-        Err(Box::new(stat_puller::StatPullerError::NoCharacterSheet))
+        Err(Box::new(RpgError::NoCharacterSheet))
     }
 
     const PROMPT: &'static str = r#"

@@ -1,29 +1,88 @@
-use crate::common::fetch_message_poise;
-use crate::common::Context;
-use crate::common::Error;
+pub mod mir;
 
-use sha2::{Digest, Sha256};
+use std::fmt;
 
-use crate::db;
+// use crate::db;
 use crate::db::models::Character;
-use crate::db::models::User;
-use diesel::sqlite::SqliteConnection;
+// use crate::db::models::User;
+// use diesel::sqlite::SqliteConnection;
 
 use serde_json::Value;
 
-extern crate regex;
-use std::fmt;
-
+use crate::common::fetch_message_poise;
+use crate::common::Context;
+use crate::common::Error;
 use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::MessageId;
 use poise::CreateReply;
 
-use super::spell_sheet::SpellSheet;
-use super::stat_block::StatBlock;
-
 use crate::gpt::generate_to_string;
 use crate::gpt::Message;
 use crate::gpt::Role;
+
+use crate::db;
+use crate::db::models::User;
+
+use diesel::sqlite::SqliteConnection;
+
+pub struct SheetInfo {
+    pub original_message: Option<String>,
+    pub jsonified_message: Option<String>,
+    pub deserialized_message: Option<Value>,
+
+    pub message_hash: Option<String>,
+    pub changed: bool,
+    pub character: Option<Character>,
+}
+
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub enum RpgError {
+    NoGuildId,
+
+    NoCharacterSheet,
+    NoCharacterSelected,
+
+    NoSpellSheet,
+    SpellNotFound,
+    NoSpellCost,
+    NoMaxEnergy,
+    GaugeMessageMissing,
+
+    NoEnergyDie,
+    NoMagicDie,
+    NoTrainingDie,
+
+    JsonNotInitialised,
+}
+
+impl fmt::Display for RpgError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RpgError::NoGuildId => write!(f, "Guild ID is missing - Are you in a DM?"),
+            RpgError::NoCharacterSheet => {
+                write!(f, "Character sheet is missing - Was it deleted?")
+            }
+            RpgError::NoCharacterSelected => write!(f, 
+                "No character selected (please select one with /get_characters and /select_character (id))"
+            ),
+            RpgError::NoSpellSheet => write!(f, "Spell sheet is missing - please set one with the Set Spell Message button"),
+            RpgError::SpellNotFound => write!(f, "Spell not found"),
+            RpgError::NoSpellCost => write!(f, "Spell cost appears to be missing from your spell block"),
+            RpgError::NoMaxEnergy => write!(f, "Energy pool appears to be missing from your stat block"),
+            RpgError::GaugeMessageMissing => write!(f, "Gauge message is missing - was it deleted?"),
+            RpgError::NoEnergyDie => write!(f, "Energy die per level appears to be missing from your stat block"),
+            RpgError::NoMagicDie => write!(f, "Magic die per level appears to be missing from your stat block"),
+            RpgError::NoTrainingDie => write!(f, "Training die per level appears to be missing from your stat block"),
+            RpgError::JsonNotInitialised => write!(f, "JSON is not initialised - this should never happen"),
+        }
+    }
+}
+impl std::error::Error for RpgError {}
+
+
+
 
 impl fmt::Display for SheetInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -36,16 +95,6 @@ impl fmt::Display for SheetInfo {
 
         write!(f, "No stat sheet found")
     }
-}
-
-pub struct SheetInfo {
-    pub original_message: Option<String>,
-    pub jsonified_message: Option<String>,
-    pub deserialized_message: Option<Value>,
-
-    pub message_hash: Option<String>,
-    pub changed: bool,
-    pub character: Option<Character>,
 }
 
 pub trait CharacterSheetable: Sized + std::fmt::Display {
@@ -189,52 +238,6 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
         }
     }
 }
-
-#[allow(dead_code)]
-#[derive(Debug)]
-pub enum StatPullerError {
-    NoGuildId,
-
-    NoCharacterSheet,
-    NoCharacterSelected,
-
-    NoSpellSheet,
-    SpellNotFound,
-    NoSpellCost,
-    NoMaxEnergy,
-    GaugeMessageMissing,
-
-    NoEnergyDie,
-    NoMagicDie,
-    NoTrainingDie,
-
-    JsonNotInitialised,
-}
-
-impl fmt::Display for StatPullerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StatPullerError::NoGuildId => write!(f, "Guild ID is missing - Are you in a DM?"),
-            StatPullerError::NoCharacterSheet => {
-                write!(f, "Character sheet is missing - Was it deleted?")
-            }
-            StatPullerError::NoCharacterSelected => write!(f, 
-                "No character selected (please select one with /get_characters and /select_character (id))"
-            ),
-            StatPullerError::NoSpellSheet => write!(f, "Spell sheet is missing - please set one with the Set Spell Message button"),
-            StatPullerError::SpellNotFound => write!(f, "Spell not found"),
-            StatPullerError::NoSpellCost => write!(f, "Spell cost appears to be missing from your spell block"),
-            StatPullerError::NoMaxEnergy => write!(f, "Energy pool appears to be missing from your stat block"),
-            StatPullerError::GaugeMessageMissing => write!(f, "Gauge message is missing - was it deleted?"),
-            StatPullerError::NoEnergyDie => write!(f, "Energy die per level appears to be missing from your stat block"),
-            StatPullerError::NoMagicDie => write!(f, "Magic die per level appears to be missing from your stat block"),
-            StatPullerError::NoTrainingDie => write!(f, "Training die per level appears to be missing from your stat block"),
-            StatPullerError::JsonNotInitialised => write!(f, "JSON is not initialised - this should never happen"),
-        }
-    }
-}
-impl std::error::Error for StatPullerError {}
-
 pub async fn get_user_character(
     ctx: &Context<'_>,
     db_connection: &mut SqliteConnection,
@@ -245,7 +248,7 @@ pub async fn get_user_character(
         return Ok(db::characters::get(db_connection, character_id)?);
     }
 
-    Err(Box::new(StatPullerError::NoCharacterSelected))
+    Err(Box::new(RpgError::NoCharacterSelected))
 }
 
 pub async fn get_sheet<T: CharacterSheetable>(ctx: &Context<'_>) -> Result<T, Error> {
@@ -269,55 +272,4 @@ pub async fn get_sheet<T: CharacterSheetable>(ctx: &Context<'_>) -> Result<T, Er
     }
 
     Ok(character_sheet)
-}
-
-#[poise::command(slash_command)]
-pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
-    let thinking_message = CreateReply::default()
-        .content("*Thinking, please wait...*")
-        .ephemeral(true);
-
-    let msg = ctx.send(thinking_message).await?;
-
-    let stat_block: StatBlock = get_sheet(&ctx).await?;
-
-    let reply = CreateReply::default().content(
-        stat_block
-            .sheet_info
-            .jsonified_message
-            .expect("Stat block should always generate json"),
-    );
-    msg.edit(ctx, reply).await?;
-
-    return Ok(());
-}
-
-#[poise::command(
-    slash_command,
-    // description_localized = "Pull a single stat from your character sheet"
-)]
-pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error> {
-    let stat_block_thinking_message = CreateReply::default()
-        .content("*Thinking, please wait...*")
-        .ephemeral(true);
-
-    let msg = ctx.send(stat_block_thinking_message).await?;
-
-    // let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
-
-    let stat_block: StatBlock = get_sheet(&ctx).await?;
-
-    let stats: Value = serde_json::from_str(
-        &stat_block
-            .sheet_info
-            .jsonified_message
-            .expect("Stat block should always generate json"),
-    )?;
-
-    // println!("```json\n{}```", response_message);
-
-    let reply = CreateReply::default().content(stats.get(stat_name).unwrap().to_string());
-    msg.edit(ctx, reply).await?;
-
-    return Ok(());
 }

@@ -1,5 +1,3 @@
-pub mod stat_puller;
-
 pub mod spell_sheet;
 pub mod stat_block;
 
@@ -12,9 +10,6 @@ use spell_sheet::Spell;
 use spell_sheet::SpellSheet;
 use spell_sheet::SpellType;
 use stat_block::StatBlock;
-use stat_puller::get_sheet;
-use stat_puller::get_user_character;
-use stat_puller::CharacterSheetable;
 
 use std::any::Any;
 use std::collections::HashMap;
@@ -28,8 +23,11 @@ use crate::db::models::Character;
 
 use diesel::SqliteConnection;
 
+use super::get_user_character;
+use super::CharacterSheetable;
+use super::RpgError;
+
 use crate::dice;
-use stat_puller::StatPullerError;
 
 use poise::serenity_prelude::CreateMessage;
 use poise::serenity_prelude::EditMessage;
@@ -49,7 +47,7 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
 
     let placeholder_msg = ctx.send(placeholder).await?;
 
-    let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
 
     let stat_block: Value = serde_json::from_str(
         &stat_block
@@ -58,7 +56,7 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
             .expect("Stat block should always generate json"),
     )?;
 
-    let spell_block_result: SpellSheet = stat_puller::get_sheet(&ctx).await?;
+    let spell_block_result: SpellSheet = super::get_sheet(&ctx).await?;
 
     let spell_block: Value = serde_json::from_str(
         &spell_block_result
@@ -308,7 +306,7 @@ async fn update_mana_readout(
     }
 
     println!("No channel id or message id - no spell message?");
-    return Err(Box::new(StatPullerError::NoSpellSheet));
+    return Err(Box::new(RpgError::NoSpellSheet));
 }
 
 async fn set_mana_internal(
@@ -458,7 +456,7 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
     if let Some(active_spells) =
         active_spells_map.get(&character.id.expect("Character ID should never be null"))
     {
-        let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
+        let stat_block: StatBlock = super::get_sheet(&ctx).await?;
         let max_mana = stat_block.energy_pool;
 
         for spell in active_spells.into_iter() {
@@ -468,13 +466,13 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
                 name = spell_name;
             }
 
-            let mut cur_mana = max_mana.ok_or(StatPullerError::NoMaxEnergy)? as i32;
+            let mut cur_mana = max_mana.ok_or(RpgError::NoMaxEnergy)? as i32;
 
             if let Some(mana) = character.mana {
                 cur_mana = mana;
             }
 
-            let new_mana = cur_mana + spell.mana_change.ok_or(StatPullerError::NoSpellCost)? as i32;
+            let new_mana = cur_mana + spell.mana_change.ok_or(RpgError::NoSpellCost)? as i32;
 
             if new_mana >= 0 {
                 let modified_char =
@@ -518,15 +516,15 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
     let placeholder = CreateReply::default().content("*Thinking, please wait...*");
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
-    let spell_sheet: SpellSheet = stat_puller::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let spell_sheet: SpellSheet = super::get_sheet(&ctx).await?;
 
     let max_mana = stat_block.energy_pool;
 
-    let spells = spell_sheet.spells.ok_or(StatPullerError::NoSpellSheet)?;
+    let spells = spell_sheet.spells.ok_or(RpgError::NoSpellSheet)?;
 
     if let Some(spell) = spells.get(&spell_name) {
-        let spell_cost = spell.mana_change.ok_or(StatPullerError::NoSpellCost)?;
+        let spell_cost = spell.mana_change.ok_or(RpgError::NoSpellCost)?;
 
         let spell_cost_string = spell_cost.to_string();
 
@@ -551,13 +549,13 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
 
         let mana = character
             .mana
-            .unwrap_or(max_mana.ok_or(StatPullerError::NoMaxEnergy)? as i32);
+            .unwrap_or(max_mana.ok_or(RpgError::NoMaxEnergy)? as i32);
 
         let mut modified_char: Option<Character> = None;
 
         match spell_type {
             SpellType::Single => {
-                let new_mana = mana + spell.mana_change.ok_or(StatPullerError::NoSpellCost)? as i32;
+                let new_mana = mana + spell.mana_change.ok_or(RpgError::NoSpellCost)? as i32;
 
                 if new_mana >= 0 {
                     modified_char =
@@ -664,7 +662,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
             .ephemeral(true);
 
         ctx.send(spell_list_reply).await?;
-        // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
+        // return Err(Box::new(crate::stat_puller::RpgError::SpellNotFound));
     }
 
     Ok(())
@@ -677,9 +675,9 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let spell_sheet: SpellSheet = stat_puller::get_sheet(&ctx).await?;
+    let spell_sheet: SpellSheet = super::get_sheet(&ctx).await?;
 
-    let spells = spell_sheet.spells.ok_or(StatPullerError::NoSpellSheet)?;
+    let spells = spell_sheet.spells.ok_or(RpgError::NoSpellSheet)?;
 
     let mut spell_list_message = "Available Spells: \n".to_string();
 
@@ -692,7 +690,7 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
         .ephemeral(true);
 
     placeholder_message.edit(ctx, spell_list_reply).await?;
-    // return Err(Box::new(crate::stat_puller::StatPullerError::SpellNotFound));
+    // return Err(Box::new(crate::stat_puller::RpgError::SpellNotFound));
 
     Ok(())
 }
@@ -705,7 +703,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     _ = ctx.send(placeholder).await?;
 
-    let stat_block_result: Result<StatBlock, Error> = get_sheet(&ctx).await;
+    let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx).await;
 
     //TODO make this default configurable per server
     let mut dice = dice_expression
@@ -741,18 +739,18 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         }
 
         Err(e) => {
-            if let Some(stat_puller_error) = e.downcast_ref::<StatPullerError>() {
+            if let Some(stat_puller_error) = e.downcast_ref::<RpgError>() {
                 match stat_puller_error {
-                    StatPullerError::NoCharacterSelected | StatPullerError::NoCharacterSheet => {
+                    RpgError::NoCharacterSelected | RpgError::NoCharacterSheet => {
                         // Handle specific error
                         println!("Caught NoCharacterSheet error");
 
                         nag_user_about_character_sheet = true;
                     }
-                    _ => return Err(e), // Propagate other StatPullerError variants
+                    _ => return Err(e), // Propagate other RpgError variants
                 }
             } else {
-                // Propagate other errors that are not StatPullerError
+                // Propagate other errors that are not RpgError
                 return Err(e);
             }
         }
@@ -977,7 +975,7 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
             if char.user_id.eq(&comparison_user_id)
                 || common::check_admin(
                     ctx,
-                    ctx.guild_id().ok_or(StatPullerError::NoGuildId)?,
+                    ctx.guild_id().ok_or(RpgError::NoGuildId)?,
                     ctx.author().id,
                 )
                 .await
@@ -1061,7 +1059,7 @@ pub async fn set_spells(ctx: Context<'_>, msg: crate::serenity::Message) -> Resu
             )
             .await?;
     } else {
-        return Err(Box::new(stat_puller::StatPullerError::NoCharacterSheet));
+        return Err(Box::new(RpgError::NoCharacterSheet));
     }
 
     Ok(())
@@ -1116,7 +1114,7 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let stat_block: StatBlock = stat_puller::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
 
     let stats: Value = serde_json::from_str(
         &stat_block
@@ -1139,15 +1137,15 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     let energy_die = stats
         .get("energy_die_per_level")
-        .ok_or(StatPullerError::NoEnergyDie)?
+        .ok_or(RpgError::NoEnergyDie)?
         .to_string();
     let magic_die = stats
         .get("magic_die_per_level")
-        .ok_or(StatPullerError::NoMagicDie)?
+        .ok_or(RpgError::NoMagicDie)?
         .to_string();
     let training_die = stats
         .get("training_die_per_level")
-        .ok_or(StatPullerError::NoTrainingDie)?
+        .ok_or(RpgError::NoTrainingDie)?
         .to_string();
 
     let mut energy_die_sum: i32 = 0;
@@ -1174,6 +1172,57 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
     message = message.replace('"', "");
     message = format!("{message}\n\n**Total**:\n    ⚡️ {energy_die_sum}    🐇 {magic_die_sum}    🏋 {training_die_sum}");
     let reply = CreateReply::default().content(message);
+    msg.edit(ctx, reply).await?;
+
+    return Ok(());
+}
+
+#[poise::command(slash_command)]
+pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
+    let thinking_message = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+
+    let msg = ctx.send(thinking_message).await?;
+
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+
+    let reply = CreateReply::default().content(
+        stat_block
+            .sheet_info
+            .jsonified_message
+            .expect("Stat block should always generate json"),
+    );
+    msg.edit(ctx, reply).await?;
+
+    return Ok(());
+}
+
+#[poise::command(
+    slash_command,
+    // description_localized = "Pull a single stat from your character sheet"
+)]
+pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error> {
+    let stat_block_thinking_message = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+
+    let msg = ctx.send(stat_block_thinking_message).await?;
+
+    // let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
+
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+
+    let stats: Value = serde_json::from_str(
+        &stat_block
+            .sheet_info
+            .jsonified_message
+            .expect("Stat block should always generate json"),
+    )?;
+
+    // println!("```json\n{}```", response_message);
+
+    let reply = CreateReply::default().content(stats.get(stat_name).unwrap().to_string());
     msg.edit(ctx, reply).await?;
 
     return Ok(());

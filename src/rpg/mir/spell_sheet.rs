@@ -8,9 +8,9 @@ use crate::common::Error;
 
 use crate::db::models::Character;
 
-use super::stat_puller;
-use super::stat_puller::SheetInfo;
-use super::stat_puller::StatPullerError;
+use super::super::CharacterSheetable;
+use super::super::RpgError;
+use super::super::SheetInfo;
 
 use poise::serenity_prelude::Message;
 
@@ -72,7 +72,7 @@ impl fmt::Display for SpellSheet {
     }
 }
 
-impl super::stat_puller::CharacterSheetable for SpellSheet {
+impl CharacterSheetable for SpellSheet {
     fn new() -> Self {
         return Self {
             sheet_info: SheetInfo {
@@ -95,9 +95,9 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
 
             for (spell_name, spell_data) in spell_data
                 .get("spells")
-                .ok_or(StatPullerError::NoSpellSheet)?
+                .ok_or(RpgError::NoSpellSheet)?
                 .as_object()
-                .ok_or(StatPullerError::NoSpellSheet)?
+                .ok_or(RpgError::NoSpellSheet)?
             {
                 let mut spell_type_enum: Option<SpellType> = None;
 
@@ -171,7 +171,7 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
             return Ok(message);
         }
 
-        Err(Box::new(stat_puller::StatPullerError::NoSpellSheet))
+        Err(Box::new(RpgError::NoSpellSheet))
     }
 
     const PROMPT: &'static str = r#"
