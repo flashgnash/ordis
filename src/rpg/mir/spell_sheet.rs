@@ -1,62 +1,28 @@
-use std::fmt;
-
 use std::collections::HashMap;
+use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::common::Context;
 use crate::common::Error;
 
 use crate::db::models::Character;
+use crate::rpg::spells::SpellResource;
 
 use super::super::CharacterSheetable;
 use super::super::RpgError;
 use super::super::SheetInfo;
 
+use super::spells::ManaSpellResource;
+use super::spells::Spell;
+use super::spells::SpellType;
+
 use poise::serenity_prelude::Message;
-
-#[derive(Clone)]
-pub enum SpellType {
-    Single,
-    Toggle,
-    Summon,
-    Unknown,
-}
-
-impl FromStr for SpellType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "single" => Ok(SpellType::Single),
-            "toggle" => Ok(SpellType::Toggle),
-            "summon" => Ok(SpellType::Summon),
-            _ => Ok(SpellType::Unknown),
-        }
-    }
-}
-
-impl std::fmt::Display for SpellType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            SpellType::Single => "single",
-            SpellType::Toggle => "toggle",
-            SpellType::Summon => "summon",
-            SpellType::Unknown => "unknown",
-        };
-        write!(f, "{}", s)
-    }
-}
-#[derive(Clone)]
-pub struct Spell {
-    pub mana_change: Option<i64>,
-    pub name: Option<String>,
-    pub cast_time: Option<String>,
-    pub spell_type: Option<SpellType>,
-}
 
 pub struct SpellSheet {
     pub sheet_info: SheetInfo,
-    pub spells: Option<HashMap<String, Spell>>,
+    pub spells: Option<HashMap<String, Spell<ManaSpellResource>>>,
+    pub active_spells: Option<Vec<String>>,
 }
 
 impl fmt::Display for SpellSheet {
@@ -84,6 +50,7 @@ impl CharacterSheetable for SpellSheet {
                 deserialized_message: None,
             },
             spells: None,
+            active_spells: None,
         };
     }
 
@@ -91,7 +58,7 @@ impl CharacterSheetable for SpellSheet {
         let deserialized_message = self.sheet_info.deserialized_message.clone();
 
         if let Some(spell_data) = deserialized_message {
-            let mut spells: HashMap<String, Spell> = HashMap::new();
+            let mut spells: HashMap<String, Spell<ManaSpellResource>> = HashMap::new();
 
             for (spell_name, spell_data) in spell_data
                 .get("spells")
@@ -108,13 +75,25 @@ impl CharacterSheetable for SpellSheet {
                     );
                 }
 
+                let mana_change_i64 = spell_data.get("cost").and_then(|c| c.as_i64());
+
+                let spell_cost: Option<ManaSpellResource>;
+
+                if let Some(change) = mana_change_i64 {
+                    spell_cost = Some(ManaSpellResource {
+                        mana: change as i32,
+                    });
+                } else {
+                    spell_cost = None;
+                }
+
                 let spell = Spell {
                     name: Some(spell_name.to_string()),
                     cast_time: spell_data
                         .get("cast_time")
                         .and_then(|c| Some(c.to_string())),
                     spell_type: spell_type_enum,
-                    mana_change: spell_data.get("cost").and_then(|c| c.as_i64()),
+                    cost: spell_cost,
                 };
 
                 spells.insert(spell_name.to_string(), spell);

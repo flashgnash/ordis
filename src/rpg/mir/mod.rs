@@ -3,15 +3,17 @@ pub mod stat_block;
 
 use lazy_static::lazy_static;
 use poise::serenity_prelude::CreateEmbed;
-use poise::serenity_prelude::Embed;
 use tokio::sync::Mutex;
 
-use spell_sheet::Spell;
+use super::spells;
+use super::spells::ManaSpellResource;
+use super::spells::Spell;
+use super::spells::SpellResource;
+use super::spells::SpellType;
+
 use spell_sheet::SpellSheet;
-use spell_sheet::SpellType;
 use stat_block::StatBlock;
 
-use std::any::Any;
 use std::collections::HashMap;
 
 use crate::common;
@@ -136,7 +138,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     {
         active_spells_content = "Active Spells:\n".to_string();
 
-        let mut total_mana_diff: i64 = 0;
+        let mut total_mana_diff: ManaSpellResource = ManaSpellResource { mana: 0 };
 
         for spell in active_spells {
             active_spells_content = active_spells_content
@@ -144,13 +146,14 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
                     "- {}: {} per turn\n",
                     &spell.name.clone().unwrap_or("No spell name".to_string()),
                     &spell
-                        .mana_change
+                        .cost
+                        .clone()
                         .and_then(|c| Some(c.to_string()))
                         .unwrap_or("No mana cost".to_string())
                 );
 
-            if let Some(mana_change) = &spell.mana_change {
-                total_mana_diff = total_mana_diff + mana_change;
+            if let Some(mana_change) = &spell.cost {
+                total_mana_diff.add(&mana_change).mana;
             }
         }
 
@@ -438,7 +441,8 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
 }
 
 lazy_static! {
-    static ref ACTIVE_SPELLS: Mutex<HashMap<i32, Vec<Spell>>> = Mutex::new(HashMap::new());
+    static ref ACTIVE_SPELLS: Mutex<HashMap<i32, Vec<Spell<ManaSpellResource>>>> =
+        Mutex::new(HashMap::new());
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -472,7 +476,7 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
                 cur_mana = mana;
             }
 
-            let new_mana = cur_mana + spell.mana_change.ok_or(RpgError::NoSpellCost)? as i32;
+            let new_mana = cur_mana + spell.cost.as_ref().ok_or(RpgError::NoSpellCost)?.mana;
 
             if new_mana >= 0 {
                 let modified_char =
@@ -524,12 +528,12 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
     let spells = spell_sheet.spells.ok_or(RpgError::NoSpellSheet)?;
 
     if let Some(spell) = spells.get(&spell_name) {
-        let spell_cost = spell.mana_change.ok_or(RpgError::NoSpellCost)?;
+        let spell_cost = spell.cost.clone().ok_or(RpgError::NoSpellCost)?;
 
-        let spell_cost_string = spell_cost.to_string();
+        // let spell_cost_string = spell_cost.to_string();
 
         let mut spell_cost_word = "Cost";
-        if spell_cost > 0 {
+        if spell_cost.mana > 0 {
             spell_cost_word = "Gain";
         }
 
@@ -555,7 +559,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
 
         match spell_type {
             SpellType::Single => {
-                let new_mana = mana + spell.mana_change.ok_or(RpgError::NoSpellCost)? as i32;
+                let new_mana = mana + spell.cost.clone().ok_or(RpgError::NoSpellCost)?.mana;
 
                 if new_mana >= 0 {
                     modified_char =

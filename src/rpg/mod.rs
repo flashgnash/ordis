@@ -1,6 +1,15 @@
 pub mod mir;
+pub mod spells;
 
+use lazy_static::lazy_static;
+use tokio::sync::Mutex;
+
+use std::any::Any;
+use std::any::TypeId;
+use std::collections::HashMap;
 use std::fmt;
+use std::ops::Add;
+use std::ops::Sub;
 
 // use crate::db;
 use crate::db::models::Character;
@@ -96,6 +105,10 @@ impl fmt::Display for SheetInfo {
         write!(f, "No stat sheet found")
     }
 }
+
+
+
+
 
 pub trait CharacterSheetable: Sized + std::fmt::Display {
     const PROMPT: &'static str;
@@ -251,6 +264,10 @@ pub async fn get_user_character(
     Err(Box::new(RpgError::NoCharacterSelected))
 }
 
+// lazy_static! {
+//     static ref SHEET_CACHE: Mutex<HashMap<(TypeId,i32), Box<dyn Any + Send + Sync>>> =
+//         Mutex::new(HashMap::new());
+// }
 pub async fn get_sheet<T: CharacterSheetable>(ctx: &Context<'_>) -> Result<T, Error> {
     let db_connection = &mut db::establish_connection();
 
