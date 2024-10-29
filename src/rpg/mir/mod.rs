@@ -99,7 +99,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .clone()
         .unwrap_or("".to_string());
 
-    let stat_block = StatBlock::from_character_with_cache(&ctx, &character).await?;
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &character, &bar_length);
 
     let max_health = stat_block.max_hp;
@@ -189,7 +189,7 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    let stat_block = StatBlock::from_character_with_cache(&ctx, &character).await?;
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &character, &BAR_LENGTH);
 
     placeholder_message
@@ -215,7 +215,7 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     let placeholder = CreateReply::default()
@@ -252,8 +252,7 @@ async fn update_mana_readout(
 ) -> Result<Character, Error> {
     let mut modified_character = character.clone();
 
-    let stat_block = StatBlock::from_character_with_cache(&ctx, character).await?;
-
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
     let mana_message_content = format!(
         "Current Energy: \n\n{}",
         get_mana_bar_message(&stat_block, &character, &BAR_LENGTH)
@@ -263,7 +262,6 @@ async fn update_mana_readout(
         &character.mana_readout_channel_id,
         &character.mana_readout_message_id,
     ) {
-        println!("Using existing gauge");
         let channel: ChannelId = channel_id.parse()?;
         let message: MessageId = message_id.parse()?;
 
@@ -352,7 +350,7 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     placeholder_message
@@ -388,7 +386,7 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     placeholder_message
@@ -430,7 +428,7 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block = StatBlock::from_character_with_cache(&ctx, &modified_character).await?;
+    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     placeholder_message

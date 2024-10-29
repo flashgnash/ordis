@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::ops::Add;
 use std::ops::Sub;
+use std::sync::Arc;
 
 // use crate::db;
 use crate::db::models::Character;
@@ -34,6 +35,7 @@ use crate::db::models::User;
 
 use diesel::sqlite::SqliteConnection;
 
+#[derive(Clone)]
 pub struct SheetInfo {
     pub original_message: Option<String>,
     pub jsonified_message: Option<String>,
@@ -110,7 +112,7 @@ impl fmt::Display for SheetInfo {
 
 
 
-pub trait CharacterSheetable: Sized + std::fmt::Display {
+pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
     const PROMPT: &'static str;
 
     fn new() -> Self;
@@ -180,7 +182,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
         return Ok(Self::from_string(&message).await?);
     }
 
-    fn from_cache(message: &str, json: &str) -> Result<Self, Error> {
+    fn from_json(message: &str, json: &str) -> Result<Self, Error> {
         let mut instance = Self::new();
         let sheet_info = instance.mut_sheet_info();
 
@@ -209,22 +211,33 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
         return Ok(sheet);
     }
 
-    async fn from_character_with_cache(
+    async fn message_changed(
         ctx: &Context<'_>,
         character: &Character,
-    ) -> Result<Self, Error> {
+    ) -> Result<bool, Error> {
+
         let stat_message = Self::get_sheet_message(ctx, &character).await?;
 
         let hash_hex = crate::common::hash(&stat_message.content);
 
-        let (previous_hash, previous_block) = Self::get_previous_block(character);
+        let (previous_hash, _) = Self::get_previous_block(character);
 
-        let generate_new_json = match previous_hash {
+        Ok(match previous_hash {
             Some(value) => value != hash_hex,
             None => true,
-        };
+        })
 
-        if generate_new_json {
+    }
+    //If the character sheet has changed, generate a new one with openAI
+    async fn from_character_openai(
+        ctx: &Context<'_>,
+        character: &Character,
+    ) -> Result<Self, Error> {
+
+        let stat_message = Self::get_sheet_message(ctx, &character).await?;
+
+        // let generate_new_json = Self::message_changed(ctx,character).await?;
+        
             println!("Generating new json via openai");
             let mut sheet = Self::from_string(&stat_message.content).await?;
             let sheet_info = sheet.mut_sheet_info();
@@ -235,10 +248,21 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
             sheet.update_character();
 
             Ok(sheet)
-        } else {
-            println!("Got cached stat block");
 
-            let mut sheet = Self::from_cache(
+    }
+    async fn from_character_database(
+        ctx: &Context<'_>,
+        character: &Character,
+    ) -> Result<Self, Error> {
+        let stat_message = Self::get_sheet_message(ctx, &character).await?;
+
+        let hash_hex = crate::common::hash(&stat_message.content);
+
+        let (previous_hash, previous_block) = Self::get_previous_block(character);
+
+
+
+            let mut sheet = Self::from_json(
                 &stat_message.content, //FUCK
                 &previous_block.expect("stat block hash has been checked"),
             )?;
@@ -247,9 +271,13 @@ pub trait CharacterSheetable: Sized + std::fmt::Display {
 
             sheet_info.character = Some(character.clone());
 
+            println!("Getting saved stat block");
             Ok(sheet)
-        }
     }
+
+
+        
+
 }
 pub async fn get_user_character(
     ctx: &Context<'_>,
@@ -264,18 +292,35 @@ pub async fn get_user_character(
     Err(Box::new(RpgError::NoCharacterSelected))
 }
 
-// lazy_static! {
-//     static ref SHEET_CACHE: Mutex<HashMap<(TypeId,i32), Box<dyn Any + Send + Sync>>> =
-//         Mutex::new(HashMap::new());
-// }
-pub async fn get_sheet<T: CharacterSheetable>(ctx: &Context<'_>) -> Result<T, Error> {
+lazy_static! {
+    static ref SHEET_CACHE: Mutex<HashMap<(TypeId,i32), Box<dyn Any + Send + Sync>>> =
+        Mutex::new(HashMap::new());
+}
+pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Result<T, Error> {
     let db_connection = &mut db::establish_connection();
 
     let character = get_user_character(ctx, db_connection).await?;
 
-    let character_sheet = T::from_character_with_cache(ctx, &character).await?;
+    let mut cache = SHEET_CACHE.lock().await;
 
-    // println!("{}", character_sheet);
+
+    let key = (TypeId::of::<T>(),character.id.expect("Char ID should not be null"));
+
+    
+
+    if cache.contains_key(&key) {
+        if T::message_changed(ctx, &character).await? {
+
+            let sheet = T::from_character_openai(ctx, &character).await?;
+            cache.insert(key,Box::new(sheet));       
+        }
+    }
+    else {
+        let sheet = T::from_character_database(ctx, &character).await?;
+        cache.insert(key,Box::new(sheet));       
+    }
+
+    let character_sheet = cache.get(&key).and_then(|a| a.downcast_ref::<T>()).ok_or(RpgError::NoCharacterSheet)?; 
 
     let sheet_info = character_sheet.sheet_info();
 
@@ -288,5 +333,5 @@ pub async fn get_sheet<T: CharacterSheetable>(ctx: &Context<'_>) -> Result<T, Er
         let _ = db::characters::update(db_connection, &new_char);
     }
 
-    Ok(character_sheet)
+    Ok(character_sheet.clone())
 }

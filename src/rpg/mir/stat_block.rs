@@ -11,6 +11,7 @@ use super::super::SheetInfo;
 
 use poise::serenity_prelude::Message;
 
+#[derive(Clone)]
 pub struct StatBlock {
     pub sheet_info: SheetInfo,
     pub stats: Option<serde_json::Value>,

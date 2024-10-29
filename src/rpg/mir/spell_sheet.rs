@@ -19,6 +19,7 @@ use super::spells::SpellType;
 
 use poise::serenity_prelude::Message;
 
+#[derive(Clone)]
 pub struct SpellSheet {
     pub sheet_info: SheetInfo,
     pub spells: Option<HashMap<String, Spell<ManaSpellResource>>>,
