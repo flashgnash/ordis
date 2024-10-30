@@ -1,13 +1,29 @@
 
+
+use common::ButtonEventSystem;
+use common::ButtonParams;
 use meval::eval_str;
 
 
 use dotenv::dotenv;
 
 use poise::async_trait;
+use poise::serenity_prelude::ButtonStyle;
+use poise::serenity_prelude::CreateActionRow;
+use poise::serenity_prelude::CreateButton;
+use poise::serenity_prelude::CreateMessage;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::EventHandler;
 use poise::serenity_prelude::Ready;
+use poise::CreateReply;
+
+use serde_json::Value;
+use tokio::sync::Mutex;
+use tokio::sync::MutexGuard;
+
+
+
+
 mod common;
 use crate::common::Context;
 use crate::common::Data;
@@ -65,8 +81,39 @@ use gpt::translate;
 use gpt::translate_context;
 use gpt::draw;
 use rand::prelude::*;
+use lazy_static::lazy_static;
 
 pub struct Handler;
+
+
+
+fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
+    event_system.register_handler("test_event", test_event_handler);
+}
+
+fn test_event_handler(ctx: &poise::serenity_prelude::Context,interaction: &poise::serenity_prelude::ComponentInteraction,params: &ButtonParams) {
+
+
+    
+    if let Some(Value::String(val)) = params.get("key") {
+        println!("Event received with param: {}", val);
+
+        
+        // interaction.channel_id.send_message(ctx,CreateMessage::default().content(format!("Event received with param: {}", val))).await?;
+    }
+}
+
+lazy_static! {
+    static ref EVENT_SYSTEM: Mutex<ButtonEventSystem> = {
+        let event_system = ButtonEventSystem::new();
+
+        // Register the standalone function as a handler at startup
+
+        Mutex::new(event_system)
+    };
+}
+
+
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -162,6 +209,35 @@ impl EventHandler for Handler {
         }
     }
 
+    async fn interaction_create(
+        &self,
+        ctx: poise::serenity_prelude::Context,
+        interaction: poise::serenity_prelude::Interaction,
+    ) {
+
+    match interaction {
+        poise::serenity_prelude::Interaction::Component(component) => {
+
+
+            println!("Testing!");
+            let event_system = EVENT_SYSTEM.lock().await;
+
+            
+
+            event_system.emit_event(&ctx,&component,&component.data.custom_id);    
+            
+            component.create_response(&ctx,
+                serenity::CreateInteractionResponse::Acknowledge
+            ).await.expect("Huh");
+
+           component.channel_id.send_message(&ctx,CreateMessage::default().content(format!("Test "))).await.expect("Huh"); 
+
+        }
+        _ => {}
+    }
+        }
+
+    
     async fn ready(&self, _ctx: poise::serenity_prelude::Context, _ready: Ready) {
         println!("Bot is connected!");
     }
@@ -194,7 +270,46 @@ fn get_random(vec: &Vec<&str>) -> String {
 
 
 
+#[poise::command(slash_command, prefix_command)]
+async fn button_test(ctx: Context<'_>) -> Result<(), Error> {
+    // Define buttons as variables
 
+    
+        
+    let json = r#"{"name": "test_event", "params": {"key": "Hello"}}"#;
+    let json2 = r#"{"name": "test_event", "params": {"key": "Hello2"}}"#;
+    let button1 = CreateButton::new(json).label("Button 1").style(ButtonStyle::Primary);
+    let button2 = CreateButton::new(json2).label("Button 2").style(ButtonStyle::Primary);
+    let button3 = CreateButton::new("test3").label("Button 3").style(ButtonStyle::Primary);
+    let button4 = CreateButton::new("test4").label("Button 4").style(ButtonStyle::Primary);
+
+
+    let button5 = CreateButton::new("test6").label("Button 6").style(ButtonStyle::Danger);
+    let button6 = CreateButton::new("Test7").label("Button 7").style(ButtonStyle::Secondary);
+    let button7 = CreateButton::new("test8").label("Button 8").style(ButtonStyle::Success);
+    let button8 = CreateButton::new("test9").label("Button 9").style(ButtonStyle::Primary);
+
+    let buttons = vec![button1,button2,button3,button4];
+    let buttons2 = vec![button5,button6,button7,button8];
+
+    // Create action row and add buttons
+    let action_row = CreateActionRow::Buttons(buttons);
+    let action_row2 = CreateActionRow::Buttons(buttons2);
+
+    let msg = CreateReply::default()
+        .content("Hello")
+        .components(vec![action_row,action_row2]);
+
+
+
+
+
+    // Send message with action row
+    ctx.send( msg ).await?;
+
+    Ok(())
+
+}
 #[poise::command(slash_command, prefix_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let quotes : Vec<&str> = vec![
@@ -263,11 +378,27 @@ async fn main() {
         | serenity::GatewayIntents::GUILD_PRESENCES;
 
 
+    let mut event_system = EVENT_SYSTEM.lock().await;
+
+    register_events(&mut event_system);
+
+    // crate::rpg::register_events(&mut event_system);
+
+    drop(event_system); 
+
+    // event_system.register_handler("test_event", 
+    //     |ctx: &poise::serenity_prelude::Context, params: &ButtonParams| {
+    //         if let Some(Value::String(val)) = params.get("key") {
+    //             println!("Event received with param: {}", val);
+    //         }
+    //     });
+
+
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
-                ping(),
+                ping(), button_test(),
                 calc(), 
 
                 ask(), draw(), translate(),translate_context(),

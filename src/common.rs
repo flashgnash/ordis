@@ -1,7 +1,11 @@
 pub struct Data {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
+use std::collections::HashMap;
+
 use poise::serenity_prelude::{Colour, Message};
+use serde::Deserialize;
+use serde_json::{from_str, Value};
 
 use crate::db;
 use diesel::sqlite::SqliteConnection;
@@ -13,6 +17,72 @@ use sha2::{Digest, Sha256};
 
 lazy_static! {
     pub static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::new();
+}
+
+pub type ButtonParams = HashMap<String, Value>;
+type ButtonHandler = Box<
+    dyn Fn(
+            &poise::serenity_prelude::Context,
+            &poise::serenity_prelude::ComponentInteraction,
+            &ButtonParams,
+        ) + Send
+        + Sync,
+>;
+
+pub struct ButtonEventSystem {
+    handlers: HashMap<String, Vec<ButtonHandler>>,
+}
+
+#[derive(Deserialize)]
+pub struct ButtonEvent {
+    name: String,
+    params: ButtonParams,
+}
+
+impl ButtonEventSystem {
+    pub fn new() -> Self {
+        ButtonEventSystem {
+            handlers: HashMap::new(),
+        }
+    }
+
+    pub fn register_handler<F>(&mut self, event_name: &str, handler: F)
+    where
+        F: for<'a, 'b> Fn(
+                &poise::serenity_prelude::Context,
+                &poise::serenity_prelude::ComponentInteraction,
+                &ButtonParams,
+            ) + Send
+            + Sync
+            + 'static,
+    {
+        println!("Registered handler {event_name}");
+        self.handlers
+            .entry(event_name.to_string())
+            .or_insert_with(Vec::new)
+            .push(Box::new(handler));
+    }
+
+    pub fn emit_event<'a>(
+        &self,
+        ctx: &poise::serenity_prelude::Context,
+        interaction: &poise::serenity_prelude::ComponentInteraction,
+        json: &str,
+    ) {
+        let event: ButtonEvent = match from_str(json) {
+            Ok(event) => event,
+            Err(err) => {
+                eprintln!("Failed to parse event JSON: {}", err);
+                return;
+            }
+        };
+
+        if let Some(handlers) = self.handlers.get(&event.name) {
+            for handler in handlers {
+                handler(ctx, interaction, &event.params);
+            }
+        }
+    }
 }
 
 pub fn uid_to_rgb(uid: u64) -> (u8, u8, u8) {
