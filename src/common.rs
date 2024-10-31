@@ -1,7 +1,7 @@
 pub struct Data {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
-use std::collections::HashMap;
+use std::{collections::HashMap, future::Future};
 
 use poise::serenity_prelude::{Colour, Message};
 use serde::Deserialize;
@@ -13,24 +13,37 @@ use diesel::sqlite::SqliteConnection;
 use lazy_static::lazy_static;
 use poise::serenity_prelude as serenity;
 
+use async_trait::async_trait;
 use sha2::{Digest, Sha256};
 
 lazy_static! {
     pub static ref HTTP_CLIENT: reqwest::Client = reqwest::Client::new();
 }
 
+#[async_trait]
+pub trait EventHandlerTrait: Send + Sync {
+    async fn run(
+        &self,
+        ctx: &poise::serenity_prelude::Context,
+        interaction: &poise::serenity_prelude::ComponentInteraction,
+        params: &ButtonParams,
+    );
+}
+
 pub type ButtonParams = HashMap<String, Value>;
+
 type ButtonHandler = Box<
     dyn Fn(
             &poise::serenity_prelude::Context,
             &poise::serenity_prelude::ComponentInteraction,
             &ButtonParams,
-        ) + Send
+        ) -> Box<dyn Future<Output = ()>>
+        + Send
         + Sync,
 >;
 
 pub struct ButtonEventSystem {
-    handlers: HashMap<String, Vec<ButtonHandler>>,
+    handlers: HashMap<String, Vec<Box<dyn EventHandlerTrait>>>,
 }
 
 #[derive(Deserialize)]
@@ -46,29 +59,25 @@ impl ButtonEventSystem {
         }
     }
 
-    pub fn register_handler<F>(&mut self, event_name: &str, handler: F)
+    pub fn register_handler<T>(&mut self, handler: T)
     where
-        F: for<'a, 'b> Fn(
-                &poise::serenity_prelude::Context,
-                &poise::serenity_prelude::ComponentInteraction,
-                &ButtonParams,
-            ) + Send
-            + Sync
-            + 'static,
+        T: EventHandlerTrait + 'static,
     {
+        let event_name = std::any::type_name::<T>().to_string();
         println!("Registered handler {event_name}");
         self.handlers
-            .entry(event_name.to_string())
+            .entry(event_name)
             .or_insert_with(Vec::new)
             .push(Box::new(handler));
     }
 
-    pub fn emit_event<'a>(
+    pub async fn emit_event(
         &self,
         ctx: &poise::serenity_prelude::Context,
         interaction: &poise::serenity_prelude::ComponentInteraction,
         json: &str,
     ) {
+        println!("Emitting event");
         let event: ButtonEvent = match from_str(json) {
             Ok(event) => event,
             Err(err) => {
@@ -79,7 +88,7 @@ impl ButtonEventSystem {
 
         if let Some(handlers) = self.handlers.get(&event.name) {
             for handler in handlers {
-                handler(ctx, interaction, &event.params);
+                handler.run(ctx, interaction, &event.params).await;
             }
         }
     }
