@@ -224,13 +224,13 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
         let (previous_hash, _) = Self::get_previous_block(character);
 
-        if let Some(prev) = &previous_hash {
+        // if let Some(prev) = &previous_hash {
             
-            println!("Prev: {prev}\n Current:{hash_hex}");
-        }
-        else{
-           println!("No prev hash") 
-        }
+        //     println!("Prev: {prev}\n Current:{hash_hex}");
+        // }
+        // else{
+        //    println!("No prev hash") 
+        // }
 
         
         Ok(match previous_hash {
