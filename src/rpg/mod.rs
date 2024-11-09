@@ -66,6 +66,7 @@ pub enum RpgError {
     NoTrainingDie,
 
     JsonNotInitialised,
+    TestingError,
 }
 
 impl fmt::Display for RpgError {
@@ -87,6 +88,7 @@ impl fmt::Display for RpgError {
             RpgError::NoMagicDie => write!(f, "Magic die per level appears to be missing from your stat block"),
             RpgError::NoTrainingDie => write!(f, "Training die per level appears to be missing from your stat block"),
             RpgError::JsonNotInitialised => write!(f, "JSON is not initialised - this should never happen"),
+            _ => write!(f,"Testing"),
         }
     }
 }
@@ -182,11 +184,11 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
         return Ok(Self::from_string(&message).await?);
     }
 
-    fn from_json(message: &str, json: &str) -> Result<Self, Error> {
+    fn from_json(message: Option<&str>, json: &str) -> Result<Self, Error> {
         let mut instance = Self::new();
         let sheet_info = instance.mut_sheet_info();
 
-        sheet_info.original_message = Some(message.to_string());
+        sheet_info.original_message = message.and_then(|m| Some(m.to_string()));
         sheet_info.jsonified_message = Some(json.to_string());
 
         sheet_info.deserialized_message = Some(serde_json::from_str(
@@ -222,6 +224,15 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
         let (previous_hash, _) = Self::get_previous_block(character);
 
+        if let Some(prev) = &previous_hash {
+            
+            println!("Prev: {prev}\n Current:{hash_hex}");
+        }
+        else{
+           println!("No prev hash") 
+        }
+
+        
         Ok(match previous_hash {
             Some(value) => value != hash_hex,
             None => true,
@@ -238,41 +249,51 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
         // let generate_new_json = Self::message_changed(ctx,character).await?;
         
-            println!("Generating new json via openai");
-            let mut sheet = Self::from_string(&stat_message.content).await?;
-            let sheet_info = sheet.mut_sheet_info();
+        println!("Generating new json via openai");
+        let mut sheet = Self::from_string(&stat_message.content).await?;
+        let sheet_info = sheet.mut_sheet_info();
 
-            sheet_info.message_hash = Some(crate::common::hash(&stat_message.content));
-            sheet_info.character = Some(character.clone());
-            sheet_info.changed = true;
-            sheet.update_character();
+        sheet_info.message_hash = Some(crate::common::hash(&stat_message.content));
+        sheet_info.character = Some(character.clone());
+        sheet_info.changed = true;
+        sheet.update_character();
 
-            Ok(sheet)
+        Ok(sheet)
 
     }
     async fn from_character_database(
         ctx: &poise::serenity_prelude::Context,
         character: &Character,
     ) -> Result<Self, Error> {
-        let stat_message = Self::get_sheet_message(ctx, &character).await?;
 
-        let hash_hex = crate::common::hash(&stat_message.content);
 
         let (previous_hash, previous_block) = Self::get_previous_block(character);
 
+        let mut sheet: Self;
+
+        let stat_message = Self::get_sheet_message(ctx, &character).await?;
+            
+        if let Some(prev_block) = previous_block {
 
 
-            let mut sheet = Self::from_json(
-                &stat_message.content, //FUCK
-                &previous_block.expect("stat block hash has been checked"),
+
+                    
+            sheet = Self::from_json(
+                Some(&stat_message.content), //FUCK
+                &prev_block
             )?;
+        }
 
-            let sheet_info = sheet.mut_sheet_info();
+        else {
+            sheet = Self::from_string(&stat_message.content).await?
+        }
 
-            sheet_info.character = Some(character.clone());
+        let sheet_info = sheet.mut_sheet_info();
 
-            println!("Getting saved stat block");
-            Ok(sheet)
+        sheet_info.character = Some(character.clone());
+
+        println!("Getting saved stat block");
+        Ok(sheet)
     }
 
 
@@ -310,12 +331,16 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Re
 
     if cache.contains_key(&key) {
         if T::message_changed(ctx.serenity_context(), &character).await? {
+            println!("Fetching from cache");
 
             let sheet = T::from_character_openai(ctx.serenity_context(), &character).await?;
             cache.insert(key,Box::new(sheet));       
         }
     }
     else {
+
+        println!("Not cached - generating");
+        
         let sheet = T::from_character_database(ctx.serenity_context(), &character).await?;
         cache.insert(key,Box::new(sheet));       
     }
