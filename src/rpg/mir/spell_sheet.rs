@@ -1,62 +1,29 @@
-use std::fmt;
-
 use std::collections::HashMap;
+use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use crate::common::Context;
 use crate::common::Error;
 
 use crate::db::models::Character;
+use crate::rpg::spells::SpellResource;
 
-use super::stat_puller;
-use super::stat_puller::SheetInfo;
-use super::stat_puller::StatPullerError;
+use super::super::CharacterSheetable;
+use super::super::RpgError;
+use super::super::SheetInfo;
+
+use super::spells::ManaSpellResource;
+use super::spells::Spell;
+use super::spells::SpellType;
 
 use poise::serenity_prelude::Message;
 
 #[derive(Clone)]
-pub enum SpellType {
-    Single,
-    Toggle,
-    Summon,
-    Unknown,
-}
-
-impl FromStr for SpellType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "single" => Ok(SpellType::Single),
-            "toggle" => Ok(SpellType::Toggle),
-            "summon" => Ok(SpellType::Summon),
-            _ => Ok(SpellType::Unknown),
-        }
-    }
-}
-
-impl std::fmt::Display for SpellType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            SpellType::Single => "single",
-            SpellType::Toggle => "toggle",
-            SpellType::Summon => "summon",
-            SpellType::Unknown => "unknown",
-        };
-        write!(f, "{}", s)
-    }
-}
-#[derive(Clone)]
-pub struct Spell {
-    pub mana_change: Option<i64>,
-    pub name: Option<String>,
-    pub cast_time: Option<String>,
-    pub spell_type: Option<SpellType>,
-}
-
 pub struct SpellSheet {
     pub sheet_info: SheetInfo,
-    pub spells: Option<HashMap<String, Spell>>,
+    pub spells: Option<HashMap<String, Spell<ManaSpellResource>>>,
+    pub active_spells: Option<Vec<String>>,
 }
 
 impl fmt::Display for SpellSheet {
@@ -72,7 +39,7 @@ impl fmt::Display for SpellSheet {
     }
 }
 
-impl super::stat_puller::CharacterSheetable for SpellSheet {
+impl CharacterSheetable for SpellSheet {
     fn new() -> Self {
         return Self {
             sheet_info: SheetInfo {
@@ -84,6 +51,7 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
                 deserialized_message: None,
             },
             spells: None,
+            active_spells: None,
         };
     }
 
@@ -91,13 +59,13 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
         let deserialized_message = self.sheet_info.deserialized_message.clone();
 
         if let Some(spell_data) = deserialized_message {
-            let mut spells: HashMap<String, Spell> = HashMap::new();
+            let mut spells: HashMap<String, Spell<ManaSpellResource>> = HashMap::new();
 
             for (spell_name, spell_data) in spell_data
                 .get("spells")
-                .ok_or(StatPullerError::NoSpellSheet)?
+                .ok_or(RpgError::NoSpellSheet)?
                 .as_object()
-                .ok_or(StatPullerError::NoSpellSheet)?
+                .ok_or(RpgError::NoSpellSheet)?
             {
                 let mut spell_type_enum: Option<SpellType> = None;
 
@@ -108,13 +76,25 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
                     );
                 }
 
+                let mana_change_i64 = spell_data.get("cost").and_then(|c| c.as_i64());
+
+                let spell_cost: Option<ManaSpellResource>;
+
+                if let Some(change) = mana_change_i64 {
+                    spell_cost = Some(ManaSpellResource {
+                        mana: change as i32,
+                    });
+                } else {
+                    spell_cost = None;
+                }
+
                 let spell = Spell {
                     name: Some(spell_name.to_string()),
                     cast_time: spell_data
                         .get("cast_time")
                         .and_then(|c| Some(c.to_string())),
                     spell_type: spell_type_enum,
-                    mana_change: spell_data.get("cost").and_then(|c| c.as_i64()),
+                    cost: spell_cost,
                 };
 
                 spells.insert(spell_name.to_string(), spell);
@@ -158,7 +138,10 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
         );
     }
 
-    async fn get_sheet_message(ctx: &Context<'_>, character: &Character) -> Result<Message, Error> {
+    async fn get_sheet_message(
+        ctx: &poise::serenity_prelude::Context,
+        character: &Character,
+    ) -> Result<Message, Error> {
         if let (Some(channel_id_u64), Some(message_id_u64)) = (
             character.spell_block_channel_id.clone(),
             character.spell_block_message_id.clone(),
@@ -166,12 +149,12 @@ impl super::stat_puller::CharacterSheetable for SpellSheet {
             let channel_id = channel_id_u64.parse().expect("Invalid channel ID");
             let message_id = message_id_u64.parse().expect("Invalid message ID");
 
-            let message = crate::common::fetch_message_poise(&ctx, channel_id, message_id).await?;
+            let message = crate::common::fetch_message(&ctx, channel_id, message_id).await?;
 
             return Ok(message);
         }
 
-        Err(Box::new(stat_puller::StatPullerError::NoSpellSheet))
+        Err(Box::new(RpgError::NoSpellSheet))
     }
 
     const PROMPT: &'static str = r#"
