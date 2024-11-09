@@ -5,11 +5,13 @@ use crate::common::Error;
 
 use crate::db::models::Character;
 
-use super::stat_puller;
-use super::stat_puller::SheetInfo;
+use super::super::CharacterSheetable;
+use super::super::RpgError;
+use super::super::SheetInfo;
 
 use poise::serenity_prelude::Message;
 
+#[derive(Clone)]
 pub struct StatBlock {
     pub sheet_info: SheetInfo,
     pub stats: Option<serde_json::Value>,
@@ -32,7 +34,7 @@ impl fmt::Display for StatBlock {
     }
 }
 
-impl super::stat_puller::CharacterSheetable for StatBlock {
+impl CharacterSheetable for StatBlock {
     fn new() -> Self {
         return Self {
             sheet_info: SheetInfo {
@@ -108,7 +110,10 @@ impl super::stat_puller::CharacterSheetable for StatBlock {
         );
     }
 
-    async fn get_sheet_message(ctx: &Context<'_>, character: &Character) -> Result<Message, Error> {
+    async fn get_sheet_message(
+        ctx: &poise::serenity_prelude::Context,
+        character: &Character,
+    ) -> Result<Message, Error> {
         if let (Some(channel_id_u64), Some(message_id_u64)) = (
             character.stat_block_channel_id.clone(),
             character.stat_block_message_id.clone(),
@@ -116,12 +121,12 @@ impl super::stat_puller::CharacterSheetable for StatBlock {
             let channel_id = channel_id_u64.parse().expect("Invalid channel ID");
             let message_id = message_id_u64.parse().expect("Invalid message ID");
 
-            let message = crate::common::fetch_message_poise(&ctx, channel_id, message_id).await?;
+            let message = crate::common::fetch_message(&ctx, channel_id, message_id).await?;
 
             return Ok(message);
         }
 
-        Err(Box::new(stat_puller::StatPullerError::NoCharacterSheet))
+        Err(Box::new(RpgError::NoCharacterSheet))
     }
 
     const PROMPT: &'static str = r#"

@@ -50,33 +50,33 @@ use songbird::SerenityInit;
 
 
 
-mod mir;
+mod rpg;
 
-use mir::stat_puller::pull_stats;
-use mir::stat_puller::pull_stat;
-use mir::pull_spellsheet;
+use rpg::mir::pull_stats;
+use rpg::mir::pull_stat;
+use rpg::mir::pull_spellsheet;
 
-use mir::get_mana;
-use mir::set_mana;
-use mir::mod_mana;
-use mir::add_mana;
-use mir::sub_mana;
-
-
-use mir::status;
-
-use mir::level_up;
-use mir::create_character;
-use mir::get_characters;
-use mir::roll;
-use mir::delete_character;
-use mir::select_character;
+use rpg::mir::get_mana;
+use rpg::mir::set_mana;
+use rpg::mir::mod_mana;
+use rpg::mir::add_mana;
+use rpg::mir::sub_mana;
 
 
-use mir::cast_spell;
-use mir::set_spells;
-use mir::list_spells;
-use mir::end_turn;
+use rpg::mir::status;
+
+use rpg::mir::level_up;
+use rpg::mir::create_character;
+use rpg::mir::get_characters;
+use rpg::mir::roll;
+use rpg::mir::delete_character;
+use rpg::mir::select_character;
+
+
+use rpg::mir::cast_spell;
+use rpg::mir::set_spells;
+use rpg::mir::list_spells;
+use rpg::mir::end_turn;
 
 mod gpt;
 use gpt::ask;
