@@ -827,7 +827,7 @@ pub async fn create_character(
         }
     }
 
-    let response_message = StatBlock::from_message(&ctx, msg.channel_id, msg.id)
+    let response_message = StatBlock::from_message(&ctx.serenity_context(), msg.channel_id, msg.id)
         .await?
         .sheet_info
         .jsonified_message

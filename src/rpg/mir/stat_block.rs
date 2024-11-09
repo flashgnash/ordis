@@ -110,7 +110,10 @@ impl CharacterSheetable for StatBlock {
         );
     }
 
-    async fn get_sheet_message(ctx: &Context<'_>, character: &Character) -> Result<Message, Error> {
+    async fn get_sheet_message(
+        ctx: &poise::serenity_prelude::Context,
+        character: &Character,
+    ) -> Result<Message, Error> {
         if let (Some(channel_id_u64), Some(message_id_u64)) = (
             character.stat_block_channel_id.clone(),
             character.stat_block_message_id.clone(),
@@ -118,7 +121,7 @@ impl CharacterSheetable for StatBlock {
             let channel_id = channel_id_u64.parse().expect("Invalid channel ID");
             let message_id = message_id_u64.parse().expect("Invalid message ID");
 
-            let message = crate::common::fetch_message_poise(&ctx, channel_id, message_id).await?;
+            let message = crate::common::fetch_message(&ctx, channel_id, message_id).await?;
 
             return Ok(message);
         }

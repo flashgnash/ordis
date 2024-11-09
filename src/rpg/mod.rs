@@ -19,7 +19,7 @@ use crate::db::models::Character;
 
 use serde_json::Value;
 
-use crate::common::fetch_message_poise;
+use crate::common::fetch_message;
 use crate::common::Context;
 use crate::common::Error;
 use poise::serenity_prelude::ChannelId;
@@ -125,7 +125,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
     fn sheet_info(&self) -> &SheetInfo;
 
     async fn get_sheet_message(
-        ctx: &Context<'_>,
+        ctx: &poise::serenity_prelude::Context, // 'a is to specify message is borrowed from context
         character: &Character,
     ) -> Result<poise::serenity_prelude::Message, Error>;
 
@@ -171,11 +171,11 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
     #[allow(dead_code)]
     async fn from_message(
-        ctx: &Context<'_>,
+        ctx: &poise::serenity_prelude::Context,
         channel_id: ChannelId,
         message_id: MessageId,
     ) -> Result<Self, Error> {
-        let message = fetch_message_poise(&ctx, channel_id, message_id)
+        let message = fetch_message(&ctx, channel_id, message_id)
             .await?
             .content;
 
@@ -201,7 +201,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
         Ok(instance)
     }
 
-    async fn from_character(ctx: &Context<'_>, character: &Character) -> Result<Self, Error> {
+    async fn from_character(ctx: &poise::serenity_prelude::Context, character: &Character) -> Result<Self, Error> {
         let message = Self::get_sheet_message(ctx, &character).await?;
         let mut sheet = Self::from_message(ctx, message.channel_id, message.id).await?;
 
@@ -212,7 +212,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
     }
 
     async fn message_changed(
-        ctx: &Context<'_>,
+        ctx: &poise::serenity_prelude::Context,
         character: &Character,
     ) -> Result<bool, Error> {
 
@@ -230,7 +230,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
     }
     //If the character sheet has changed, generate a new one with openAI
     async fn from_character_openai(
-        ctx: &Context<'_>,
+        ctx: &poise::serenity_prelude::Context,
         character: &Character,
     ) -> Result<Self, Error> {
 
@@ -251,7 +251,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
     }
     async fn from_character_database(
-        ctx: &Context<'_>,
+        ctx: &poise::serenity_prelude::Context,
         character: &Character,
     ) -> Result<Self, Error> {
         let stat_message = Self::get_sheet_message(ctx, &character).await?;
@@ -309,14 +309,14 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Re
     
 
     if cache.contains_key(&key) {
-        if T::message_changed(ctx, &character).await? {
+        if T::message_changed(ctx.serenity_context(), &character).await? {
 
-            let sheet = T::from_character_openai(ctx, &character).await?;
+            let sheet = T::from_character_openai(ctx.serenity_context(), &character).await?;
             cache.insert(key,Box::new(sheet));       
         }
     }
     else {
-        let sheet = T::from_character_database(ctx, &character).await?;
+        let sheet = T::from_character_database(ctx.serenity_context(), &character).await?;
         cache.insert(key,Box::new(sheet));       
     }
 
