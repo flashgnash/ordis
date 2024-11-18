@@ -63,7 +63,12 @@ impl ButtonEventSystem {
     where
         T: EventHandlerTrait + 'static,
     {
-        let event_name = std::any::type_name::<T>().to_string();
+        let event_name = std::any::type_name::<T>()
+            .split("::")
+            .last()
+            .unwrap()
+            .to_string();
+
         println!("Registered handler {event_name}");
         self.handlers
             .entry(event_name)

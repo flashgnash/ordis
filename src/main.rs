@@ -107,8 +107,8 @@ pub struct TestEventParams {
 }
 
 impl TestEvent {
-    fn create_button(text: &str, params: &TestEventParams) -> Result<CreateButton,Error> {
-        return create_button_with_callback::<Self,TestEventParams>(text,params);
+    fn create_button(text: &str, params: &TestEventParams, button_style: ButtonStyle) -> Result<CreateButton,Error> {
+        return create_button_with_callback::<Self,TestEventParams>(text,params,button_style);
     }
 }
 
@@ -117,7 +117,7 @@ impl common::EventHandlerTrait for TestEvent {
     async fn run(&self,ctx: &poise::serenity_prelude::Context,interaction: &poise::serenity_prelude::ComponentInteraction,params: &ButtonParams) {
         if let Some(Value::String(val)) = params.get("key") {
             println!("Event received with param: {}", val);
-            interaction.channel_id.send_message(ctx,CreateMessage::default().content(format!("Event received with param: {}", val))).await.expect("AAA");
+            interaction.channel_id.send_message(ctx,CreateMessage::default().content(format!("Event received with param: {} from user {}", val, interaction.user.name))).await.expect("AAA");
         }
     }
 }
@@ -300,12 +300,16 @@ T: Serialize
     params: T
 }
 
-fn create_button_with_callback<T,P>(text:&str,callback_params: &P) -> Result<CreateButton,Error>
+fn create_button_with_callback<T,P>(text:&str,callback_params: &P,button_style:ButtonStyle) -> Result<CreateButton,Error>
 where P: Serialize
  
 {
 
-    let callback_name = type_name::<T>().to_string();
+    let callback_name = std::any::type_name::<T>()
+        .split("::")
+        .last()
+        .unwrap()
+        .to_string();
     // let params = serde_json::to_string(&callback);
 
     let callback_serializable = Callback {
@@ -316,7 +320,7 @@ where P: Serialize
 
     let json = serde_json::to_string(&callback_serializable)?;
 
-    Ok(CreateButton::new(json).label(text).style(ButtonStyle::Primary))
+    Ok(CreateButton::new(json).label(text).style(button_style))
     
 }
 
@@ -331,13 +335,16 @@ async fn button_test(ctx: Context<'_>) -> Result<(), Error> {
             TestEvent::create_button("Click me!",
                 &TestEventParams {
                     key: "Hello world!".to_string()
-                }
+                },
+                ButtonStyle::Primary
             )?,
 
             TestEvent::create_button("Click me!",
                 &TestEventParams {
                     key: "Testing world!".to_string()
-                }
+                },
+                
+                ButtonStyle::Primary
             )?
         ])
     ];
@@ -423,6 +430,7 @@ async fn main() {
     let mut event_system = EVENT_SYSTEM.lock().await;
 
     register_events(&mut event_system);
+    rpg::mir::register_events(&mut event_system);
 
     // crate::rpg::register_events(&mut event_system);
 
