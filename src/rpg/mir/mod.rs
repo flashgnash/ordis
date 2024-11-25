@@ -267,53 +267,102 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
 
     let character = db::characters::get(db_connection, character_id)?;
 
-    let mut rows = vec![CreateActionRow::Buttons(vec![
-        ChangeManaEvent::create_button(
-            "🪄-100",
-            &ChangeManaEventParams {
-                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
-                mana_change: -100,
-            },
-            ButtonStyle::Secondary,
-        )
-        .expect("How fail"),
-        ChangeManaEvent::create_button(
-            "🪄-50",
-            &ChangeManaEventParams {
-                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
-                mana_change: -50,
-            },
-            ButtonStyle::Secondary,
-        )
-        .expect("How fail"),
-        ChangeManaEvent::create_button(
-            "🪄 Set to 0",
-            &ChangeManaEventParams {
-                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
-                mana_change: 0,
-            },
-            ButtonStyle::Secondary,
-        )
-        .expect("How fail"),
-        ChangeManaEvent::create_button(
-            "🪄+50",
-            &ChangeManaEventParams {
-                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
-                mana_change: 50,
-            },
-            ButtonStyle::Secondary,
-        )
-        .expect("How fail"),
-        ChangeManaEvent::create_button(
-            "🪄+100",
-            &ChangeManaEventParams {
-                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
-                mana_change: 100,
-            },
-            ButtonStyle::Secondary,
-        )
-        .expect("How fail"),
-    ])];
+    let mut rows = vec![
+        CreateActionRow::Buttons(vec![
+            ChangeManaEvent::create_button(
+                "🪄-50",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: -50,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄-25",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: -25,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            // ChangeManaEvent::create_button(
+            //     "🪄 Set to full",
+            //     &ChangeManaEventParams {
+            //         character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+            //         mana_change: 0,
+            //     },
+            //     ButtonStyle::Secondary,
+            // )
+            // .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄+25",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: 25,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄+50",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: 50,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+        ]),
+        CreateActionRow::Buttons(vec![
+            ChangeManaEvent::create_button(
+                "🪄-200",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: -200,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄-100",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: -100,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            // ChangeManaEvent::create_button(
+            //     "🪄 Set to 0",
+            //     &ChangeManaEventParams {
+            //         character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+            //         mana_change: 69,
+            //     },
+            //     ButtonStyle::Secondary,
+            // )
+            // .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄+100",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: 100,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄+200",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: 200,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+        ]),
+    ];
 
     rows.push(CreateActionRow::Buttons(vec![
         UpdateStatusEvent::create_button(
