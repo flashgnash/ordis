@@ -175,9 +175,26 @@ pub async fn generate_status_embed(
             active_spells_content + &format!("\nNet mana change: {total_mana_diff} per turn");
     }
 
-    let embed = CreateEmbed::default().title(format!("{character_name}\n<#{character_channel}>\n​\n")).description(format!(
-                "\n\n{health_message_content}\n\n{mana_message_content}\n\n{hunger_message_content}\n​\n{active_spells_content}\n"
-            ));
+    let invisible_char = "\u{200B}";
+
+    let embed = CreateEmbed::default()
+        .title(format!(
+            "
+            {character_name}
+<#{character_channel}>
+            "
+        ))
+        .description(format!(
+            "{invisible_char}
+                {health_message_content}
+                
+                {mana_message_content}
+                
+                {hunger_message_content}
+                
+                {invisible_char}{active_spells_content}
+                "
+        ));
 
     Ok(embed)
 }

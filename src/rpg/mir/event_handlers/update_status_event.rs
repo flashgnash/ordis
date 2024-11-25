@@ -9,6 +9,7 @@ use crate::db;
 
 use super::super::RpgError;
 
+use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::EditMessage;
 use serde_json::Value;
 
@@ -43,6 +44,20 @@ impl common::EventHandlerTrait for UpdateStatusEvent {
         params: &common::ButtonParams,
     ) {
         if let Some(Value::Number(char_id)) = params.get("character_id") {
+            let channel_id = interaction.message.channel_id;
+            let message_id = interaction.message.id;
+
+            let placeholder_embed = CreateEmbed::default().description("Loading... Please wait");
+
+            channel_id
+                .edit_message(
+                    &ctx,
+                    message_id,
+                    EditMessage::default().embed(placeholder_embed),
+                )
+                .await
+                .expect("I am so tired");
+
             let db_connection = &mut db::establish_connection();
 
             let char = db::characters::get(
@@ -53,9 +68,6 @@ impl common::EventHandlerTrait for UpdateStatusEvent {
                     .expect("Really gotta make these return result") as i32,
             )
             .expect("Remove this expect later");
-
-            let channel_id = interaction.message.channel_id;
-            let message_id = interaction.message.id;
 
             println!("Channel: {channel_id}, message: {message_id}");
 
