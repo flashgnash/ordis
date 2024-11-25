@@ -6,6 +6,7 @@ use poise::serenity_prelude::ButtonStyle;
 use poise::serenity_prelude::CreateActionRow;
 use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateEmbed;
+use poise::serenity_prelude::CreateEmbedFooter;
 use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
@@ -143,6 +144,44 @@ pub async fn generate_status_embed(
         );
     }
 
+    let max_armour = stat_block.max_armour;
+    let armour = stat_block.armour;
+
+    let mut armour_message_content = "Current armour unknown.".to_string();
+
+    if let Some(max_armour) = max_armour {
+        let armour = armour.unwrap_or(max_armour);
+        armour_message_content = format!(
+            "🛡️ {} ``{armour} / {max_armour}``",
+            crate::common::draw_bar(
+                armour as i32,
+                max_armour as i32,
+                BAR_LENGTH as usize,
+                "⬜",
+                "⬛"
+            )
+        );
+    }
+
+    let max_soul = stat_block.max_soul;
+    let soul = stat_block.soul;
+
+    let mut soul_message_content = "Current soul unknown (are you ginger?)".to_string();
+
+    if let Some(max_soul) = max_soul {
+        let soul = soul.unwrap_or(max_soul);
+        soul_message_content = format!(
+            "👻 {} ``{soul} / {max_soul}``",
+            crate::common::draw_bar(
+                soul as i32,
+                max_soul as i32,
+                BAR_LENGTH as usize,
+                "🟪",
+                "⬛"
+            )
+        );
+    }
+
     let mut active_spells_content: String = "".to_string();
 
     let active_spells_map = ACTIVE_SPELLS.lock().await;
@@ -175,6 +214,25 @@ pub async fn generate_status_embed(
             active_spells_content + &format!("\nNet mana change: {total_mana_diff} per turn");
     }
 
+    let mut stats_message = "".to_string();
+
+    if let Some(stats) = stat_block.stats {
+        if let Value::Object(map) = stats {
+            stats_message = map
+                .into_iter()
+                .filter_map(|(key, value)| {
+                    // Only include the pair if the value is not null
+                    if value != Value::Null {
+                        Some(format!("| {} {}", key, value))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join(" ")
+                + " | ";
+        }
+    }
     let invisible_char = "\u{200B}";
 
     let embed = CreateEmbed::default()
@@ -186,15 +244,21 @@ pub async fn generate_status_embed(
         ))
         .description(format!(
             "{invisible_char}
-                {health_message_content}
+{health_message_content}
                 
-                {mana_message_content}
+{mana_message_content}
                 
-                {hunger_message_content}
+{hunger_message_content}
+
+{invisible_char}
+{armour_message_content}
+
+{soul_message_content}
                 
-                {invisible_char}{active_spells_content}
+{invisible_char}{active_spells_content}
                 "
-        ));
+        ))
+        .footer(CreateEmbedFooter::new(stats_message));
 
     Ok(embed)
 }
