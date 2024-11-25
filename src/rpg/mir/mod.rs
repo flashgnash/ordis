@@ -103,28 +103,18 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
 
 static BAR_LENGTH: i32 = 17;
 
-#[poise::command(slash_command, prefix_command)]
-pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Error> {
-    let ephemeral = !permanent.unwrap_or(false);
-
-    let placeholder = CreateReply::default()
-        .content("*Thinking, please wait...*")
-        .ephemeral(ephemeral);
-    let placeholder_message = ctx.send(placeholder).await?;
-    let db_connection = &mut db::establish_connection();
-
-    let bar_length = BAR_LENGTH;
-
-    let character = get_user_character(&ctx, db_connection).await?;
-
-    let character_name = &character.name.clone().unwrap_or("No name?".to_string());
-    let character_channel = &character
+pub async fn generate_status_embed(
+    ctx: &poise::serenity_prelude::Context,
+    character: &Character,
+) -> Result<CreateEmbed, Error> {
+    let character_name = character.name.clone().unwrap_or("No name?".to_string());
+    let character_channel = character
         .stat_block_channel_id
         .clone()
         .unwrap_or("".to_string());
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &character, &bar_length);
+    let stat_block: StatBlock = super::get_sheet(&ctx, character).await?;
+    let mana_message_content = get_mana_bar_message(&stat_block, &character, &BAR_LENGTH);
 
     let max_health = stat_block.max_hp;
     let health = stat_block.hp;
@@ -188,6 +178,24 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
     let embed = CreateEmbed::default().title(format!("{character_name}\n<#{character_channel}>\n​\n")).description(format!(
                 "\n\n{health_message_content}\n\n{mana_message_content}\n\n{hunger_message_content}\n​\n{active_spells_content}\n"
             ));
+
+    Ok(embed)
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Error> {
+    let ephemeral = !permanent.unwrap_or(false);
+
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(ephemeral);
+    let placeholder_message = ctx.send(placeholder).await?;
+    let db_connection = &mut db::establish_connection();
+
+    let bar_length = BAR_LENGTH;
+
+    let character = get_user_character(&ctx, db_connection).await?;
+
     // embed.description("Test");
 
     let mut rows = vec![CreateActionRow::Buttons(vec![
@@ -195,7 +203,7 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
             "🎲 Roll",
             &RollEventParams {
                 dice_string: "1d100".to_string(),
-                character_id: 1,
+                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
             },
             ButtonStyle::Secondary,
         )
@@ -244,10 +252,17 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
 
     if !ephemeral {
         rows.push(CreateActionRow::Buttons(vec![
-            UpdateStatusEvent::create_button("♻️", &UpdateStatusEventParams { character_id: 1 })
-                .expect("How fail"),
+            UpdateStatusEvent::create_button(
+                "♻️",
+                &UpdateStatusEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                },
+            )
+            .expect("How fail"),
         ]));
     }
+
+    let embed = generate_status_embed(ctx.serenity_context(), &character).await?;
 
     placeholder_message
         .edit(
@@ -785,7 +800,7 @@ pub async fn roll_with_char_sheet(
     dice_expression: Option<String>,
     character: Character,
 ) -> Result<(String, f64), Error> {
-    let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx, character).await;
+    let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx, &character).await;
 
     //TODO make this default configurable per server
     let mut dice = dice_expression

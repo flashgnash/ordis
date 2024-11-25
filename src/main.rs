@@ -242,12 +242,12 @@ impl EventHandler for Handler {
             let event_system = EVENT_SYSTEM.lock().await;
 
             
-
-            event_system.emit_event(&ctx,&component,&component.data.custom_id).await;    
-            
             component.create_response(&ctx,
                 serenity::CreateInteractionResponse::Acknowledge
             ).await.expect("Huh");
+
+            event_system.emit_event(&ctx,&component,&component.data.custom_id).await;    
+            
 
            // component.channel_id.send_message(&ctx,CreateMessage::default().content(format!("Test "))).await.expect("Huh"); 
 

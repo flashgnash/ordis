@@ -321,12 +321,12 @@ pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<
     let db_connection = &mut db::establish_connection();
     let sheet = get_sheet(
       ctx.serenity_context(),
-      get_user_character(ctx,db_connection).await?
+      &get_user_character(ctx,db_connection).await?
     ).await?; 
 
     return Ok(sheet)
 }
-pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_prelude::Context,character: Character) -> Result<T, Error> {
+pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_prelude::Context,character: &Character) -> Result<T, Error> {
 
     let db_connection = &mut db::establish_connection();
 

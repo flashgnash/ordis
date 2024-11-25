@@ -59,12 +59,25 @@ impl common::EventHandlerTrait for UpdateStatusEvent {
 
             println!("Channel: {channel_id}, message: {message_id}");
 
+            // let msg = common::fetch_message(ctx, channel_id, message_id)
+            //     .await
+            //     .expect("Blah");
+
+            // println!("{}", msg.content);
+
+            println!("{}", char_id);
+
+            //TODO this is horrendous
+            let stat_block: super::super::StatBlock = super::super::super::get_sheet(ctx, &char)
+                .await
+                .expect("blah");
+
+            let embed = super::super::generate_status_embed(ctx, &char)
+                .await
+                .expect("Ffs");
+
             channel_id
-                .edit_message(
-                    &ctx,
-                    message_id,
-                    EditMessage::default().content(format!("Hello world")),
-                )
+                .edit_message(&ctx, message_id, EditMessage::default().embed(embed))
                 .await
                 .expect("I am so tired");
         }
