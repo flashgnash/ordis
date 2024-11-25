@@ -59,9 +59,13 @@ use event_handlers::RollEventParams;
 use event_handlers::UpdateStatusEvent;
 use event_handlers::UpdateStatusEventParams;
 
+use event_handlers::ChangeManaEvent;
+use event_handlers::ChangeManaEventParams;
+
 pub fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
     event_system.register_handler(RollEvent);
     event_system.register_handler(UpdateStatusEvent);
+    event_system.register_handler(ChangeManaEvent);
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -125,7 +129,7 @@ pub async fn generate_status_embed(
     if let Some(max_health) = max_health {
         let health = health.unwrap_or(max_health);
         health_message_content = format!(
-            "♥️ {} ``{health} / {max_health}``",
+            "♥️ {} ``{health} / {max_health}\n\n``",
             crate::common::draw_bar(
                 health as i32,
                 max_health as i32,
@@ -139,7 +143,7 @@ pub async fn generate_status_embed(
     let mut hunger_message_content = "Hunger unknown.".to_string();
     if let Some(hunger) = stat_block.hunger {
         hunger_message_content = format!(
-            "🍖 {} ``{hunger} / 10``",
+            "🍖 {} ``{hunger} / 10\n\n``",
             crate::common::draw_bar(hunger as i32, 10, BAR_LENGTH as usize, "🟨", "⬛")
         );
     }
@@ -147,12 +151,12 @@ pub async fn generate_status_embed(
     let max_armour = stat_block.max_armour;
     let armour = stat_block.armour;
 
-    let mut armour_message_content = "Current armour unknown.".to_string();
+    let mut armour_message_content = "".to_string();
 
     if let Some(max_armour) = max_armour {
         let armour = armour.unwrap_or(max_armour);
         armour_message_content = format!(
-            "🛡️ {} ``{armour} / {max_armour}``",
+            "🛡️ {} ``{armour} / {max_armour}\n\n``",
             crate::common::draw_bar(
                 armour as i32,
                 max_armour as i32,
@@ -166,12 +170,12 @@ pub async fn generate_status_embed(
     let max_soul = stat_block.max_soul;
     let soul = stat_block.soul;
 
-    let mut soul_message_content = "Current soul unknown (are you ginger?)".to_string();
+    let mut soul_message_content = "".to_string();
 
     if let Some(max_soul) = max_soul {
         let soul = soul.unwrap_or(max_soul);
         soul_message_content = format!(
-            "👻 {} ``{soul} / {max_soul}``",
+            "👻 {} ``{soul} / {max_soul}\n\n``",
             crate::common::draw_bar(
                 soul as i32,
                 max_soul as i32,
@@ -244,23 +248,96 @@ pub async fn generate_status_embed(
         ))
         .description(format!(
             "{invisible_char}
-{health_message_content}
+{health_message_content}{mana_message_content}{hunger_message_content}{invisible_char}{armour_message_content}{soul_message_content}
                 
-{mana_message_content}
-                
-{hunger_message_content}
-
-{invisible_char}
-{armour_message_content}
-
-{soul_message_content}
-                
-{invisible_char}{active_spells_content}
+{active_spells_content}
                 "
         ))
         .footer(CreateEmbedFooter::new(stats_message));
 
     Ok(embed)
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Error> {
+    let placeholder = CreateReply::default().content("*Thinking, please wait...*");
+
+    let placeholder_message = ctx.send(placeholder).await?;
+    let db_connection = &mut db::establish_connection();
+
+    let character = db::characters::get(db_connection, character_id)?;
+
+    let mut rows = vec![CreateActionRow::Buttons(vec![
+        ChangeManaEvent::create_button(
+            "🪄-100",
+            &ChangeManaEventParams {
+                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                mana_change: -100,
+            },
+            ButtonStyle::Secondary,
+        )
+        .expect("How fail"),
+        ChangeManaEvent::create_button(
+            "🪄-50",
+            &ChangeManaEventParams {
+                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                mana_change: -50,
+            },
+            ButtonStyle::Secondary,
+        )
+        .expect("How fail"),
+        ChangeManaEvent::create_button(
+            "🪄 Set to 0",
+            &ChangeManaEventParams {
+                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                mana_change: 0,
+            },
+            ButtonStyle::Secondary,
+        )
+        .expect("How fail"),
+        ChangeManaEvent::create_button(
+            "🪄+50",
+            &ChangeManaEventParams {
+                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                mana_change: 50,
+            },
+            ButtonStyle::Secondary,
+        )
+        .expect("How fail"),
+        ChangeManaEvent::create_button(
+            "🪄+100",
+            &ChangeManaEventParams {
+                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                mana_change: 100,
+            },
+            ButtonStyle::Secondary,
+        )
+        .expect("How fail"),
+    ])];
+
+    rows.push(CreateActionRow::Buttons(vec![
+        UpdateStatusEvent::create_button(
+            " Refresh ",
+            &UpdateStatusEventParams {
+                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+            },
+        )
+        .expect("How fail"),
+    ]));
+
+    let embed = generate_status_embed(ctx.serenity_context(), &character).await?;
+
+    placeholder_message
+        .edit(
+            ctx,
+            CreateReply::default()
+                .content("")
+                .components(rows)
+                .embed(embed),
+        )
+        .await?;
+
+    Ok(())
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -273,63 +350,19 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
     let placeholder_message = ctx.send(placeholder).await?;
     let db_connection = &mut db::establish_connection();
 
-    let bar_length = BAR_LENGTH;
-
     let character = get_user_character(&ctx, db_connection).await?;
 
     // embed.description("Test");
 
-    let mut rows = vec![CreateActionRow::Buttons(vec![
-        RollEvent::create_button(
-            "🎲 Roll",
-            &RollEventParams {
-                dice_string: "1d100".to_string(),
-                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
-            },
-            ButtonStyle::Secondary,
-        )
-        .expect("How fail"),
-        // RollEvent::create_button(
-        //     " 🎲 💪 ",
-        //     &RollEventParams {
-        //         dice_string: "1d100+str".to_string(),
-        //         character_id: 1,
-        //     },
-        // )
-        // .expect("How fail"),
-        // RollEvent::create_button(
-        //     " 🎲 🐇 ",
-        //     &RollEventParams {
-        //         dice_string: "1d100+agl".to_string(),
-        //         character_id: 1,
-        //     },
-        // )
-        // .expect("How fail"),
-        // RollEvent::create_button(
-        //     " 🎲 🍺 ",
-        //     &RollEventParams {
-        //         dice_string: "1d100+con".to_string(),
-        //         character_id: 1,
-        //     },
-        // )
-        // .expect("How fail"),
-        // RollEvent::create_button(
-        //     " 🎲 👉👉 ",
-        //     &RollEventParams {
-        //         dice_string: "1d100+cha".to_string(),
-        //         character_id: 1,
-        //     },
-        // )
-        // .expect("How fail"),
-        // RollEvent::create_button(
-        //     " 🎲 📔 ",
-        //     &RollEventParams {
-        //         dice_string: "1d100+kno".to_string(),
-        //         character_id: 1,
-        //     },
-        // )
-        // .expect("How fail"),
-    ])];
+    let mut rows = vec![CreateActionRow::Buttons(vec![RollEvent::create_button(
+        "🎲 Roll",
+        &RollEventParams {
+            dice_string: "1d100".to_string(),
+            character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+        },
+        ButtonStyle::Secondary,
+    )
+    .expect("How fail")])];
 
     if !ephemeral {
         rows.push(CreateActionRow::Buttons(vec![
@@ -411,7 +444,7 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
 
 fn get_mana_bar_message(stat_block: &StatBlock, character: &Character, bar_length: &i32) -> String {
     return format!(
-        "🪄 {} ``{} / {}`` ",
+        "🪄 {} ``{} / {}``\n\n",
         crate::common::draw_bar(
             character.mana.unwrap_or(0),
             stat_block.energy_pool.unwrap_or(0) as i32,
