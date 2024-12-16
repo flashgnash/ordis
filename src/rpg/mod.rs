@@ -26,9 +26,9 @@ use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::MessageId;
 use poise::CreateReply;
 
-use crate::gpt::generate_to_string;
-use crate::gpt::Message;
-use crate::gpt::Role;
+use crate::llm::generate_to_string;
+use crate::llm::Message;
+use crate::llm::Role;
 
 use crate::db;
 use crate::db::models::User;
@@ -140,7 +140,6 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
         sheet_info.original_message = Some(message.to_string());
 
-        let model = "gpt-4o-mini";
 
         let preprompt = Self::PROMPT.to_string();
 
@@ -155,15 +154,17 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
             },
         ];
 
-        let response = generate_to_string(model, messages).await?;
+        let response = generate_to_string(None, messages).await?;
 
-        sheet_info.jsonified_message = Some(response);
+        let response_filtered = response.replace("```json","").replace("```","");
+
+        sheet_info.jsonified_message = Some(response_filtered);
 
         sheet_info.deserialized_message = Some(serde_json::from_str(
             &sheet_info
                 .jsonified_message
                 .clone()
-                .expect("This property was literally just set"),
+                .expect("This property was just set"),
         )?);
 
         instance.post_init()?;
