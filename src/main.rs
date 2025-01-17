@@ -87,7 +87,7 @@ impl EventHandler for Handler {
             let original_message = fetch_message(&ctx, channel_ref, message_ref).await.unwrap();
 
             if ctx.cache.current_user().id == original_message.author.id {
-                println!("That's me!");
+                println!("Testing me!");
 
 
                 let mut messages = vec![            
