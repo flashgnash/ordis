@@ -101,7 +101,7 @@ fn generate_randoms(count: i32, faces: i32) -> Vec<i32> {
     let mut rolls: Vec<i32> = vec![];
 
     for _i in 0..count {
-        rolls.push(rng.gen_range(1..faces));
+        rolls.push(rng.gen_range(1..faces + 1));
     }
 
     return rolls;
