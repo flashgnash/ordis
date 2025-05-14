@@ -1,13 +1,32 @@
 
+
+use std::any::type_name;
+
+use common::ButtonEventSystem;
+use common::ButtonParams;
 use meval::eval_str;
 
 
 use dotenv::dotenv;
 
 use poise::async_trait;
+use poise::serenity_prelude::ButtonStyle;
+use poise::serenity_prelude::CreateActionRow;
+use poise::serenity_prelude::CreateButton;
+use poise::serenity_prelude::CreateMessage;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::EventHandler;
 use poise::serenity_prelude::Ready;
+use poise::CreateReply;
+
+use serde::Serialize;
+use serde_json::Value;
+use tokio::sync::Mutex;
+use tokio::sync::MutexGuard;
+
+
+
+
 mod common;
 use crate::common::Context;
 use crate::common::Data;
@@ -45,6 +64,7 @@ use rpg::mir::sub_mana;
 
 
 use rpg::mir::status;
+use rpg::mir::status_admin;
 
 use rpg::mir::level_up;
 use rpg::mir::create_character;
@@ -65,8 +85,57 @@ use gpt::translate;
 use gpt::translate_context;
 use gpt::draw;
 use rand::prelude::*;
+use lazy_static::lazy_static;
+
+
 
 pub struct Handler;
+
+
+
+fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
+    event_system.register_handler(TestEvent);
+}
+
+
+
+// Example event
+pub struct TestEvent;
+
+#[derive(Serialize)]
+pub struct TestEventParams {
+    key: String,
+}
+
+impl TestEvent {
+    fn create_button(text: &str, params: &TestEventParams, button_style: ButtonStyle) -> Result<CreateButton,Error> {
+        return create_button_with_callback::<Self,TestEventParams>(text,params,button_style);
+    }
+}
+
+#[async_trait]
+impl common::EventHandlerTrait for TestEvent {
+    async fn run(&self,ctx: &poise::serenity_prelude::Context,interaction: &poise::serenity_prelude::ComponentInteraction,params: &ButtonParams) {
+        if let Some(Value::String(val)) = params.get("key") {
+            println!("Event received with param: {}", val);
+            interaction.channel_id.send_message(ctx,CreateMessage::default().content(format!("Event received with param: {} from user {}", val, interaction.user.name))).await.expect("AAA");
+        }
+    }
+}
+// Example event end
+
+
+lazy_static! {
+    static ref EVENT_SYSTEM: Mutex<ButtonEventSystem> = {
+        let event_system = ButtonEventSystem::new();
+
+        // Register the standalone function as a handler at startup
+
+        Mutex::new(event_system)
+    };
+}
+
+
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -162,6 +231,33 @@ impl EventHandler for Handler {
         }
     }
 
+    async fn interaction_create(
+        &self,
+        ctx: poise::serenity_prelude::Context,
+        interaction: poise::serenity_prelude::Interaction,
+    ) {
+
+    match interaction {
+        poise::serenity_prelude::Interaction::Component(component) => {
+
+            let event_system = EVENT_SYSTEM.lock().await;
+
+            
+            component.create_response(&ctx,
+                serenity::CreateInteractionResponse::Acknowledge
+            ).await.expect("Huh");
+
+            event_system.emit_event(&ctx,&component,&component.data.custom_id).await;    
+            
+
+           // component.channel_id.send_message(&ctx,CreateMessage::default().content(format!("Test "))).await.expect("Huh"); 
+
+        }
+        _ => {}
+    }
+        }
+
+    
     async fn ready(&self, _ctx: poise::serenity_prelude::Context, _ready: Ready) {
         println!("Bot is connected!");
     }
@@ -195,6 +291,75 @@ fn get_random(vec: &Vec<&str>) -> String {
 
 
 
+
+#[derive(Serialize)]
+struct Callback<T>
+where
+T: Serialize
+{
+    name: String,
+    params: T
+}
+
+fn create_button_with_callback<T,P>(text:&str,callback_params: &P,button_style:ButtonStyle) -> Result<CreateButton,Error>
+where P: Serialize
+ 
+{
+
+    let callback_name = std::any::type_name::<T>()
+        .split("::")
+        .last()
+        .unwrap()
+        .to_string();
+    // let params = serde_json::to_string(&callback);
+
+    let callback_serializable = Callback {
+        name: callback_name,
+        params: callback_params
+    };
+
+
+    let json = serde_json::to_string(&callback_serializable)?;
+
+    Ok(CreateButton::new(json).label(text).style(button_style))
+    
+}
+
+
+#[poise::command(slash_command, prefix_command)]
+async fn button_test(ctx: Context<'_>) -> Result<(), Error> {
+    // Define buttons as variables
+
+    let rows = vec![
+        CreateActionRow::Buttons(vec![
+
+            TestEvent::create_button("Click me!",
+                &TestEventParams {
+                    key: "Hello world!".to_string()
+                },
+                ButtonStyle::Primary
+            )?,
+
+            TestEvent::create_button("Click me!",
+                &TestEventParams {
+                    key: "Testing world!".to_string()
+                },
+                
+                ButtonStyle::Primary
+            )?
+        ])
+    ];
+    
+    let msg = CreateReply::default()
+        .content("Hello")
+        .components(rows);
+
+    // Send message with action row
+    ctx.send( msg ).await?;
+
+    Ok(())
+
+}
 #[poise::command(slash_command, prefix_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let quotes : Vec<&str> = vec![
@@ -263,18 +428,35 @@ async fn main() {
         | serenity::GatewayIntents::GUILD_PRESENCES;
 
 
+    let mut event_system = EVENT_SYSTEM.lock().await;
+
+    register_events(&mut event_system);
+    rpg::mir::register_events(&mut event_system);
+
+    // crate::rpg::register_events(&mut event_system);
+
+    drop(event_system); 
+
+    // event_system.register_handler("test_event", 
+    //     |ctx: &poise::serenity_prelude::Context, params: &ButtonParams| {
+    //         if let Some(Value::String(val)) = params.get("key") {
+    //             println!("Event received with param: {}", val);
+    //         }
+    //     });
+
+
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
-                ping(),
+                ping(), button_test(),
                 calc(), 
 
                 ask(), draw(), translate(),translate_context(),
 
                 pull_stat(), pull_stats(), pull_spellsheet(),
                 get_mana(), set_mana(), mod_mana(), add_mana(), sub_mana(),
-                status(),
+                status(),status_admin(),
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 

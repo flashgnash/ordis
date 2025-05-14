@@ -8,9 +8,7 @@ use std::any::Any;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt;
-use std::ops::Add;
-use std::ops::Sub;
-use std::sync::Arc;
+
 
 // use crate::db;
 use crate::db::models::Character;
@@ -24,14 +22,12 @@ use crate::common::Context;
 use crate::common::Error;
 use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::MessageId;
-use poise::CreateReply;
 
 use crate::gpt::generate_to_string;
 use crate::gpt::Message;
 use crate::gpt::Role;
 
 use crate::db;
-use crate::db::models::User;
 
 use diesel::sqlite::SqliteConnection;
 
@@ -317,10 +313,22 @@ lazy_static! {
     static ref SHEET_CACHE: Mutex<HashMap<(TypeId,i32), Box<dyn Any + Send + Sync>>> =
         Mutex::new(HashMap::new());
 }
-pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Result<T, Error> {
-    let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(ctx, db_connection).await?;
+
+
+pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Result<T,Error> {
+
+    let db_connection = &mut db::establish_connection();
+    let sheet = get_sheet(
+      ctx.serenity_context(),
+      &get_user_character(ctx,db_connection).await?
+    ).await?; 
+
+    return Ok(sheet)
+}
+pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_prelude::Context,character: &Character) -> Result<T, Error> {
+
+    let db_connection = &mut db::establish_connection();
 
     let mut cache = SHEET_CACHE.lock().await;
 
@@ -330,10 +338,10 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Re
     
 
     if cache.contains_key(&key) {
-        if T::message_changed(ctx.serenity_context(), &character).await? {
+        if T::message_changed(ctx, &character).await? {
             println!("Fetching from cache");
 
-            let sheet = T::from_character_openai(ctx.serenity_context(), &character).await?;
+            let sheet = T::from_character_openai(ctx, &character).await?;
             cache.insert(key,Box::new(sheet));       
         }
     }
@@ -341,7 +349,7 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Re
 
         println!("Not cached - generating");
         
-        let sheet = T::from_character_database(ctx.serenity_context(), &character).await?;
+        let sheet = T::from_character_database(ctx, &character).await?;
         cache.insert(key,Box::new(sheet));       
     }
 

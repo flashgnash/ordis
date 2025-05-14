@@ -2,8 +2,14 @@ pub mod spell_sheet;
 pub mod stat_block;
 
 use lazy_static::lazy_static;
+use poise::serenity_prelude::ButtonStyle;
+use poise::serenity_prelude::CreateActionRow;
+use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateEmbed;
+use poise::serenity_prelude::CreateEmbedFooter;
+use serde::Serialize;
 use tokio::sync::Mutex;
+use tokio::sync::MutexGuard;
 
 use super::spells;
 use super::spells::ManaSpellResource;
@@ -18,8 +24,10 @@ use std::collections::HashMap;
 
 use crate::common;
 use crate::common::safe_to_number;
+use crate::common::ButtonEventSystem;
 use crate::common::Context;
 use crate::common::Error;
+use crate::create_button_with_callback;
 use crate::db;
 use crate::db::models::Character;
 
@@ -41,6 +49,25 @@ use regex::Regex;
 use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::MessageId;
 
+use poise::async_trait;
+
+pub mod event_handlers;
+
+use event_handlers::RollEvent;
+use event_handlers::RollEventParams;
+
+use event_handlers::UpdateStatusEvent;
+use event_handlers::UpdateStatusEventParams;
+
+use event_handlers::ChangeManaEvent;
+use event_handlers::ChangeManaEventParams;
+
+pub fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
+    event_system.register_handler(RollEvent);
+    event_system.register_handler(UpdateStatusEvent);
+    event_system.register_handler(ChangeManaEvent);
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
     let placeholder = CreateReply::default()
@@ -49,7 +76,7 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
 
     let placeholder_msg = ctx.send(placeholder).await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
 
     let stat_block: Value = serde_json::from_str(
         &stat_block
@@ -58,7 +85,7 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
             .expect("Stat block should always generate json"),
     )?;
 
-    let spell_block_result: SpellSheet = super::get_sheet(&ctx).await?;
+    let spell_block_result: SpellSheet = super::get_sheet_of_sender(&ctx).await?;
 
     let spell_block: Value = serde_json::from_str(
         &spell_block_result
@@ -81,26 +108,18 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
 
 static BAR_LENGTH: i32 = 17;
 
-#[poise::command(slash_command, prefix_command)]
-pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
-    let placeholder = CreateReply::default()
-        .content("*Thinking, please wait...*")
-        .ephemeral(true);
-    let placeholder_message = ctx.send(placeholder).await?;
-    let db_connection = &mut db::establish_connection();
-
-    let bar_length = BAR_LENGTH;
-
-    let character = get_user_character(&ctx, db_connection).await?;
-
-    let character_name = &character.name.clone().unwrap_or("No name?".to_string());
-    let character_channel = &character
+pub async fn generate_status_embed(
+    ctx: &poise::serenity_prelude::Context,
+    character: &Character,
+) -> Result<CreateEmbed, Error> {
+    let character_name = character.name.clone().unwrap_or("No name?".to_string());
+    let character_channel = character
         .stat_block_channel_id
         .clone()
         .unwrap_or("".to_string());
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &character, &bar_length);
+    let stat_block: StatBlock = super::get_sheet(&ctx, character).await?;
+    let mana_message_content = get_mana_bar_message(&stat_block, &character, &BAR_LENGTH);
 
     let max_health = stat_block.max_hp;
     let health = stat_block.hp;
@@ -110,7 +129,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     if let Some(max_health) = max_health {
         let health = health.unwrap_or(max_health);
         health_message_content = format!(
-            "♥️ {} ``{health} / {max_health}``",
+            "♥️ {} ``{health} / {max_health}\n\n``",
             crate::common::draw_bar(
                 health as i32,
                 max_health as i32,
@@ -124,8 +143,46 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     let mut hunger_message_content = "Hunger unknown.".to_string();
     if let Some(hunger) = stat_block.hunger {
         hunger_message_content = format!(
-            "🍖 {} ``{hunger} / 10``",
+            "🍖 {} ``{hunger} / 10\n\n``",
             crate::common::draw_bar(hunger as i32, 10, BAR_LENGTH as usize, "🟨", "⬛")
+        );
+    }
+
+    let max_armour = stat_block.max_armour;
+    let armour = stat_block.armour;
+
+    let mut armour_message_content = "".to_string();
+
+    if let Some(max_armour) = max_armour {
+        let armour = armour.unwrap_or(max_armour);
+        armour_message_content = format!(
+            "🛡️ {} ``{armour} / {max_armour}\n\n``",
+            crate::common::draw_bar(
+                armour as i32,
+                max_armour as i32,
+                BAR_LENGTH as usize,
+                "⬜",
+                "⬛"
+            )
+        );
+    }
+
+    let max_soul = stat_block.max_soul;
+    let soul = stat_block.soul;
+
+    let mut soul_message_content = "".to_string();
+
+    if let Some(max_soul) = max_soul {
+        let soul = soul.unwrap_or(max_soul);
+        soul_message_content = format!(
+            "👻 {} ``{soul} / {max_soul}\n\n``",
+            crate::common::draw_bar(
+                soul as i32,
+                max_soul as i32,
+                BAR_LENGTH as usize,
+                "🟪",
+                "⬛"
+            )
         );
     }
 
@@ -161,18 +218,222 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
             active_spells_content + &format!("\nNet mana change: {total_mana_diff} per turn");
     }
 
-    let embed = CreateEmbed::default().title(format!("{character_name}\n<#{character_channel}>\n​\n")).description(format!(
-                "\n\n{health_message_content}\n\n{mana_message_content}\n\n{hunger_message_content}\n​\n{active_spells_content}\n"
-            ));
-    // embed.description("Test");
+    let mut stats_message = "".to_string();
+
+    if let Some(stats) = stat_block.stats {
+        if let Value::Object(map) = stats {
+            stats_message = map
+                .into_iter()
+                .filter_map(|(key, value)| {
+                    // Only include the pair if the value is not null
+                    if value != Value::Null {
+                        Some(format!("| {} {}", key, value))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join(" ")
+                + " | ";
+        }
+    }
+    let invisible_char = "\u{200B}";
+
+    let embed = CreateEmbed::default()
+        .title(format!(
+            "
+            {character_name}
+<#{character_channel}>
+            "
+        ))
+        .description(format!(
+            "{invisible_char}
+{health_message_content}{mana_message_content}{hunger_message_content}{invisible_char}{armour_message_content}{soul_message_content}
+                
+{active_spells_content}
+                "
+        ))
+        .footer(CreateEmbedFooter::new(stats_message));
+
+    Ok(embed)
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Error> {
+    let placeholder = CreateReply::default().content("*Thinking, please wait...*");
+
+    let placeholder_message = ctx.send(placeholder).await?;
+    let db_connection = &mut db::establish_connection();
+
+    let character = db::characters::get(db_connection, character_id)?;
+
+    let mut rows = vec![
+        CreateActionRow::Buttons(vec![
+            ChangeManaEvent::create_button(
+                "🪄-50",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: -50,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄-25",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: -25,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            // ChangeManaEvent::create_button(
+            //     "🪄 Set to full",
+            //     &ChangeManaEventParams {
+            //         character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+            //         mana_change: 0,
+            //     },
+            //     ButtonStyle::Secondary,
+            // )
+            // .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄+25",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: 25,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄+50",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: 50,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+        ]),
+        CreateActionRow::Buttons(vec![
+            ChangeManaEvent::create_button(
+                "🪄-200",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: -200,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄-100",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: -100,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            // ChangeManaEvent::create_button(
+            //     "🪄 Set to 0",
+            //     &ChangeManaEventParams {
+            //         character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+            //         mana_change: 69,
+            //     },
+            //     ButtonStyle::Secondary,
+            // )
+            // .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄+100",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: 100,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+            ChangeManaEvent::create_button(
+                "🪄+200",
+                &ChangeManaEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    mana_change: 200,
+                },
+                ButtonStyle::Secondary,
+            )
+            .expect("How fail"),
+        ]),
+    ];
+
+    rows.push(CreateActionRow::Buttons(vec![
+        UpdateStatusEvent::create_button(
+            " Refresh ",
+            &UpdateStatusEventParams {
+                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+            },
+        )
+        .expect("How fail"),
+    ]));
+
+    let embed = generate_status_embed(ctx.serenity_context(), &character).await?;
 
     placeholder_message
         .edit(
             ctx,
             CreateReply::default()
                 .content("")
-                .embed(embed)
-                .ephemeral(true),
+                .components(rows)
+                .embed(embed),
+        )
+        .await?;
+
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Error> {
+    let ephemeral = !permanent.unwrap_or(false);
+
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(ephemeral);
+    let placeholder_message = ctx.send(placeholder).await?;
+    let db_connection = &mut db::establish_connection();
+
+    let character = get_user_character(&ctx, db_connection).await?;
+
+    // embed.description("Test");
+
+    let mut rows = vec![CreateActionRow::Buttons(vec![RollEvent::create_button(
+        "🎲 Roll",
+        &RollEventParams {
+            dice_string: "1d100".to_string(),
+            character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+        },
+        ButtonStyle::Secondary,
+    )
+    .expect("How fail")])];
+
+    if !ephemeral {
+        rows.push(CreateActionRow::Buttons(vec![
+            UpdateStatusEvent::create_button(
+                "♻️",
+                &UpdateStatusEventParams {
+                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                },
+            )
+            .expect("How fail"),
+        ]));
+    }
+
+    let embed = generate_status_embed(ctx.serenity_context(), &character).await?;
+
+    placeholder_message
+        .edit(
+            ctx,
+            CreateReply::default()
+                .content("")
+                .components(rows)
+                .embed(embed),
         )
         .await?;
 
@@ -189,7 +450,7 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &character, &BAR_LENGTH);
 
     placeholder_message
@@ -215,7 +476,7 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     let placeholder = CreateReply::default()
@@ -232,7 +493,7 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
 
 fn get_mana_bar_message(stat_block: &StatBlock, character: &Character, bar_length: &i32) -> String {
     return format!(
-        "🪄 {} ``{} / {}`` ",
+        "🪄 {} ``{} / {}``\n\n",
         crate::common::draw_bar(
             character.mana.unwrap_or(0),
             stat_block.energy_pool.unwrap_or(0) as i32,
@@ -252,7 +513,7 @@ async fn update_mana_readout(
 ) -> Result<Character, Error> {
     let mut modified_character = character.clone();
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
     let mana_message_content = format!(
         "Current Energy: \n\n{}",
         get_mana_bar_message(&stat_block, &character, &BAR_LENGTH)
@@ -350,7 +611,7 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     placeholder_message
@@ -386,7 +647,7 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     placeholder_message
@@ -428,7 +689,7 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
 
     placeholder_message
@@ -458,7 +719,7 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
     if let Some(active_spells) =
         active_spells_map.get(&character.id.expect("Character ID should never be null"))
     {
-        let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+        let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
         let max_mana = stat_block.energy_pool;
 
         for spell in active_spells.into_iter() {
@@ -518,8 +779,8 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
     let placeholder = CreateReply::default().content("*Thinking, please wait...*");
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
-    let spell_sheet: SpellSheet = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let spell_sheet: SpellSheet = super::get_sheet_of_sender(&ctx).await?;
 
     let max_mana = stat_block.energy_pool;
 
@@ -677,7 +938,7 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let spell_sheet: SpellSheet = super::get_sheet(&ctx).await?;
+    let spell_sheet: SpellSheet = super::get_sheet_of_sender(&ctx).await?;
 
     let spells = spell_sheet.spells.ok_or(RpgError::NoSpellSheet)?;
 
@@ -697,15 +958,12 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(slash_command, prefix_command)]
-pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
-    let placeholder = CreateReply::default()
-        .content("*Thinking, please wait...*")
-        .ephemeral(true);
-
-    _ = ctx.send(placeholder).await?;
-
-    let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx).await;
+pub async fn roll_with_char_sheet(
+    ctx: &poise::serenity_prelude::Context,
+    dice_expression: Option<String>,
+    character: Character,
+) -> Result<(String, f64), Error> {
+    let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx, &character).await;
 
     //TODO make this default configurable per server
     let mut dice = dice_expression
@@ -758,9 +1016,24 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         }
     }
 
-    let result = dice::roll_internal(&str_replaced).await?;
+    Ok(dice::roll_internal(&str_replaced).await?)
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
+    let placeholder = CreateReply::default()
+        .content("*Thinking, please wait...*")
+        .ephemeral(true);
+
+    _ = ctx.send(placeholder).await?;
 
     let author = ctx.author();
+
+    let db_connection = &mut db::establish_connection();
+
+    let character = get_user_character(&ctx, db_connection).await?;
+
+    let result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, character).await?;
 
     let mut nick = author.name.to_string();
 
@@ -774,13 +1047,13 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     dice::output_roll_message(ctx, result, nick).await?;
 
-    if nag_user_about_character_sheet {
-        let character_sheet_missing_message = CreateReply::default()
-                            .content("Hint: if you configure and select a character sheet you can add stat modifiers to your rolls (e.g /roll 1d100+str )")
-                            .ephemeral(true);
+    // if nag_user_about_character_sheet {
+    //     let character_sheet_missing_message = CreateReply::default()
+    //                         .content("Hint: if you configure and select a character sheet you can add stat modifiers to your rolls (e.g /roll 1d100+str )")
+    //                         .ephemeral(true);
 
-        let _ = ctx.send(character_sheet_missing_message).await?;
-    }
+    //     let _ = ctx.send(character_sheet_missing_message).await?;
+    // }
 
     Ok(())
 }
@@ -1116,7 +1389,7 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
 
     let stats: Value = serde_json::from_str(
         &stat_block
@@ -1187,7 +1460,7 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
 
     let msg = ctx.send(thinking_message).await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
 
     let reply = CreateReply::default().content(
         stat_block
@@ -1213,7 +1486,7 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
 
     // let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
 
-    let stat_block: StatBlock = super::get_sheet(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
 
     let stats: Value = serde_json::from_str(
         &stat_block

@@ -18,6 +18,13 @@ pub struct StatBlock {
     pub energy_pool: Option<i64>,
     pub hp: Option<i64>,
     pub max_hp: Option<i64>,
+
+    pub armour: Option<i64>,
+    pub max_armour: Option<i64>,
+
+    pub soul: Option<i64>,
+    pub max_soul: Option<i64>,
+
     pub hunger: Option<i64>,
 }
 
@@ -47,8 +54,16 @@ impl CharacterSheetable for StatBlock {
             },
             stats: None,
             energy_pool: None,
+
             max_hp: None,
             hp: None,
+
+            max_armour: None,
+            armour: None,
+
+            max_soul: None,
+            soul: None,
+
             hunger: None,
         };
     }
@@ -72,6 +87,16 @@ impl CharacterSheetable for StatBlock {
             .get("current_hp")
             .and_then(|v| v.as_i64());
         self.max_hp = deserialized_message.get("hp").and_then(|v| v.as_i64());
+
+        self.soul = deserialized_message
+            .get("current_soul")
+            .and_then(|v| v.as_i64());
+        self.max_soul = deserialized_message.get("soul").and_then(|v| v.as_i64());
+
+        self.armour = deserialized_message
+            .get("current_armour")
+            .and_then(|v| v.as_i64());
+        self.max_armour = deserialized_message.get("armour").and_then(|v| v.as_i64());
 
         self.hunger = deserialized_message.get("hunger").and_then(|v| v.as_i64());
 
@@ -142,7 +167,13 @@ impl CharacterSheetable for StatBlock {
             "reactions": (number),
     
             "speed": (number),
-            "armor": (number),
+            
+            "armour": (number),
+            "current_armour": (number),
+
+            "soul": (number),
+            "current_soul": (number),
+
             "hp": (number),
             "current_hp": (number),
             "hpr": (number),
