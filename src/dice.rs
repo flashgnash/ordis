@@ -85,11 +85,6 @@ pub fn roll_replace(text: &str) -> Result<(String, String), DiceError> {
 
     let regex = Regex::new(regex_string).unwrap(); // This regex pattern matches three-letter words
 
-    // let result = regex.replace_all(&original, |caps: &Captures| {
-    //     let cap = caps.get(0)?.as_str()
-    //     roll_one_instance(cap)?.to_string()
-    // });
-
     let (result, message) = roll_matches(&text, &regex)?;
 
     return Ok((result, message));

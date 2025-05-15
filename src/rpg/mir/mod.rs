@@ -583,7 +583,9 @@ async fn set_mana_internal(
 
     db::characters::update(db_connection, &new_character)?;
 
-    update_mana_readout(ctx, &new_character, db_connection).await?;
+    // update_mana_readout(ctx, &new_character, db_connection).await?;
+    // Disabled for now as this may be superceded by permanent status
+    // readouts
 
     Ok(new_character)
 }
@@ -1001,7 +1003,9 @@ pub async fn roll_with_char_sheet(
         Err(e) => {
             if let Some(stat_puller_error) = e.downcast_ref::<RpgError>() {
                 match stat_puller_error {
-                    RpgError::NoCharacterSelected | RpgError::NoCharacterSheet => {
+                    RpgError::NoCharacterSelected
+                    | RpgError::NoCharacterSheet
+                    | RpgError::NoSpellSheet => {
                         // Handle specific error
                         println!("Caught NoCharacterSheet error");
 
