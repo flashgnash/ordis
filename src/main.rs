@@ -6,7 +6,8 @@ use common::ButtonEventSystem;
 use common::ButtonParams;
 use meval::eval_str;
 
-
+mod admin;
+use admin::colour_picker::set_colour;
 use dotenv::dotenv;
 
 use poise::async_trait;
@@ -463,7 +464,10 @@ async fn main() {
                 cast_spell(), list_spells(), level_up(), roll(), end_turn(),
 
                 join_vc(),
-                play_music(),stop_music(),pause_music(),resume_music(),skip_song()
+                play_music(),stop_music(),pause_music(),resume_music(),skip_song(),
+
+
+                set_colour()
             ],
 
             ..Default::default()
