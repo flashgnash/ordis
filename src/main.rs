@@ -8,6 +8,8 @@ use meval::eval_str;
 
 mod admin;
 use admin::colour_picker::set_colour;
+use admin::nickname::set_nick;
+
 use dotenv::dotenv;
 
 use poise::async_trait;
@@ -467,7 +469,7 @@ async fn main() {
                 play_music(),stop_music(),pause_music(),resume_music(),skip_song(),
 
 
-                set_colour()
+                set_colour(), set_nick()
             ],
 
             ..Default::default()

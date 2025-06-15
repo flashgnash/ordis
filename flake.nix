@@ -75,6 +75,7 @@
             crate2nix
 
             diesel-cli
+            pkg-config
             openssl.dev
 
             lldb

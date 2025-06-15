@@ -8,7 +8,7 @@ use std::convert::From;
 use std::fmt;
 use chrono::Utc;
 use poise::CreateReply;
-
+use std::collections::HashMap;
 
 use crate::common::HTTP_CLIENT;
 
@@ -30,9 +30,83 @@ pub struct Message {
 pub struct OpenAIRequest {
     pub model:String,
     pub messages: Vec<Message>
-
-
 }
+
+
+#[derive(Serialize, Deserialize)]
+pub struct OpenAIFilterRequest {
+    pub model: String,
+    pub input: String
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct FilterCategoryScores {
+    pub sexual: f64,
+    #[serde(rename = "sexual/minors")]
+    pub sexual_minors: f64,
+    pub harassment: f64,
+    #[serde(rename = "harassment/threatening")]
+    pub harassment_threatening: f64,
+    pub hate: f64,
+    #[serde(rename = "hate/threatening")]
+    pub hate_threatening: f64,
+    pub illicit: f64,
+    #[serde(rename = "illicit/violent")]
+    pub illicit_violent: f64,
+    #[serde(rename = "self-harm")]
+    pub self_harm: f64,
+    #[serde(rename = "self-harm/intent")]
+    pub self_harm_intent: f64,
+    #[serde(rename = "self-harm/instructions")]
+    pub self_harm_instructions: f64,
+    pub violence: f64,
+    #[serde(rename = "violence/graphic")]
+    pub violence_graphic: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct FilterCategories {
+    pub sexual: bool,
+    #[serde(rename = "sexual/minors")]
+    pub sexual_minors: bool,
+    pub harassment: bool,
+    #[serde(rename = "harassment/threatening")]
+    pub harassment_threatening: bool,
+    pub hate: bool,
+    #[serde(rename = "hate/threatening")]
+    pub hate_threatening: bool,
+    pub illicit: bool,
+    #[serde(rename = "illicit/violent")]
+    pub illicit_violent: bool,
+    #[serde(rename = "self-harm")]
+    pub self_harm: bool,
+    #[serde(rename = "self-harm/intent")]
+    pub self_harm_intent: bool,
+    #[serde(rename = "self-harm/instructions")]
+    pub self_harm_instructions: bool,
+    pub violence: bool,
+    #[serde(rename = "violence/graphic")]
+    pub violence_graphic: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct FilterResult{
+    pub flagged: bool,
+    pub categories: FilterCategories,
+    pub category_scores: FilterCategoryScores,
+    pub category_applied_input_types: HashMap<String, Vec<String>>,
+}
+
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct FilterResponse {
+    id: String,
+    model: String,
+    pub results: Vec<FilterResult>
+}
+
+
+
 
 #[derive(Serialize, Deserialize)]
 pub struct Choice {
@@ -44,7 +118,6 @@ pub struct Choice {
 #[derive(Serialize, Deserialize)]
 pub struct OpenAIResponse{
     pub choices:Vec<Choice>
-
 }
 
 
@@ -71,6 +144,36 @@ impl fmt::Display for OpenAIResponse {
     }
 }
 
+pub async fn filter_message(message: &str) -> Result<FilterResponse,Error> {
+    let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
+    
+    let client = &HTTP_CLIENT;
+        let request = OpenAIFilterRequest {
+        model: "omni-moderation-latest".to_string(),
+        input: message.to_string()
+    };
+
+    let content = 
+        client.post("https://api.openai.com/v1/moderations")
+        .json(&request)
+        .header(AUTHORIZATION,format!("Bearer {token}"))
+        .send().await?.text().await?;
+
+                                                                                      
+    
+    let response : FilterResponse = serde_json::from_str(&content)?;
+
+    Ok(response)
+}
+
+
+pub async fn filter_hate(message: &str) -> Result<bool,Error> {
+
+    let slurs_present = filter_message(message).await?.results[0].categories.hate == true;
+
+    Ok(slurs_present)
+
+}
 
 
 #[allow(dead_code)]
