@@ -1026,7 +1026,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    let (result_string, result_num, statistics) =
+    let (result_string, result_num, mut statistics) =
         roll_with_char_sheet(ctx.serenity_context(), dice_expression, character).await?;
 
     let mut nick = author.name.to_string();
@@ -1039,13 +1039,19 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         }
     }
 
-    for mut statistic in statistics {
+    for statistic in statistics.iter_mut() {
         statistic.user_id = Some(ctx.author().id.get());
         statistic.user_name = Some(ctx.author().name.to_string());
 
-        let pretty = serde_json::to_string(&statistic).unwrap();
-        println!("{pretty}");
+        // let pretty = serde_json::to_string(&statistic).unwrap();
+        // println!("{pretty}");
     }
+
+    crate::common::log_if_failed_async(crate::elastic::post_to_elastic(
+        "roll_statistics",
+        &statistics,
+    ))
+    .await;
 
     dice::output_roll_message(ctx, (result_string, result_num), nick).await?;
 

@@ -160,17 +160,20 @@ pub async fn output_roll_message(
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
-    let (message, calc_result, statistics) = roll_internal(&dice).await?;
+    let (message, calc_result, mut statistics) = roll_internal(&dice).await?;
 
     // let mut Vec<RollStatistic> user_tagged_stats = vec![];
 
-    for mut statistic in statistics {
+    for statistic in statistics.iter_mut() {
         statistic.user_id = Some(ctx.author().id.get());
         statistic.user_name = Some(ctx.author().name.to_string());
-
-        let pretty = serde_json::to_string(&statistic).unwrap();
-        println!("{pretty}");
     }
+
+    crate::common::log_if_failed_async(crate::elastic::post_to_elastic(
+        "roll_statistics",
+        &statistics,
+    ))
+    .await;
 
     output_roll_message(
         ctx,

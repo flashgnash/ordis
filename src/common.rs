@@ -1,3 +1,7 @@
+use std::fs::OpenOptions;
+use std::io::Write;
+
+use chrono::Utc;
 pub struct Data {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
@@ -42,6 +46,28 @@ type ButtonHandler = Box<
         + Sync,
 >;
 
+pub async fn log_if_failed_async<T, E: std::fmt::Debug>(
+    fut: impl std::future::Future<Output = Result<T, E>>,
+) -> Option<T> {
+    match fut.await {
+        Ok(val) => Some(val),
+        Err(e) => {
+            let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S");
+            let msg = format!("[{} UTC] Error: {:?}\n", timestamp, e);
+            eprint!("{}", msg);
+
+            if let Ok(mut file) = OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open("errors.log")
+            {
+                let _ = file.write_all(msg.as_bytes());
+            }
+
+            None
+        }
+    }
+}
 pub struct ButtonEventSystem {
     handlers: HashMap<String, Vec<Box<dyn EventHandlerTrait>>>,
 }
