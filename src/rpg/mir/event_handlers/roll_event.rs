@@ -55,7 +55,7 @@ impl common::EventHandlerTrait for RollEvent {
                 )
                 .expect("Remove this expect later");
 
-                let (result, _) =
+                let (result, _, _) =
                     super::super::roll_with_char_sheet(ctx, Some(dice_string.to_string()), char)
                         .await
                         .expect("This is bad practise");

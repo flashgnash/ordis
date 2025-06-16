@@ -73,15 +73,6 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
 
     let placeholder_msg = ctx.send(placeholder).await?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
-
-    let stat_block: Value = serde_json::from_str(
-        &stat_block
-            .sheet_info
-            .jsonified_message
-            .expect("Stat block should always generate json"),
-    )?;
-
     let spell_block_result: SpellSheet = super::get_sheet_of_sender(&ctx).await?;
 
     let spell_block: Value = serde_json::from_str(
@@ -961,7 +952,7 @@ pub async fn roll_with_char_sheet(
     ctx: &poise::serenity_prelude::Context,
     dice_expression: Option<String>,
     character: Character,
-) -> Result<(String, f64), Error> {
+) -> Result<(String, f64, Vec<crate::dice::RollStatistic>), Error> {
     let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx, &character).await;
 
     //TODO make this default configurable per server
@@ -1016,9 +1007,9 @@ pub async fn roll_with_char_sheet(
             }
         }
     }
-    let (result_string, result_number, _) = dice::roll_internal(&str_replaced).await?;
+    let (result_string, result_number, statistics) = dice::roll_internal(&str_replaced).await?;
 
-    Ok((result_string, result_number))
+    Ok((result_string, result_number, statistics))
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -1035,7 +1026,8 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    let result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, character).await?;
+    let (result_string, result_num, statistics) =
+        roll_with_char_sheet(ctx.serenity_context(), dice_expression, character).await?;
 
     let mut nick = author.name.to_string();
 
@@ -1047,7 +1039,15 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         }
     }
 
-    dice::output_roll_message(ctx, result, nick).await?;
+    for mut statistic in statistics {
+        statistic.user_id = Some(ctx.author().id.get());
+        statistic.user_name = Some(ctx.author().name.to_string());
+
+        let pretty = serde_json::to_string(&statistic).unwrap();
+        println!("{pretty}");
+    }
+
+    dice::output_roll_message(ctx, (result_string, result_num), nick).await?;
 
     // if nag_user_about_character_sheet {
     //     let character_sheet_missing_message = CreateReply::default()
