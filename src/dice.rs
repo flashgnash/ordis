@@ -1,6 +1,4 @@
-use poise::serenity_prelude::Colour;
 use poise::serenity_prelude::CreateEmbed;
-use poise::serenity_prelude::Embed;
 use poise::CreateReply;
 use rand::prelude::*;
 
@@ -33,7 +31,15 @@ impl fmt::Display for DiceError {
 
 impl std::error::Error for DiceError {}
 
-pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
+pub struct RollStatistic {
+    value: i32,
+    max: i32,
+    string: String,
+    user_id: Option<u32>,
+    user_name: Option<String>,
+}
+
+pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>, RollStatistic), DiceError> {
     let mut number_of_dice = 1;
     let faces_of_die;
 
@@ -57,25 +63,25 @@ pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
         return Err(DiceError::InvalidFaceCount);
     }
 
-    let dice_rolls = generate_randoms(number_of_dice, faces_of_die);
+    let mut rng = rand::thread_rng();
 
-    Ok((sum_array(&dice_rolls), dice_rolls))
-}
+    let mut dice_rolls: Vec<i32> = vec![];
 
-fn roll_matches(input: &str, pattern: &Regex) -> Result<(String, String), DiceError> {
-    let mut result = input.to_string();
-
-    let mut message = "".to_string();
-
-    for mat in pattern.find_iter(input) {
-        let (processed, rolls) = roll_one_instance(mat.as_str())?;
-
-        let mat_str = mat.as_str();
-
-        message = format!("{message}\n- {mat_str}: [{}] ", join_to_string(&rolls, ","));
-        result = result.replacen(mat_str, &processed.to_string(), 1);
+    for _i in 0..number_of_dice {
+        dice_rolls.push(rng.gen_range(1..faces_of_die + 1));
     }
-    Ok((result, message))
+
+    let sum = sum_array(&dice_rolls);
+
+    let statistic = RollStatistic {
+        value: sum,
+        max: number_of_dice * faces_of_die,
+        string: instance.to_string(),
+        user_id: None,
+        user_name: None,
+    };
+
+    Ok((sum, dice_rolls, statistic))
 }
 
 pub fn roll_replace(text: &str) -> Result<(String, String), DiceError> {
@@ -85,35 +91,47 @@ pub fn roll_replace(text: &str) -> Result<(String, String), DiceError> {
 
     let regex = Regex::new(regex_string).unwrap(); // This regex pattern matches three-letter words
 
-    let (result, message) = roll_matches(&text, &regex)?;
+    let mut result = text.to_string();
+    let mut message = "".to_string();
+
+    for mat in regex.find_iter(text) {
+        let (processed, rolls, statistic) = roll_one_instance(mat.as_str())?;
+
+        let mat_str = mat.as_str();
+
+        message = format!("{message}\n- {mat_str}: [{}] ", join_to_string(&rolls, ","));
+        result = result.replacen(mat_str, &processed.to_string(), 1);
+    }
 
     return Ok((result, message));
 }
 
-fn generate_randoms(count: i32, faces: i32) -> Vec<i32> {
-    let mut rng = rand::thread_rng();
+pub async fn roll_internal(dice: &String) -> Result<(String, f64, Vec<RollStatistic>), Error> {
+    let regex_string = r"\d+d\d+";
 
-    let mut rolls: Vec<i32> = vec![];
+    let regex = Regex::new(regex_string).unwrap(); // This regex pattern matches three-letter words
 
-    for _i in 0..count {
-        rolls.push(rng.gen_range(1..faces + 1));
+    let mut replaced = dice.to_string();
+    let mut message = "".to_string();
+
+    let mut statistics = vec![];
+
+    for mat in regex.find_iter(dice) {
+        let (processed, rolls, statistic) = roll_one_instance(mat.as_str())?;
+
+        let mat_str = mat.as_str();
+
+        message = format!("{message}\n- {mat_str}: [{}] ", join_to_string(&rolls, ","));
+        replaced = replaced.replacen(mat_str, &processed.to_string(), 1);
+
+        statistics.push(statistic);
     }
-
-    return rolls;
-}
-
-fn pad_string(input: &str, total_len: usize) -> String {
-    format!("{:<width$}", input, width = total_len)
-}
-
-pub async fn roll_internal(dice: &String) -> Result<(String, f64), Error> {
-    let (replaced, messages) = roll_replace(dice)?;
 
     let calc_result = eval_str(&replaced)?;
 
-    let message = format!("{dice} {messages}\n\n Result: __{calc_result}__");
+    let message = format!("{dice} {message}\n\n Result: __{calc_result}__");
 
-    let result = (message, calc_result);
+    let result = (message, calc_result, statistics);
 
     Ok(result)
 }
@@ -139,11 +157,19 @@ pub async fn output_roll_message(
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
-    let results = roll_internal(&dice).await?;
+    let (message, calc_result, statistics) = roll_internal(&dice).await?;
+
+    // let mut Vec<RollStatistic> user_tagged_stats = vec![];
+
+    // for statistic in statistics {
+    //     let mut updated_statistic = statistic.clone();
+    // updated_statistic.user_id = ctx.author().id;
+    //     user_tagged_stats.push(statistic.clone());
+    // }
 
     output_roll_message(
         ctx,
-        results,
+        (message, calc_result),
         ctx.author()
             .nick_in(
                 ctx,

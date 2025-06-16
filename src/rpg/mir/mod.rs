@@ -4,10 +4,8 @@ pub mod stat_block;
 use lazy_static::lazy_static;
 use poise::serenity_prelude::ButtonStyle;
 use poise::serenity_prelude::CreateActionRow;
-use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
-use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
@@ -27,7 +25,6 @@ use crate::common::safe_to_number;
 use crate::common::ButtonEventSystem;
 use crate::common::Context;
 use crate::common::Error;
-use crate::create_button_with_callback;
 use crate::db;
 use crate::db::models::Character;
 
@@ -1019,8 +1016,9 @@ pub async fn roll_with_char_sheet(
             }
         }
     }
+    let (result_string, result_number, _) = dice::roll_internal(&str_replaced).await?;
 
-    Ok(dice::roll_internal(&str_replaced).await?)
+    Ok((result_string, result_number))
 }
 
 #[poise::command(slash_command, prefix_command)]
