@@ -2,6 +2,8 @@ use poise::serenity_prelude::CreateEmbed;
 use poise::CreateReply;
 use rand::prelude::*;
 
+use serde::{Deserialize, Serialize};
+
 use crate::common::Context;
 use crate::common::Error;
 
@@ -31,12 +33,13 @@ impl fmt::Display for DiceError {
 
 impl std::error::Error for DiceError {}
 
+#[derive(Serialize, Deserialize)]
 pub struct RollStatistic {
-    value: i32,
-    max: i32,
-    string: String,
-    user_id: Option<u32>,
-    user_name: Option<String>,
+    pub value: i32,
+    pub max: i32,
+    pub string: String,
+    pub user_id: Option<u64>,
+    pub user_name: Option<String>,
 }
 
 pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>, RollStatistic), DiceError> {
@@ -161,11 +164,13 @@ pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
 
     // let mut Vec<RollStatistic> user_tagged_stats = vec![];
 
-    // for statistic in statistics {
-    //     let mut updated_statistic = statistic.clone();
-    // updated_statistic.user_id = ctx.author().id;
-    //     user_tagged_stats.push(statistic.clone());
-    // }
+    for mut statistic in statistics {
+        statistic.user_id = Some(ctx.author().id.get());
+        statistic.user_name = Some(ctx.author().name.to_string());
+
+        let pretty = serde_json::to_string(&statistic).unwrap();
+        println!("{pretty}");
+    }
 
     output_roll_message(
         ctx,
