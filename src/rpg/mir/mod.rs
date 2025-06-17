@@ -389,8 +389,8 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
     Ok(())
 }
 
-fn roll_button_row(text: &str, dice_string: &str, character_id: i32) -> CreateActionRow {
-    CreateActionRow::Buttons(vec![RollEvent::create_button(
+fn roll_button(text: &str, dice_string: &str, character_id: i32) -> CreateButton {
+    RollEvent::create_button(
         text,
         &RollEventParams {
             dice_string: dice_string.to_string(),
@@ -398,7 +398,7 @@ fn roll_button_row(text: &str, dice_string: &str, character_id: i32) -> CreateAc
         },
         ButtonStyle::Secondary,
     )
-    .expect("How fail")])
+    .expect("How fail")
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -415,38 +415,38 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
 
     // embed.description("Test");
 
-    let mut rows = vec![
-        roll_button_row(
-            "🎲 Roll",
+    let mut rows = vec![CreateActionRow::Buttons(vec![
+        roll_button(
+            "🎲",
             "1d100",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
-        roll_button_row(
+        roll_button(
             "💪🎲",
             "1d100+str",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
-        roll_button_row(
+        roll_button(
             "🐇🎲",
             "1d100+agl",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
-        roll_button_row(
+        roll_button(
             "❤️🎲",
             "1d100+con",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
-        roll_button_row(
+        roll_button(
             "📘🎲",
             "1d100+kno",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
-        roll_button_row(
+        roll_button(
             "💬🎲",
             "1d100+cha",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
-    ];
+    ])];
 
     if !ephemeral {
         rows.push(CreateActionRow::Buttons(vec![
