@@ -415,38 +415,47 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
 
     // embed.description("Test");
 
-    let mut rows = vec![CreateActionRow::Buttons(vec![
-        roll_button(
-            "🎲",
-            "1d100",
-            character.id.ok_or(RpgError::NoCharacterSheet)?,
-        ),
-        roll_button(
-            "💪🎲",
-            "1d100+str",
-            character.id.ok_or(RpgError::NoCharacterSheet)?,
-        ),
-        roll_button(
-            "🐇🎲",
-            "1d100+agl",
-            character.id.ok_or(RpgError::NoCharacterSheet)?,
-        ),
-        roll_button(
-            "❤️🎲",
-            "1d100+con",
-            character.id.ok_or(RpgError::NoCharacterSheet)?,
-        ),
-        roll_button(
-            "📘🎲",
-            "1d100+kno",
-            character.id.ok_or(RpgError::NoCharacterSheet)?,
-        ),
-        roll_button(
-            "💬🎲",
-            "1d100+cha",
-            character.id.ok_or(RpgError::NoCharacterSheet)?,
-        ),
-    ])];
+    let mut rows = vec![
+        CreateActionRow::Buttons(vec![
+            roll_button(
+                "🎲",
+                "1d100",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🎲 advantage",
+                "max(1d100,1d100)",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+        ]),
+        CreateActionRow::Buttons(vec![
+            roll_button(
+                "💪🎲",
+                "1d100+str",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🐇🎲",
+                "1d100+agl",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "❤️🎲",
+                "1d100+con",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "📘🎲",
+                "1d100+kno",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "💬🎲",
+                "1d100+cha",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+        ]),
+    ];
 
     if !ephemeral {
         rows.push(CreateActionRow::Buttons(vec![
