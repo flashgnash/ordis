@@ -463,7 +463,9 @@ async fn main() {
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 
-                cast_spell(), list_spells(), level_up(), roll(), end_turn(),
+                // cast_spell(), list_spells(),  end_turn(),
+                level_up(), roll(),
+
 
                 join_vc(),
                 play_music(),stop_music(),pause_music(),resume_music(),skip_song(),
