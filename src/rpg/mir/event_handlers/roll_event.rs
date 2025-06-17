@@ -65,8 +65,8 @@ impl common::EventHandlerTrait for RollEvent {
                     .send_message(
                         ctx,
                         CreateMessage::default().content(format!(
-                            "Rolling {} for {}: {}",
-                            dice_string, interaction.user.name, result
+                            "Rolling for {}:\n {}",
+                            interaction.user.name, result
                         )),
                     )
                     .await
