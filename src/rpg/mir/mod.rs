@@ -422,28 +422,28 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
         roll_button_row(
-            "🎲 Roll str",
+            "💪🎲",
             "1d100+str",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
         roll_button_row(
-            "🎲 Roll agl",
+            "🐇🎲",
             "1d100+agl",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
         roll_button_row(
-            "🎲 Roll con",
-            "1d100",
+            "❤️🎲 Roll con",
+            "1d100+con",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
         roll_button_row(
-            "🎲 Roll kno",
-            "1d100",
+            "📘🎲 Roll kno",
+            "1d100+kno",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
         roll_button_row(
-            "🎲 Roll cha",
-            "1d100",
+            "💬🎲",
+            "1d100+cha",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
     ];
