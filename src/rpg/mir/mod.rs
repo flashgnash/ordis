@@ -391,9 +391,9 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
 
 fn roll_button_row(text: &str, dice_string: &str, character_id: i32) -> CreateActionRow {
     CreateActionRow::Buttons(vec![RollEvent::create_button(
-        "🎲 Roll",
+        text,
         &RollEventParams {
-            dice_string: "1d100".to_string(),
+            dice_string: dice_string.to_string(),
             character_id: character_id,
         },
         ButtonStyle::Secondary,
@@ -432,12 +432,12 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
         roll_button_row(
-            "❤️🎲 Roll con",
+            "❤️🎲",
             "1d100+con",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
         roll_button_row(
-            "📘🎲 Roll kno",
+            "📘🎲",
             "1d100+kno",
             character.id.ok_or(RpgError::NoCharacterSheet)?,
         ),
