@@ -41,6 +41,8 @@ mod dice;
 
 mod db;
 
+mod auto_threads;
+
 mod voice;
 use voice::join_vc;
 use voice::music::play_music;
@@ -485,6 +487,7 @@ async fn main() {
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .event_handler(Handler)
+        .event_handler(crate::auto_threads::Handler)
         .register_songbird()        
         .await;
     println!("Starting framework...");
