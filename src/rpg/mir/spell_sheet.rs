@@ -20,6 +20,7 @@ use poise::serenity_prelude::Message;
 pub struct SpellSheet {
     pub sheet_info: SheetInfo,
     pub spells: Option<HashMap<String, Spell<ManaSpellResource>>>,
+    #[allow(dead_code)] //cargo is lying
     pub active_spells: Option<Vec<String>>,
 }
 
