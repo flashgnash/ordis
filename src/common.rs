@@ -3,7 +3,7 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 use std::collections::HashMap;
 
-use poise::serenity_prelude::{Colour, Message};
+use poise::serenity_prelude::{Colour, GuildId, Message, UserId};
 use serde::Deserialize;
 use serde_json::{from_str, Value};
 
@@ -111,6 +111,27 @@ pub async fn get_author_role_colour(ctx: Context<'_>) -> Result<Option<Colour>, 
         }
     }
     Ok(None)
+}
+
+pub async fn get_user_colour(
+    ctx: &poise::serenity_prelude::Context,
+    guild_id: Option<GuildId>,
+    user_id: UserId,
+) -> Result<Colour, Error> {
+    if let Some(guild_id) = guild_id {
+        let member = guild_id.member(&ctx, user_id).await?;
+
+        if let Some(mut roles) = member.roles(ctx) {
+            roles.sort_by_key(|r| r.position);
+            roles.reverse();
+            for role in roles {
+                if role.colour.hex() != "000000" {
+                    return Ok(role.colour);
+                }
+            }
+        }
+    }
+    return Ok(Colour::default());
 }
 
 pub async fn get_author_colour(ctx: Context<'_>) -> Result<Colour, Error> {

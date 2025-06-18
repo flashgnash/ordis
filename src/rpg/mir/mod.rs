@@ -121,7 +121,7 @@ pub async fn generate_status_embed(
         );
     }
 
-    let mut hunger_message_content = "Hunger unknown.".to_string();
+    let mut hunger_message_content = "".to_string();
     if let Some(hunger) = stat_block.hunger {
         hunger_message_content = format!(
             "🍖 {} ``{hunger} / 10\n\n``",
@@ -208,7 +208,11 @@ pub async fn generate_status_embed(
                 .filter_map(|(key, value)| {
                     // Only include the pair if the value is not null
                     if value != Value::Null {
-                        Some(format!("| {} {}", key, value))
+                        Some(format!(
+                            "| {} +{}",
+                            key,
+                            (value.as_f64().expect("value of stat was nan") / 10 as f64).floor()
+                        ))
                     } else {
                         None
                     }
@@ -370,6 +374,18 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
     Ok(())
 }
 
+fn roll_button(text: &str, dice_string: &str, character_id: i32) -> CreateButton {
+    RollEvent::create_button(
+        text,
+        &RollEventParams {
+            dice_string: dice_string.to_string(),
+            character_id: character_id,
+        },
+        ButtonStyle::Secondary,
+    )
+    .expect("How fail")
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Error> {
     let ephemeral = !permanent.unwrap_or(false);
@@ -384,15 +400,52 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
 
     // embed.description("Test");
 
-    let mut rows = vec![CreateActionRow::Buttons(vec![RollEvent::create_button(
-        "🎲 Roll",
-        &RollEventParams {
-            dice_string: "1d100".to_string(),
-            character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
-        },
-        ButtonStyle::Secondary,
-    )
-    .expect("How fail")])];
+    let mut rows = vec![
+        CreateActionRow::Buttons(vec![
+            roll_button(
+                "🎲 disadvantage",
+                "min(1d100,1d100)",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🎲",
+                "1d100",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🎲 advantage",
+                "max(1d100,1d100)",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+        ]),
+        CreateActionRow::Buttons(vec![
+            roll_button(
+                "💪",
+                "1d100+str",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🐇",
+                "1d100+agl",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🛡️",
+                "1d100+con",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🧠",
+                "1d100+kno",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "💬",
+                "1d100+cha",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+        ]),
+    ];
 
     if !ephemeral {
         rows.push(CreateActionRow::Buttons(vec![

@@ -117,18 +117,28 @@ pub async fn output_roll_message(
     roll: (String, f64),
     username: String,
 ) -> Result<(), Error> {
-    let (message, _) = roll;
+    let colour = crate::common::get_author_colour(ctx).await?;
 
-    let col = crate::common::get_author_colour(ctx).await?;
-
-    let embed = CreateEmbed::default()
-        .title(format!("Rolling for {username}..."))
-        .colour(col)
-        .description(format!("\n​\n{message}"));
+    let embed = generate_roll_embed(roll, username, colour).await?;
 
     ctx.send(CreateReply::default().embed(embed)).await?;
 
     Ok(())
+}
+
+pub async fn generate_roll_embed(
+    roll: (String, f64),
+    username: String,
+    colour: Colour,
+) -> Result<CreateEmbed, Error> {
+    let (message, _) = roll;
+
+    let embed = CreateEmbed::default()
+        .title(format!("Rolling for {username}..."))
+        .colour(colour)
+        .description(format!("\n​\n{message}"));
+
+    Ok(embed)
 }
 
 #[poise::command(slash_command, prefix_command)]
