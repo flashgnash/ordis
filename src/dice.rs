@@ -1,3 +1,4 @@
+use poise::serenity_prelude::Colour;
 use poise::serenity_prelude::CreateEmbed;
 use poise::CreateReply;
 use rand::prelude::*;

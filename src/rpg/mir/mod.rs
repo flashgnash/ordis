@@ -4,6 +4,7 @@ pub mod stat_block;
 use lazy_static::lazy_static;
 use poise::serenity_prelude::ButtonStyle;
 use poise::serenity_prelude::CreateActionRow;
+use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
 use tokio::sync::Mutex;
