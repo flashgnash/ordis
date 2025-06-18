@@ -1,6 +1,5 @@
 
 
-use std::any::type_name;
 
 use common::ButtonEventSystem;
 use common::ButtonParams;
@@ -77,10 +76,7 @@ use rpg::mir::delete_character;
 use rpg::mir::select_character;
 
 
-use rpg::mir::cast_spell;
 use rpg::mir::set_spells;
-use rpg::mir::list_spells;
-use rpg::mir::end_turn;
 
 mod gpt;
 use gpt::ask;

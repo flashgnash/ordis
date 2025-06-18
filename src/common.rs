@@ -226,7 +226,7 @@ pub async fn fetch_message_chain(
     let mut messages = Vec::new();
 
     // Fetch the initial message
-    let mut message = ctx.http.get_message(channel_id, message_id).await?;
+    let message = ctx.http.get_message(channel_id, message_id).await?;
     messages.push(message.clone());
 
     match message.message_reference {

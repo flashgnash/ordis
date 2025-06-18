@@ -283,7 +283,7 @@ Do not respond with anything else under any circumstances";
 pub async fn generate_ordis(message: &str) -> Result<OpenAIResponse,Error> {
 
     // let use_gpt_4 = model_selector(message).await?;
-    let mut model = "gpt-4o-mini";
+    let model = "gpt-4o-mini";
 
     // if use_gpt_4 {
     //     model = "gpt-4";

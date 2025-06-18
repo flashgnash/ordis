@@ -7,7 +7,6 @@ use poise::serenity_prelude::CreateActionRow;
 use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
-use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
@@ -27,7 +26,6 @@ use crate::common::safe_to_number;
 use crate::common::ButtonEventSystem;
 use crate::common::Context;
 use crate::common::Error;
-use crate::create_button_with_callback;
 use crate::db;
 use crate::db::models::Character;
 
@@ -49,7 +47,6 @@ use regex::Regex;
 use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::MessageId;
 
-use poise::async_trait;
 
 pub mod event_handlers;
 
@@ -661,7 +658,7 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
-    if (!modifier.contains("n")) {
+    if !modifier.contains("n") {
         ctx.reply("Your modification should include the letter N to represent your current energy (use add_mana if you just want to add or subtract)")
             .await?;
 
@@ -1200,7 +1197,7 @@ pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(),
     let author = &ctx.author();
     let user_id = author.id.get();
 
-    let mut user = db::users::get(db_connection, user_id)?;
+    let user = db::users::get(db_connection, user_id)?;
     if user.selected_character == Some(character_id) {
         println!("Removing selected character");
         db::users::unset_character(db_connection, &user)?;
