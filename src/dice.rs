@@ -1,6 +1,4 @@
-use poise::serenity_prelude::Colour;
 use poise::serenity_prelude::CreateEmbed;
-use poise::serenity_prelude::Embed;
 use poise::CreateReply;
 use rand::prelude::*;
 
@@ -100,10 +98,6 @@ fn generate_randoms(count: i32, faces: i32) -> Vec<i32> {
     }
 
     return rolls;
-}
-
-fn pad_string(input: &str, total_len: usize) -> String {
-    format!("{:<width$}", input, width = total_len)
 }
 
 pub async fn roll_internal(dice: &String) -> Result<(String, f64), Error> {
