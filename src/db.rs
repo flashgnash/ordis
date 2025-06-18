@@ -13,14 +13,9 @@ use std::env;
 use std::error::Error;
 use std::fmt;
 
-use thiserror::Error;
-
 #[derive(Debug)]
 pub enum DbError {
     NotFound,
-
-    #[error("Other error: {0}")]
-    Other(#[from] diesel::result::Error),
 }
 
 impl fmt::Display for DbError {
@@ -29,12 +24,6 @@ impl fmt::Display for DbError {
             DbError::NotFound => write!(f, "Not found error"),
             // Other kinds of errors...
         }
-    }
-}
-
-impl From<std::io::Error> for DbError {
-    fn from(err: std::io::Error) -> Self {
-        DbError::Io(err)
     }
 }
 

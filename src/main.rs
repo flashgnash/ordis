@@ -384,7 +384,6 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
     let user_id = author.id.get();
-    let user_name = &author.name;
 
     let mut user = db::users::get_or_create(db_connection, user_id).unwrap();
 
@@ -459,7 +458,8 @@ async fn main() {
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 
-                cast_spell(), list_spells(), level_up(), roll(), end_turn(),
+                level_up(), roll(),
+
 
                 join_vc(),
                 play_music(),stop_music(),pause_music(),resume_music(),skip_song(),

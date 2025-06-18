@@ -15,8 +15,13 @@ use crate::common::HTTP_CLIENT;
 
 #[derive(Serialize, Deserialize)]
 pub enum Role {
+    #[allow(non_camel_case_types)]
     user,
+
+    #[allow(non_camel_case_types)]
     assistant,
+
+    #[allow(non_camel_case_types)]
     system
 }
 
@@ -240,7 +245,8 @@ fn string_to_bool(value: &str) -> Option<bool> {
     }
 }
 
-
+//This may be useful if models get expensive again
+#[allow(dead_code)]
 pub async fn model_selector(message:&str) -> Result<bool,Error> {
     let prompt = "
 You are a programming filter.

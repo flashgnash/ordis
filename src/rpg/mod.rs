@@ -263,7 +263,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
     ) -> Result<Self, Error> {
 
 
-        let (previous_hash, previous_block) = Self::get_previous_block(character);
+        let (_previous_hash, previous_block) = Self::get_previous_block(character);
 
         let mut sheet: Self;
 
