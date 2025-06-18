@@ -1,7 +1,7 @@
 pub struct Data {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
-use std::{collections::HashMap, future::Future};
+use std::collections::HashMap;
 
 use poise::serenity_prelude::{Colour, Message};
 use serde::Deserialize;
@@ -31,16 +31,6 @@ pub trait EventHandlerTrait: Send + Sync {
 }
 
 pub type ButtonParams = HashMap<String, Value>;
-
-type ButtonHandler = Box<
-    dyn Fn(
-            &poise::serenity_prelude::Context,
-            &poise::serenity_prelude::ComponentInteraction,
-            &ButtonParams,
-        ) -> Box<dyn Future<Output = ()>>
-        + Send
-        + Sync,
->;
 
 pub struct ButtonEventSystem {
     handlers: HashMap<String, Vec<Box<dyn EventHandlerTrait>>>,
@@ -106,17 +96,6 @@ pub fn uid_to_rgb(uid: u64) -> (u8, u8, u8) {
     (r, g, b)
 }
 
-pub fn username_to_rgb(s: &str) -> (u8, u8, u8) {
-    let uid = s
-        .as_bytes()
-        .iter()
-        .fold(0u64, |acc, &b| (acc << 8) | b as u64);
-    let r = ((uid & 0xFF) % 128 + 128) as u8; // Brightness adjustment
-    let g = (((uid >> 8) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
-    let b = (((uid >> 16) & 0xFF) % 128 + 128) as u8; // Brightness adjustment
-    (r, g, b)
-}
-
 pub async fn get_author_role_colour(ctx: Context<'_>) -> Result<Option<Colour>, Error> {
     if let Some(guild_id) = ctx.guild_id() {
         let member = guild_id.member(&ctx, ctx.author().id).await?;
@@ -143,6 +122,7 @@ pub async fn get_author_colour(ctx: Context<'_>) -> Result<Colour, Error> {
     }
 }
 
+#[allow(dead_code)] // I might be using this soon
 pub fn is_author_on_mobile(ctx: &Context<'_>) -> bool {
     if let Some(guild) = ctx.guild() {
         let presence = guild.presences.get(&ctx.author().id);
@@ -194,6 +174,7 @@ pub fn hash(content: &str) -> String {
     format!("{:x}", result)
 }
 
+#[allow(dead_code)]
 pub fn capitalize_first_letter(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {
@@ -226,7 +207,7 @@ pub async fn fetch_message_chain(
     let mut messages = Vec::new();
 
     // Fetch the initial message
-    let mut message = ctx.http.get_message(channel_id, message_id).await?;
+    let message = ctx.http.get_message(channel_id, message_id).await?;
     messages.push(message.clone());
 
     match message.message_reference {
@@ -253,6 +234,7 @@ pub async fn fetch_message_chain(
     Ok(messages)
 }
 
+#[allow(dead_code)]
 pub async fn fetch_message_poise<E>(
     ctx: &poise::Context<'_, Data, E>,
     channel_id: poise::serenity_prelude::ChannelId,

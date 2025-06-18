@@ -83,11 +83,6 @@ impl common::EventHandlerTrait for ChangeManaEvent {
 
                 db::characters::update(db_connection, &char).expect("Argh");
 
-                let stat_block: super::super::StatBlock =
-                    super::super::super::get_sheet(ctx, &char)
-                        .await
-                        .expect("blah");
-
                 let embed = super::super::generate_status_embed(ctx, &char)
                     .await
                     .expect("Ffs");
