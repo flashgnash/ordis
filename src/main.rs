@@ -13,9 +13,12 @@ use dotenv::dotenv;
 
 use poise::async_trait;
 use poise::serenity_prelude::ButtonStyle;
+use poise::serenity_prelude::ComponentInteractionDataKind;
 use poise::serenity_prelude::CreateActionRow;
 use poise::serenity_prelude::CreateButton;
+use poise::serenity_prelude::CreateSelectMenuOption;
 use poise::serenity_prelude::CreateMessage;
+use poise::serenity_prelude::SelectMenuOption;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::EventHandler;
 use poise::serenity_prelude::Ready;
@@ -247,8 +250,18 @@ impl EventHandler for Handler {
             component.create_response(&ctx,
                 serenity::CreateInteractionResponse::Acknowledge
             ).await.expect("Huh");
+    
+            if let poise::serenity_prelude::ComponentInteractionDataKind::StringSelect { values } = &component.data.kind {
+                if let Some(selected) = values.get(0) {
+                    event_system.emit_event(&ctx,&component,selected).await;
+                    // Select menu event handler needs to use dropdown value not id    
+                    
+                }
+            }
+            else{
+                event_system.emit_event(&ctx,&component,&component.data.custom_id).await;    
+            }
 
-            event_system.emit_event(&ctx,&component,&component.data.custom_id).await;    
             
 
            // component.channel_id.send_message(&ctx,CreateMessage::default().content(format!("Test "))).await.expect("Huh"); 
@@ -302,7 +315,25 @@ T: Serialize
     params: T
 }
 
-fn create_button_with_callback<T,P>(text:&str,callback_params: &P,button_style:ButtonStyle) -> Result<CreateButton,Error>
+fn create_button_with_callback<T, P>(text: &str, callback_params: &P, button_style: ButtonStyle) -> Result<CreateButton, Error>
+where
+    P: Serialize,
+{
+    let json = create_callback::<T, P>(callback_params)?;
+    Ok(CreateButton::new(json).label(text).style(button_style))
+}
+
+fn create_select_option_with_callback<T, P>(text: &str, callback_params: &P) -> Result<CreateSelectMenuOption, Error>
+where
+    P: Serialize,
+{
+    let json = create_callback::<T, P>(callback_params)?;
+    Ok(CreateSelectMenuOption::new(text,json).label(text))
+}
+
+
+
+fn create_callback<T,P>(callback_params: &P) -> Result<String,Error>
 where P: Serialize
  
 {
@@ -322,7 +353,8 @@ where P: Serialize
 
     let json = serde_json::to_string(&callback_serializable)?;
 
-    Ok(CreateButton::new(json).label(text).style(button_style))
+    Ok(json)
+    // Ok(CreateButton::new(json).label(text).style(button_style))
     
 }
 

@@ -1,10 +1,12 @@
 use poise::serenity_prelude::ButtonStyle;
 use poise::serenity_prelude::CreateButton;
+use poise::serenity_prelude::CreateSelectMenuOption;
 use serde::Serialize;
 
 use crate::common;
 use crate::common::Error;
 use crate::create_button_with_callback;
+use crate::create_select_option_with_callback;
 use crate::db;
 
 use super::super::RpgError;
@@ -29,6 +31,13 @@ impl RollEvent {
         button_style: ButtonStyle,
     ) -> Result<CreateButton, Error> {
         return create_button_with_callback::<Self, RollEventParams>(text, params, button_style);
+    }
+
+    pub fn create_select_item(
+        text: &str,
+        params: &RollEventParams,
+    ) -> Result<CreateSelectMenuOption, Error> {
+        return create_select_option_with_callback::<Self, RollEventParams>(text, params);
     }
 }
 

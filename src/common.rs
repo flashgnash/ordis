@@ -76,7 +76,7 @@ impl ButtonEventSystem {
         let event: ButtonEvent = match from_str(json) {
             Ok(event) => event,
             Err(err) => {
-                eprintln!("Failed to parse event JSON: {}", err);
+                eprintln!("Failed to parse event JSON: {}\n\n{}", err, json);
                 return;
             }
         };

@@ -7,6 +7,8 @@ use poise::serenity_prelude::CreateActionRow;
 use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
+use poise::serenity_prelude::CreateSelectMenu;
+use poise::serenity_prelude::CreateSelectMenuOption;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
@@ -387,6 +389,17 @@ fn roll_button(text: &str, dice_string: &str, character_id: i32) -> CreateButton
     .expect("How fail")
 }
 
+fn roll_option(text: &str, dice_string: &str, character_id: i32) -> CreateSelectMenuOption {
+    RollEvent::create_select_item(
+        text,
+        &RollEventParams {
+            dice_string: dice_string.to_string(),
+            character_id: character_id,
+        },
+    )
+    .expect("How fail")
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Error> {
     let ephemeral = !permanent.unwrap_or(false);
@@ -399,9 +412,48 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    // embed.description("Test");
+    let characters = db::characters::get_from_user_id(db_connection, ctx.author().id.get())?;
+
+    let mut character_options: Vec<CreateSelectMenuOption> = vec![];
+
+    for character in characters {
+        let name = character.name.unwrap_or("Test".to_string());
+
+        character_options.push(roll_option(&name, "test", 33));
+    }
+
+    let select_menu = CreateSelectMenu::new(
+        "testing_menu",
+        poise::serenity_prelude::CreateSelectMenuKind::String {
+            options: vec![
+                roll_option(
+                    "🎲 disadvantage",
+                    "min(1d100,1d100)",
+                    character.id.ok_or(RpgError::NoCharacterSheet)?,
+                ),
+                roll_option(
+                    "🎲 advantage",
+                    "max(1d100,1d100)",
+                    character.id.ok_or(RpgError::NoCharacterSheet)?,
+                ),
+                roll_option(
+                    "🎲",
+                    "1d100",
+                    character.id.ok_or(RpgError::NoCharacterSheet)?,
+                ),
+            ],
+        },
+    );
+
+    let character_dropdown = CreateSelectMenu::new(
+        "character_dropdown",
+        poise::serenity_prelude::CreateSelectMenuKind::String {
+            options: character_options,
+        },
+    );
 
     let mut rows = vec![
+        // CreateActionRow::SelectMenu(select_menu),
         CreateActionRow::Buttons(vec![
             roll_button(
                 "🎲 disadvantage",
@@ -446,6 +498,7 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
                 character.id.ok_or(RpgError::NoCharacterSheet)?,
             ),
         ]),
+        CreateActionRow::SelectMenu(character_dropdown),
     ];
 
     if !ephemeral {
