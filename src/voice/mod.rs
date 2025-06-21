@@ -7,6 +7,7 @@ use crate::serenity::async_trait;
 use crate::serenity::ChannelId;
 use crate::serenity::GuildId;
 
+use poise::Command;
 use songbird::events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent};
 use songbird::Call;
 
@@ -104,4 +105,26 @@ pub async fn join_vc(ctx: Context<'_>) -> Result<(), Error> {
     ctx.reply("Succesfully joined your channel.").await?;
 
     Ok(())
+}
+
+#[poise::command(slash_command)]
+async fn leave_vc(ctx: Context<'_>) -> Result<(), Error> {
+    if let Some(guild_id) = ctx.guild_id() {
+        let manager = match songbird::get(ctx.serenity_context()).await {
+            Some(m) => m.clone(),
+            None => return Ok(()),
+        };
+        if let Some(handler_lock) = manager.get(guild_id) {
+            handler_lock.lock().await.leave().await?;
+
+            ctx.say("Goodbye!").await?;
+            return Ok(());
+        }
+    }
+    ctx.say("Something went wrong").await?;
+    Ok(())
+}
+
+pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
+    return vec![join_vc(), leave_vc()];
 }

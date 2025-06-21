@@ -489,16 +489,12 @@ async fn main() {
                 
                 level_up(), roll(),
 
-
-                join_vc(),
-                play_music(),stop_music(),pause_music(),resume_music(),skip_song(),
-
-
                 set_colour(), set_nick()
             ].into_iter()
             .chain(llm::commands::commands())
             .chain(llm::translator::commands())            
-
+            .chain(voice::music::commands())
+            .chain(voice::commands())
             .collect::<Vec<_>>(),
 
             ..Default::default()
