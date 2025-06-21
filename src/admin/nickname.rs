@@ -1,6 +1,4 @@
-use diesel::IntoSql;
 use poise::serenity_prelude::EditMember;
-use serde::Serialize;
 
 use crate::common::Context;
 use crate::common::Error;

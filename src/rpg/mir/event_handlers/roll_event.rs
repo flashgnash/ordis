@@ -60,14 +60,29 @@ impl common::EventHandlerTrait for RollEvent {
                         .await
                         .expect("This is bad practise");
 
+                let colour =
+                    crate::common::get_user_colour(ctx, interaction.guild_id, interaction.user.id)
+                        .await
+                        .expect("I really have to fix this");
+
+                let embed = crate::dice::generate_roll_embed(
+                    result,
+                    interaction.user.name.to_string(),
+                    colour,
+                )
+                .await
+                .expect("Why did I design the event system this way");
+
+                // ctx.send(embed).await?;
+
                 interaction
                     .channel_id
                     .send_message(
                         ctx,
-                        CreateMessage::default().content(format!(
-                            "Event received with param: {} from user {},{}",
-                            dice_string, interaction.user.name, result
-                        )),
+                        CreateMessage::default().embed(embed), // CreateMessage::default().content(format!(
+                                                               // "Rolling for {}:\n {}",
+                                                               // interaction.user.name, result
+                                                               // )),
                     )
                     .await
                     .expect("AAA");

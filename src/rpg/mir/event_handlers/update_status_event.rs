@@ -79,11 +79,6 @@ impl common::EventHandlerTrait for UpdateStatusEvent {
 
             println!("{}", char_id);
 
-            //TODO this is horrendous
-            let stat_block: super::super::StatBlock = super::super::super::get_sheet(ctx, &char)
-                .await
-                .expect("blah");
-
             let embed = super::super::generate_status_embed(ctx, &char)
                 .await
                 .expect("Ffs");

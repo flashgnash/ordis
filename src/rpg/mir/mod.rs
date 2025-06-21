@@ -36,17 +36,10 @@ use super::RpgError;
 
 use crate::dice;
 
-use poise::serenity_prelude::CreateMessage;
-use poise::serenity_prelude::EditMessage;
 use poise::CreateReply;
 use serde_json::Value;
 
 use regex::Regex;
-
-use poise::serenity_prelude::ChannelId;
-use poise::serenity_prelude::MessageId;
-
-use poise::async_trait;
 
 pub mod event_handlers;
 
@@ -107,7 +100,7 @@ pub async fn generate_status_embed(
         .unwrap_or("".to_string());
 
     let stat_block: StatBlock = super::get_sheet(&ctx, character).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &character, &BAR_LENGTH);
+    let mana_message_content = get_mana_bar_message(&stat_block, &character, None);
 
     let max_health = stat_block.max_hp;
     let health = stat_block.hp;
@@ -128,7 +121,7 @@ pub async fn generate_status_embed(
         );
     }
 
-    let mut hunger_message_content = "Hunger unknown.".to_string();
+    let mut hunger_message_content = "".to_string();
     if let Some(hunger) = stat_block.hunger {
         hunger_message_content = format!(
             "🍖 {} ``{hunger} / 10\n\n``",
@@ -215,7 +208,11 @@ pub async fn generate_status_embed(
                 .filter_map(|(key, value)| {
                     // Only include the pair if the value is not null
                     if value != Value::Null {
-                        Some(format!("| {} {}", key, value))
+                        Some(format!(
+                            "| {} +{}",
+                            key,
+                            (value.as_f64().expect("value of stat was nan") / 10 as f64).floor()
+                        ))
                     } else {
                         None
                     }
@@ -377,6 +374,18 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
     Ok(())
 }
 
+fn roll_button(text: &str, dice_string: &str, character_id: i32) -> CreateButton {
+    RollEvent::create_button(
+        text,
+        &RollEventParams {
+            dice_string: dice_string.to_string(),
+            character_id: character_id,
+        },
+        ButtonStyle::Secondary,
+    )
+    .expect("How fail")
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Error> {
     let ephemeral = !permanent.unwrap_or(false);
@@ -391,15 +400,52 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
 
     // embed.description("Test");
 
-    let mut rows = vec![CreateActionRow::Buttons(vec![RollEvent::create_button(
-        "🎲 Roll",
-        &RollEventParams {
-            dice_string: "1d100".to_string(),
-            character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
-        },
-        ButtonStyle::Secondary,
-    )
-    .expect("How fail")])];
+    let mut rows = vec![
+        CreateActionRow::Buttons(vec![
+            roll_button(
+                "🎲 disadvantage",
+                "min(1d100,1d100)",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🎲",
+                "1d100",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🎲 advantage",
+                "max(1d100,1d100)",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+        ]),
+        CreateActionRow::Buttons(vec![
+            roll_button(
+                "💪",
+                "1d100+str",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🐇",
+                "1d100+agl",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🛡️",
+                "1d100+con",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "🧠",
+                "1d100+kno",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+            roll_button(
+                "💬",
+                "1d100+cha",
+                character.id.ok_or(RpgError::NoCharacterSheet)?,
+            ),
+        ]),
+    ];
 
     if !ephemeral {
         rows.push(CreateActionRow::Buttons(vec![
@@ -439,7 +485,7 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
     let character = get_user_character(&ctx, db_connection).await?;
 
     let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &character, &BAR_LENGTH);
+    let mana_message_content = get_mana_bar_message(&stat_block, &character, None);
 
     placeholder_message
         .edit(ctx, CreateReply::default().content(mana_message_content))
@@ -465,7 +511,7 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     .await?;
 
     let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, None);
 
     let placeholder = CreateReply::default()
         .content("*Thinking, please wait...*")
@@ -479,13 +525,17 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     Ok(())
 }
 
-fn get_mana_bar_message(stat_block: &StatBlock, character: &Character, bar_length: &i32) -> String {
+fn get_mana_bar_message(
+    stat_block: &StatBlock,
+    character: &Character,
+    bar_length: Option<usize>,
+) -> String {
     return format!(
         "🪄 {} ``{} / {}``\n\n",
         crate::common::draw_bar(
             character.mana.unwrap_or(0),
             stat_block.energy_pool.unwrap_or(0) as i32,
-            BAR_LENGTH as usize,
+            bar_length.unwrap_or(BAR_LENGTH as usize),
             "🟦",
             "⬛"
         ),
@@ -494,73 +544,8 @@ fn get_mana_bar_message(stat_block: &StatBlock, character: &Character, bar_lengt
     );
 }
 
-async fn update_mana_readout(
-    ctx: Context<'_>,
-    character: &Character,
-    db_connection: &mut SqliteConnection,
-) -> Result<Character, Error> {
-    let mut modified_character = character.clone();
-
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
-    let mana_message_content = format!(
-        "Current Energy: \n\n{}",
-        get_mana_bar_message(&stat_block, &character, &BAR_LENGTH)
-    );
-
-    if let (Some(channel_id), Some(message_id)) = (
-        &character.mana_readout_channel_id,
-        &character.mana_readout_message_id,
-    ) {
-        let channel: ChannelId = channel_id.parse()?;
-        let message: MessageId = message_id.parse()?;
-
-        let edit_result = channel
-            .edit_message(
-                ctx,
-                message,
-                EditMessage::default().content(&mana_message_content),
-            )
-            .await;
-
-        match edit_result {
-            Ok(_) => {
-                return Ok(modified_character);
-            }
-            Err(_) => {
-                println!("Message was deleted. Clearing saved message ID and trying again");
-                modified_character.mana_readout_channel_id = None;
-
-                // db::characters::update(db_connection, &modified_character);
-
-                // return update_mana_readout(ctx, &modified_character, db_connection).await;
-            }
-        };
-    };
-
-    if let Some(channel_id) = &character.spell_block_channel_id {
-        println!("Making new gauge in channel {channel_id}");
-
-        modified_character.mana_readout_channel_id = Some(channel_id.to_string());
-
-        let channel: ChannelId = channel_id.parse().unwrap();
-
-        let message = channel
-            .send_message(ctx, CreateMessage::default().content(&mana_message_content))
-            .await?;
-
-        modified_character.mana_readout_message_id = Some(message.id.to_string());
-
-        db::characters::update(db_connection, &modified_character)?;
-
-        return Ok(modified_character);
-    }
-
-    println!("No channel id or message id - no spell message?");
-    return Err(Box::new(RpgError::NoSpellSheet));
-}
-
 async fn set_mana_internal(
-    ctx: Context<'_>,
+    _ctx: Context<'_>, // No longer needed, cba to remove from existing function calls
     db_connection: &mut SqliteConnection,
     character: Character,
     mana: i32,
@@ -570,10 +555,6 @@ async fn set_mana_internal(
     new_character.mana = Some(mana);
 
     db::characters::update(db_connection, &new_character)?;
-
-    // update_mana_readout(ctx, &new_character, db_connection).await?;
-    // Disabled for now as this may be superceded by permanent status
-    // readouts
 
     Ok(new_character)
 }
@@ -602,7 +583,7 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     .await?;
 
     let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, None);
 
     placeholder_message
         .edit(ctx, CreateReply::default().content(mana_message_content))
@@ -638,7 +619,7 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     .await?;
 
     let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, None);
 
     placeholder_message
         .edit(ctx, CreateReply::default().content(mana_message_content))
@@ -649,7 +630,7 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
-    if (!modifier.contains("n")) {
+    if !modifier.contains("n") {
         ctx.reply("Your modification should include the letter N to represent your current energy (use add_mana if you just want to add or subtract)")
             .await?;
 
@@ -680,7 +661,7 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
     .await?;
 
     let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, &BAR_LENGTH);
+    let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, None);
 
     placeholder_message
         .edit(ctx, CreateReply::default().content(mana_message_content))
@@ -777,14 +758,14 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
     let spells = spell_sheet.spells.ok_or(RpgError::NoSpellSheet)?;
 
     if let Some(spell) = spells.get(&spell_name) {
-        let spell_cost = spell.cost.clone().ok_or(RpgError::NoSpellCost)?;
+        // let spell_cost = spell.cost.clone().ok_or(RpgError::NoSpellCost)?;
 
         // let spell_cost_string = spell_cost.to_string();
 
-        let mut spell_cost_word = "Cost";
-        if spell_cost.mana > 0 {
-            spell_cost_word = "Gain";
-        }
+        // let mut spell_cost_word = "Cost";
+        // if spell_cost.mana > 0 {
+        //     spell_cost_word = "Gain";
+        // }
 
         let spell_type = spell.spell_type.as_ref().unwrap_or(&SpellType::Unknown);
 
@@ -893,8 +874,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
         }
 
         if let Some(modified_char) = modified_char {
-            let mana_message_content =
-                get_mana_bar_message(&stat_block, &modified_char, &BAR_LENGTH);
+            let mana_message_content = get_mana_bar_message(&stat_block, &modified_char, None);
 
             ctx.send(
                 CreateReply::default()
@@ -970,8 +950,6 @@ pub async fn roll_with_char_sheet(
 
     let mut str_replaced = dice;
 
-    let mut nag_user_about_character_sheet = false;
-
     match stat_block_result {
         Ok(stat_block) => {
             if let Some(stats_object) = stat_block
@@ -996,8 +974,6 @@ pub async fn roll_with_char_sheet(
                     | RpgError::NoSpellSheet => {
                         // Handle specific error
                         println!("Caught NoCharacterSheet error");
-
-                        nag_user_about_character_sheet = true;
                     }
                     _ => return Err(e), // Propagate other RpgError variants
                 }
@@ -1055,14 +1031,6 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     dice::output_roll_message(ctx, (result_string, result_num), nick).await?;
 
-    // if nag_user_about_character_sheet {
-    //     let character_sheet_missing_message = CreateReply::default()
-    //                         .content("Hint: if you configure and select a character sheet you can add stat modifiers to your rolls (e.g /roll 1d100+str )")
-    //                         .ephemeral(true);
-
-    //     let _ = ctx.send(character_sheet_missing_message).await?;
-    // }
-
     Ok(())
 }
 
@@ -1103,7 +1071,7 @@ pub async fn create_character(
 
             return Ok(());
         }
-        Err(e) => {
+        Err(_e) => {
             println!("No existing char found using that character sheet");
         }
     }
@@ -1204,7 +1172,7 @@ pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(),
     let author = &ctx.author();
     let user_id = author.id.get();
 
-    let mut user = db::users::get(db_connection, user_id)?;
+    let user = db::users::get(db_connection, user_id)?;
     if user.selected_character == Some(character_id) {
         println!("Removing selected character");
         db::users::unset_character(db_connection, &user)?;
@@ -1303,10 +1271,9 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
                     ).await?;
 
                     return Ok(());
-                }
-                _ => {
-                    return Err(Box::new(e));
-                }
+                } // _ => {
+                  //     return Err(Box::new(e));
+                  // }
             }
         }
     }
