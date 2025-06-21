@@ -1,5 +1,4 @@
-pub mod commands;
-pub mod translator;
+pub mod discord;
 
 use crate::common::Error;
 use chrono::Utc;

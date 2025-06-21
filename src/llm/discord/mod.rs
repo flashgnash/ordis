@@ -1,3 +1,6 @@
+pub mod reply_handler;
+pub mod translator;
+
 use poise::{Command, CreateReply};
 
 use crate::{
@@ -44,3 +47,5 @@ pub async fn draw(ctx: Context<'_>, message: String) -> Result<(), Error> {
 pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
     return vec![draw(), ask()];
 }
+
+pub struct MessageReplyHandler;
