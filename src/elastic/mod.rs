@@ -10,8 +10,8 @@ lazy_static! {
     static ref ELASTICSEARCH_CONNECTION: Mutex<Elasticsearch> = {
         let api_key_base64 = std::env::var("ELASTIC_API_KEY").expect("missing ELASTIC_API_KEY");
         let elastic_url = std::env::var("ELASTIC_URL").expect("missing ELASTIC_URL");
-        let credentials = Credentials::ApiKey(api_key_base64.to_string());
-        let transport = Transport::builder(elastic_url.parse()?)
+        let credentials = Credentials::EncodedApiKey(api_key_base64.to_string());
+        let transport = Transport::TransportBuilder(elastic_url.parse()?)
             .auth(credentials)
             .build()?;
 
