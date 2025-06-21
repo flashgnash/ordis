@@ -1363,7 +1363,7 @@ pub async fn characters(ctx: Context<'_>) -> Result<(), Error> {
             .unwrap_or("No channel ID".to_string());
 
         character_messages.push(format!(
-            "{character_id}. {character_name} (<#{channel_id}>)"
+            "- **{character_name}**\n-# <#{channel_id}> [#{character_id}]"
         ))
     }
 
@@ -1372,7 +1372,7 @@ pub async fn characters(ctx: Context<'_>) -> Result<(), Error> {
         character_select_dropdown(db_connection, ctx.author().id.get()).await?,
     ];
 
-    let character_list_message = "Characters:\n".to_string() + &character_messages.join("\n");
+    let character_list_message = "Characters:\n".to_string() + &character_messages.join("\n\n");
 
     let reply = CreateReply::default()
         .content(format!(
