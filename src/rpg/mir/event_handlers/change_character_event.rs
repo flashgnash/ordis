@@ -1,6 +1,8 @@
 use poise::serenity_prelude::ButtonStyle;
 use poise::serenity_prelude::CreateButton;
+use poise::serenity_prelude::CreateInteractionResponseMessage;
 use poise::serenity_prelude::CreateSelectMenuOption;
+use poise::serenity_prelude::CustomMessage;
 use serde::Serialize;
 
 use crate::common;
@@ -11,6 +13,7 @@ use crate::db;
 
 use super::super::RpgError;
 
+use poise::serenity_prelude::CreateInteractionResponseFollowup;
 use poise::serenity_prelude::CreateMessage;
 use serde_json::Value;
 
@@ -50,6 +53,16 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
 
                 println!("Hello world {user_id} {char_id}");
 
+                let waiting_message_id = interaction
+                    .create_followup(
+                        ctx,
+                        CreateInteractionResponseFollowup::default()
+                            .ephemeral(true)
+                            .content("Thinking... please wait"),
+                    )
+                    .await
+                    .expect("AAA");
+
                 let char = db::characters::get(
                     db_connection,
                     char_id
@@ -65,16 +78,45 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
 
                 let comparison_user_id = interaction.user.id;
 
-                if char
-                    .user_id
-                    .expect("Should always have user id")
-                    .to_string()
-                    == comparison_user_id.to_string()
-                {
-                    user.selected_character = Some(char_id.as_i64().expect("asdasd") as i32);
-                    db::users::update(db_connection, &user).expect("I hate this system");
-                    println!("aaa {char_id}");
+                if let Some(user_id) = char.user_id.clone() {
+                    if &user_id.to_string() == &comparison_user_id.to_string() {
+                        user.selected_character = Some(char_id.as_i64().expect("asdasd") as i32);
+                        db::users::update(db_connection, &user).expect("I hate this system");
+                        println!("aaa {char_id}");
+
+                        let embed = super::super::generate_status_embed(ctx, &char)
+                            .await
+                            .expect("Ffs");
+
+                        let char_id_i32 = char_id.as_i64().expect("Wrong char id") as i32;
+
+                        let rows = vec![
+                            // CreateActionRow::SelectMenu(select_menu),
+                            super::super::advantage_roll_buttons(char_id_i32),
+                            super::super::stat_roll_buttons(char_id_i32),
+                            super::super::character_select_dropdown(
+                                db_connection,
+                                user_id.parse().unwrap(),
+                            )
+                            .await
+                            .expect("asda"),
+                        ];
+
+                        interaction
+                            .edit_followup(
+                                ctx,
+                                waiting_message_id,
+                                CreateInteractionResponseFollowup::default()
+                                    .embed(embed)
+                                    .content("Switched character. Current status:")
+                                    .ephemeral(true)
+                                    .components(rows),
+                            )
+                            .await
+                            .expect("AAA");
+                    }
                 }
+
                 // interaction
                 //     .channel_id
                 //     .send_message(

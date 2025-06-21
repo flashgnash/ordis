@@ -415,7 +415,7 @@ fn select_character_option(text: &str, user_id: u64, character_id: i32) -> Creat
     .expect("How fail")
 }
 
-fn advantage_roll_buttons(character_id: i32) -> CreateActionRow {
+pub fn advantage_roll_buttons(character_id: i32) -> CreateActionRow {
     CreateActionRow::Buttons(vec![
         roll_button("🎲 disadvantage", "min(1d100,1d100)", character_id),
         roll_button("🎲", "1d100", character_id),
@@ -423,7 +423,7 @@ fn advantage_roll_buttons(character_id: i32) -> CreateActionRow {
     ])
 }
 
-fn stat_roll_buttons(character_id: i32) -> CreateActionRow {
+pub fn stat_roll_buttons(character_id: i32) -> CreateActionRow {
     CreateActionRow::Buttons(vec![
         roll_button("💪", "1d100+str", character_id),
         roll_button("🐇", "1d100+agl", character_id),
@@ -433,7 +433,7 @@ fn stat_roll_buttons(character_id: i32) -> CreateActionRow {
     ])
 }
 
-async fn character_select_dropdown(
+pub async fn character_select_dropdown(
     db_connection: &mut SqliteConnection,
     user_id: u64,
 ) -> Result<CreateActionRow, Error> {
@@ -973,7 +973,7 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn roll_with_char_sheet(
     ctx: &poise::serenity_prelude::Context,
     dice_expression: Option<String>,
-    character: Character,
+    character: &Character,
 ) -> Result<(String, f64), Error> {
     let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx, &character).await;
 
@@ -1043,11 +1043,13 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    let result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, character).await?;
+    let result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, &character).await?;
 
     let mut nick = author.name.to_string();
 
-    if let Some(guild_id) = ctx.guild_id() {
+    if let Some(char_name) = &character.name {
+        nick = char_name.to_string();
+    } else if let Some(guild_id) = ctx.guild_id() {
         let author_nick = author.nick_in(ctx, guild_id).await;
 
         if let Some(author_nick) = author_nick {

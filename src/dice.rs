@@ -10,6 +10,7 @@ use crate::common::safe_to_number;
 
 use crate::common::join_to_string;
 use crate::common::sum_array;
+use crate::rpg::get_user_character;
 
 use meval::eval_str;
 
@@ -120,7 +121,7 @@ pub async fn output_roll_message(
 ) -> Result<(), Error> {
     let colour = crate::common::get_author_colour(ctx).await?;
 
-    let embed = generate_roll_embed(roll, username, colour).await?;
+    let embed = generate_roll_embed(roll, &username, colour).await?;
 
     ctx.send(CreateReply::default().embed(embed)).await?;
 
@@ -129,13 +130,13 @@ pub async fn output_roll_message(
 
 pub async fn generate_roll_embed(
     roll: (String, f64),
-    username: String,
+    name: &str,
     colour: Colour,
 ) -> Result<CreateEmbed, Error> {
     let (message, _) = roll;
 
     let embed = CreateEmbed::default()
-        .title(format!("Rolling for {username}..."))
+        .title(format!("Rolling for {name}..."))
         .colour(colour)
         .description(format!("\n​\n{message}"));
 

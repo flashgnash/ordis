@@ -65,7 +65,7 @@ impl common::EventHandlerTrait for RollEvent {
                 .expect("Remove this expect later");
 
                 let result =
-                    super::super::roll_with_char_sheet(ctx, Some(dice_string.to_string()), char)
+                    super::super::roll_with_char_sheet(ctx, Some(dice_string.to_string()), &char)
                         .await
                         .expect("This is bad practise");
 
@@ -76,7 +76,7 @@ impl common::EventHandlerTrait for RollEvent {
 
                 let embed = crate::dice::generate_roll_embed(
                     result,
-                    interaction.user.name.to_string(),
+                    &char.name.unwrap_or("Test".to_string()),
                     colour,
                 )
                 .await
@@ -86,13 +86,7 @@ impl common::EventHandlerTrait for RollEvent {
 
                 interaction
                     .channel_id
-                    .send_message(
-                        ctx,
-                        CreateMessage::default().embed(embed), // CreateMessage::default().content(format!(
-                                                               // "Rolling for {}:\n {}",
-                                                               // interaction.user.name, result
-                                                               // )),
-                    )
+                    .send_message(ctx, CreateMessage::default().embed(embed))
                     .await
                     .expect("AAA");
             }
