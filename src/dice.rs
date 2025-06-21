@@ -17,6 +17,7 @@ use meval::eval_str;
 extern crate regex;
 use regex::Regex;
 use std::fmt;
+use std::time::SystemTime;
 
 #[derive(Debug)]
 pub enum DiceError {
@@ -37,10 +38,10 @@ impl std::error::Error for DiceError {}
 pub struct RollStatistic {
     pub value: i32,
     pub max: i32,
-    pub string: String,
+    pub dice_string: String,
     pub user_id: Option<u64>,
     pub user_name: Option<String>,
-    pub timestamp: Option<String>,
+    pub time: Option<String>,
 }
 
 pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>, RollStatistic), DiceError> {

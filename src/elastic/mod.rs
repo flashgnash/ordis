@@ -1,6 +1,10 @@
 use reqwest::Client;
 use serde::Serialize;
 use lazy_static::lazy_static;
+use elasticsearch::{auth::Credentials, Elasticsearch, http::transport::Transport};
+use tokio::sync::Mutex;
+use tokio::sync::MutexGuard;
+use serde_json::json;
 
 lazy_static! {
     static ref ELASTICSEARCH_CONNECTION: Mutex<Elasticsearch> = {

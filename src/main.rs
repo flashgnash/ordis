@@ -28,8 +28,6 @@ use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
 
-
-
 mod common;
 use crate::common::Context;
 use crate::common::Data;
@@ -52,7 +50,6 @@ use voice::music::skip_song;
 use songbird::SerenityInit;
 
 mod elastic;
-use elasticsearch::{auth::Credentials, Elasticsearch, http::transport::Transport};
 
 mod rpg;
 
