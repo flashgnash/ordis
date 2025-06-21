@@ -44,7 +44,6 @@ impl fmt::Display for ManaSpellResource {
     }
 }
 
-#[allow(dead_code)] //future planning
 pub struct SlotSpellResource {
     pub slots: HashMap<i32, i32>,
 }
@@ -53,10 +52,6 @@ pub struct SlotSpellResource {
 pub struct Spell<T: SpellResource> {
     pub name: Option<String>,
     pub cost: Option<T>,
-
-    #[allow(dead_code)] //cargo is lying
     pub spell_type: Option<SpellType>,
-
-    #[allow(dead_code)] //cargo is lying
     pub cast_time: Option<String>,
 }

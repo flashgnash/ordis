@@ -1,7 +1,8 @@
-use poise::serenity_prelude::Colour;
 use poise::serenity_prelude::CreateEmbed;
 use poise::CreateReply;
 use rand::prelude::*;
+
+use serde::{Deserialize, Serialize};
 
 use crate::common::Context;
 use crate::common::Error;
@@ -16,6 +17,7 @@ use meval::eval_str;
 extern crate regex;
 use regex::Regex;
 use std::fmt;
+use std::time::SystemTime;
 
 #[derive(Debug)]
 pub enum DiceError {
@@ -32,7 +34,17 @@ impl fmt::Display for DiceError {
 
 impl std::error::Error for DiceError {}
 
-pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
+#[derive(Serialize, Deserialize)]
+pub struct RollStatistic {
+    pub value: i32,
+    pub max: i32,
+    pub dice_string: String,
+    pub user_id: Option<u64>,
+    pub user_name: Option<String>,
+    pub time: Option<String>,
+}
+
+pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>, RollStatistic), DiceError> {
     let mut number_of_dice = 1;
     let faces_of_die;
 
@@ -56,25 +68,26 @@ pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
         return Err(DiceError::InvalidFaceCount);
     }
 
-    let dice_rolls = generate_randoms(number_of_dice, faces_of_die);
+    let mut rng = rand::thread_rng();
 
-    Ok((sum_array(&dice_rolls), dice_rolls))
-}
+    let mut dice_rolls: Vec<i32> = vec![];
 
-fn roll_matches(input: &str, pattern: &Regex) -> Result<(String, String), DiceError> {
-    let mut result = input.to_string();
-
-    let mut message = "".to_string();
-
-    for mat in pattern.find_iter(input) {
-        let (processed, rolls) = roll_one_instance(mat.as_str())?;
-
-        let mat_str = mat.as_str();
-
-        message = format!("{message}\n- {mat_str}: [{}] ", join_to_string(&rolls, ","));
-        result = result.replacen(mat_str, &processed.to_string(), 1);
+    for _i in 0..number_of_dice {
+        dice_rolls.push(rng.gen_range(1..faces_of_die + 1));
     }
-    Ok((result, message))
+
+    let sum = sum_array(&dice_rolls);
+
+    let statistic = RollStatistic {
+        value: sum,
+        max: number_of_dice * faces_of_die,
+        string: instance.to_string(),
+        user_id: None,
+        user_name: None,
+        timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH),
+    };
+
+    Ok((sum, dice_rolls, statistic))
 }
 
 pub fn roll_replace(text: &str) -> Result<(String, String), DiceError> {
@@ -84,31 +97,47 @@ pub fn roll_replace(text: &str) -> Result<(String, String), DiceError> {
 
     let regex = Regex::new(regex_string).unwrap(); // This regex pattern matches three-letter words
 
-    let (result, message) = roll_matches(&text, &regex)?;
+    let mut result = text.to_string();
+    let mut message = "".to_string();
+
+    for mat in regex.find_iter(text) {
+        let (processed, rolls, statistic) = roll_one_instance(mat.as_str())?;
+
+        let mat_str = mat.as_str();
+
+        message = format!("{message}\n- {mat_str}: [{}] ", join_to_string(&rolls, ","));
+        result = result.replacen(mat_str, &processed.to_string(), 1);
+    }
 
     return Ok((result, message));
 }
 
-fn generate_randoms(count: i32, faces: i32) -> Vec<i32> {
-    let mut rng = rand::thread_rng();
+pub async fn roll_internal(dice: &String) -> Result<(String, f64, Vec<RollStatistic>), Error> {
+    let regex_string = r"\d+d\d+";
 
-    let mut rolls: Vec<i32> = vec![];
+    let regex = Regex::new(regex_string).unwrap(); // This regex pattern matches three-letter words
 
-    for _i in 0..count {
-        rolls.push(rng.gen_range(1..faces + 1));
+    let mut replaced = dice.to_string();
+    let mut message = "".to_string();
+
+    let mut statistics = vec![];
+
+    for mat in regex.find_iter(dice) {
+        let (processed, rolls, statistic) = roll_one_instance(mat.as_str())?;
+
+        let mat_str = mat.as_str();
+
+        message = format!("{message}\n- {mat_str}: [{}] ", join_to_string(&rolls, ","));
+        replaced = replaced.replacen(mat_str, &processed.to_string(), 1);
+
+        statistics.push(statistic);
     }
-
-    return rolls;
-}
-
-pub async fn roll_internal(dice: &String) -> Result<(String, f64), Error> {
-    let (replaced, messages) = roll_replace(dice)?;
 
     let calc_result = eval_str(&replaced)?;
 
-    let message = format!("{dice} {messages}\n\n Result: __{calc_result}__");
+    let message = format!("{dice} {message}\n\n Result: __{calc_result}__");
 
-    let result = (message, calc_result);
+    let result = (message, calc_result, statistics);
 
     Ok(result)
 }
@@ -118,37 +147,40 @@ pub async fn output_roll_message(
     roll: (String, f64),
     username: String,
 ) -> Result<(), Error> {
-    let colour = crate::common::get_author_colour(ctx).await?;
+    let (message, calc_result) = roll;
 
-    let embed = generate_roll_embed(roll, username, colour).await?;
+    let col = crate::common::get_author_colour(ctx).await?;
+
+    let embed = CreateEmbed::default()
+        .title(format!("Rolling for {username}..."))
+        .colour(col)
+        .description(format!("\n​\n{message}"));
 
     ctx.send(CreateReply::default().embed(embed)).await?;
 
     Ok(())
 }
 
-pub async fn generate_roll_embed(
-    roll: (String, f64),
-    username: String,
-    colour: Colour,
-) -> Result<CreateEmbed, Error> {
-    let (message, _) = roll;
-
-    let embed = CreateEmbed::default()
-        .title(format!("Rolling for {username}..."))
-        .colour(colour)
-        .description(format!("\n​\n{message}"));
-
-    Ok(embed)
-}
-
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
-    let results = roll_internal(&dice).await?;
+    let (message, calc_result, mut statistics) = roll_internal(&dice).await?;
+
+    // let mut Vec<RollStatistic> user_tagged_stats = vec![];
+
+    for statistic in statistics.iter_mut() {
+        statistic.user_id = Some(ctx.author().id.get());
+        statistic.user_name = Some(ctx.author().name.to_string());
+    }
+
+    crate::common::log_if_failed_async(crate::elastic::post_to_elastic(
+        "ordis",
+        &statistics,
+    ))
+    .await;
 
     output_roll_message(
         ctx,
-        results,
+        (message, calc_result),
         ctx.author()
             .nick_in(
                 ctx,

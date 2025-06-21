@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 
+use crate::common::Context;
 use crate::common::Error;
 
 use crate::db::models::Character;
+use crate::rpg::spells::SpellResource;
 
 use super::super::CharacterSheetable;
 use super::super::RpgError;
@@ -20,7 +23,6 @@ use poise::serenity_prelude::Message;
 pub struct SpellSheet {
     pub sheet_info: SheetInfo,
     pub spells: Option<HashMap<String, Spell<ManaSpellResource>>>,
-    #[allow(dead_code)] //cargo is lying
     pub active_spells: Option<Vec<String>>,
 }
 
