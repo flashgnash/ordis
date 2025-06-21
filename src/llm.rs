@@ -12,6 +12,68 @@ use std::collections::HashMap;
 
 use crate::common::HTTP_CLIENT;
 
+use lazy_static::lazy_static;
+
+#[allow(dead_code)]
+#[derive(Debug)]
+pub enum LLMError {
+    NoGuildId,
+
+    NoProviderConfig,
+    NoProviderConfigForModel
+
+
+    
+}
+
+impl fmt::Display for LLMError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+
+            _ => write!(f,"Unknown error"),
+        }
+    }
+}
+impl std::error::Error for LLMError {}
+
+#[derive(Debug)]
+pub struct ProviderConfig {
+    pub endpoint: &'static str,
+    pub access_token_env: &'static str,
+    pub valid_models: &'static [&'static str],
+}
+
+lazy_static! {
+    pub static ref PROVIDER_CONFIGS: HashMap<&'static str, ProviderConfig> = {
+        let mut map = HashMap::new();
+        map.insert(
+            "openai",
+            ProviderConfig {
+                endpoint: "https://api.openai.com/v1/chat/completions",
+                access_token_env: "OPENAI_TOKEN",
+                valid_models: &["gpt-3.5-turbo", "gpt-4", "gpt-4o-mini"],
+            },
+        );
+        map.insert(
+            "grok",
+            ProviderConfig {
+                endpoint: "https://api.x.ai/v1/chat/completions",
+                access_token_env: "GROK_TOKEN",
+                valid_models: &["grok-beta"],
+            },
+        );
+        map
+    };
+}
+
+
+pub fn get_provider_config(provider: &str) -> Option<&'static ProviderConfig> {
+    PROVIDER_CONFIGS.get(provider)
+}
+
+pub fn get_provider_by_model(model: &str) -> Option<&'static ProviderConfig> {
+    PROVIDER_CONFIGS.values().find(|config| config.valid_models.contains(&model))
+}
 
 #[derive(Serialize, Deserialize)]
 pub enum Role {
@@ -182,8 +244,9 @@ pub async fn filter_hate(message: &str) -> Result<bool,Error> {
 
 
 #[allow(dead_code)]
-pub async fn generate_to_string(model:&str,messages:Vec<Message>) -> Result<String,Error> {
+pub async fn generate_to_string(model:Option<&str>,messages:Vec<Message>) -> Result<String,Error> {
     let response = generate(model,messages).await?;
+    
 
     let response_message = &response.choices[0].message.content;
     return Ok(format!("{}",response_message));
@@ -215,8 +278,19 @@ pub async fn generate_image(prompt: &str) -> Result<String, Error> {
     Ok(image_data.url.clone())
 }
 
-pub async fn generate(model:&str, messages:Vec<Message>) -> Result<OpenAIResponse, Error> {                                       
-    let token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
+
+
+
+pub async fn generate(model:Option<&str>, messages:Vec<Message>) -> Result<OpenAIResponse, Error> {                                       
+
+    let model = model.unwrap_or("gpt-4o-mini");
+
+    let provider_config = get_provider_by_model(model).ok_or(LLMError::NoProviderConfigForModel)?;
+
+    let token = std::env::var(provider_config.access_token_env).expect("Missing token for LLM provider");
+
+    let endpoint = provider_config.endpoint;    
+    // token = std::env::var("OPENAI_TOKEN").expect("missing OPENAI_TOKEN");
     
     let client = &HTTP_CLIENT;
         let request = OpenAIRequest {
@@ -225,13 +299,14 @@ pub async fn generate(model:&str, messages:Vec<Message>) -> Result<OpenAIRespons
     };
 
     let content = 
-        client.post("https://api.openai.com/v1/chat/completions")
+        client.post(endpoint)
         .json(&request)
         .header(AUTHORIZATION,format!("Bearer {token}"))
         .send().await?.text().await?;
 
                                                                                       
-    
+    println!("{}",&content);
+
     let response : OpenAIResponse = serde_json::from_str(&content)?;
 
     Ok(response)
@@ -273,7 +348,7 @@ Do not respond with anything else under any circumstances";
         ];
 
 
-    let input = generate("gpt-4o-mini",messages).await?;
+    let input = generate(None,messages).await?;
 
     if let Some(result) = string_to_bool(&input.choices[0].message.content) {
         println!("Converted value: {}", result);
@@ -286,15 +361,7 @@ Do not respond with anything else under any circumstances";
 
 }
 
-pub async fn generate_ordis(message: &str) -> Result<OpenAIResponse,Error> {
-
-    // let use_gpt_4 = model_selector(message).await?;
-    let model = "gpt-4o-mini";
-
-    // if use_gpt_4 {
-    //     model = "gpt-4";
-    // }
-
+pub async fn generate_ordis(message: &str, model: Option<&str>) -> Result<OpenAIResponse,Error> {
     let now = Utc::now();
 
     let messages = vec![            
@@ -320,7 +387,7 @@ pub async fn generate_ordis(message: &str) -> Result<OpenAIResponse,Error> {
     return generate(model,messages).await;
 
 }
-pub async fn generate_translator(message: &str, lang1: &str, lang2:&str) -> Result<OpenAIResponse,Error> {
+pub async fn generate_translator(message: &str, lang1: &str, lang2:&str,model: Option<&str>) -> Result<OpenAIResponse,Error> {
 
     let now = Utc::now();
     let messages = vec![            
@@ -350,7 +417,7 @@ pub async fn generate_translator(message: &str, lang1: &str, lang2:&str) -> Resu
         ];
 
 
-    return generate("gpt-4o-mini",messages).await;
+    return generate(model,messages).await;
 
 }
 
@@ -358,7 +425,7 @@ pub async fn generate_translator(message: &str, lang1: &str, lang2:&str) -> Resu
 pub async fn translate_internal(ctx: Context<'_>,message:String) -> Result<(),Error> {
      let msg = ctx.say("*Translating, please wait...*").await?;
 
-    let response = generate_translator(&message,"english","spanish").await?;
+    let response = generate_translator(&message,"english","spanish",None).await?;
 
     let response_message = &response.choices[0].message.content;
 
@@ -421,7 +488,7 @@ pub async fn ask(ctx: Context<'_>, message:String) -> Result<(),Error> {
 
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let response = generate_ordis(&message).await?;
+    let response = generate_ordis(&message,None).await?;
 
     let response_message = &response.choices[0].message.content;
 

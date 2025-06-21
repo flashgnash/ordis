@@ -83,11 +83,11 @@ use rpg::mir::select_character;
 
 use rpg::mir::set_spells;
 
-mod gpt;
-use gpt::ask;
-use gpt::translate;
-use gpt::translate_context;
-use gpt::draw;
+mod llm;
+use llm::ask;
+use llm::translate;
+use llm::translate_context;
+use llm::draw;
 use rand::prelude::*;
 use lazy_static::lazy_static;
 
@@ -160,24 +160,24 @@ impl EventHandler for Handler {
             let original_message = fetch_message(&ctx, channel_ref, message_ref).await.unwrap();
 
             if ctx.cache.current_user().id == original_message.author.id {
-                println!("That's me!");
+                println!("Testing me!");
 
 
                 let mut messages = vec![            
 
-                        gpt::Message {
-                            role: gpt::Role::system,
+                        llm::Message {
+                            role: llm::Role::system,
                             content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
 
                         },
-                        // gpt::Message {
-                        //     role: gpt::Role::assistant,
+                        // llm::Message {
+                        //     role: llm::Role::assistant,
                         //     content: original_message.content.to_string()
 
                         // },
 
-                        // gpt::Message {
-                        //     role: gpt::Role::user,
+                        // llm::Message {
+                        //     role: llm::Role::user,
                         //     content:msg.content.to_string(),
 
                         // }
@@ -192,24 +192,24 @@ impl EventHandler for Handler {
                     // println!("Message content: {}",chain_message.content);
                     // Determine role based on whether the message author is the bot
                     let role = if chain_message.author.id == ctx.cache.current_user().id  {
-                        gpt::Role::assistant
+                        llm::Role::assistant
                     } else {
-                        gpt::Role::user
+                        llm::Role::user
                     };
 
-                    messages.push(gpt::Message {
+                    messages.push(llm::Message {
                         role,
                         content: chain_message.content.to_string(),
                     });
                 }                   
 
-                messages.push(gpt::Message {
-                    role: gpt::Role::assistant,
+                messages.push(llm::Message {
+                    role: llm::Role::assistant,
                     content: original_message.content.to_string()
                 });
 
-                messages.push(gpt::Message {
-                    role: gpt::Role::assistant,
+                messages.push(llm::Message {
+                    role: llm::Role::assistant,
                     content: msg.content.to_string()
                 });
 
@@ -218,7 +218,7 @@ impl EventHandler for Handler {
                 }
 
 
-                let response = gpt::generate_to_string("gpt-4o-mini",messages).await.unwrap();
+                let response = llm::generate_to_string(None,messages).await.unwrap();
 
 
                 if let Err(why) = &msg.reply(&ctx.http, response.to_string()).await {

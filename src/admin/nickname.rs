@@ -13,7 +13,7 @@ pub async fn set_nick(ctx: Context<'_>, mut user: Member, nickname: String) -> R
         .permissions(&ctx)?;
 
     if perms.manage_nicknames() {
-        if !crate::gpt::filter_hate(&nickname).await? {
+        if !crate::llm::filter_hate(&nickname).await? {
             user.edit(ctx, EditMember::new().nickname(nickname)).await?;
 
             let author_id = &ctx.author().id;
