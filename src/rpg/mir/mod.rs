@@ -9,6 +9,7 @@ use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
 use poise::serenity_prelude::CreateSelectMenu;
 use poise::serenity_prelude::CreateSelectMenuOption;
+use poise::Command;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
@@ -1510,4 +1511,26 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
     msg.edit(ctx, reply).await?;
 
     return Ok(());
+}
+
+pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
+    return vec![
+        pull_stat(),
+        pull_stats(),
+        pull_spellsheet(),
+        get_mana(),
+        set_mana(),
+        mod_mana(),
+        add_mana(),
+        sub_mana(),
+        status(),
+        status_admin(),
+        characters(),
+        delete_character(),
+        select_character(),
+        create_character(),
+        set_spells(),
+        level_up(),
+        roll(),
+    ];
 }

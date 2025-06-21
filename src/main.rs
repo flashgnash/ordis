@@ -13,12 +13,10 @@ use dotenv::dotenv;
 
 use poise::async_trait;
 use poise::serenity_prelude::ButtonStyle;
-use poise::serenity_prelude::ComponentInteractionDataKind;
 use poise::serenity_prelude::CreateActionRow;
 use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateSelectMenuOption;
 use poise::serenity_prelude::CreateMessage;
-use poise::serenity_prelude::SelectMenuOption;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::EventHandler;
 use poise::serenity_prelude::Ready;
@@ -46,12 +44,6 @@ mod db;
 mod auto_threads;
 
 mod voice;
-use voice::join_vc;
-use voice::music::play_music;
-use voice::music::stop_music;
-use voice::music::pause_music;
-use voice::music::resume_music;
-use voice::music::skip_song;
 
 use songbird::SerenityInit;
 
@@ -479,25 +471,25 @@ async fn main() {
             commands: vec![
                 ping(), button_test(),
                 calc(), 
-
-
-                pull_stat(), pull_stats(), pull_spellsheet(),
-                get_mana(), set_mana(), mod_mana(), add_mana(), sub_mana(),
-                status(),status_admin(),
-                characters(), delete_character(),
-                select_character(), create_character(), set_spells(),
-                
-                level_up(), roll(),
-
-                set_colour(), set_nick()
             ].into_iter()
+
             .chain(llm::commands::commands())
             .chain(llm::translator::commands())            
+
             .chain(voice::music::commands())
             .chain(voice::commands())
+
+            .chain(admin::commands())
+
+            .chain(rpg::mir::commands())
+                
             .collect::<Vec<_>>(),
 
             ..Default::default()
+            // TODO make this configurable via environment variables
+            // IE have a list of module names to import, and a dictionary in main it matches them against
+            // This way I can disable the RPG commands in Ordis and the admin commands in Sentient Bob
+            // while sharing the same codebase
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
