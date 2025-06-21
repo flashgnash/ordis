@@ -49,6 +49,9 @@ pub mod event_handlers;
 use event_handlers::RollEvent;
 use event_handlers::RollEventParams;
 
+use event_handlers::ChangeCharacterEvent;
+use event_handlers::ChangeCharacterEventParams;
+
 use event_handlers::UpdateStatusEvent;
 use event_handlers::UpdateStatusEventParams;
 
@@ -57,6 +60,7 @@ use event_handlers::ChangeManaEventParams;
 
 pub fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
     event_system.register_handler(RollEvent);
+    event_system.register_handler(ChangeCharacterEvent);
     event_system.register_handler(UpdateStatusEvent);
     event_system.register_handler(ChangeManaEvent);
 }
@@ -400,6 +404,17 @@ fn roll_option(text: &str, dice_string: &str, character_id: i32) -> CreateSelect
     .expect("How fail")
 }
 
+fn select_character_option(text: &str, user_id: u64, character_id: i32) -> CreateSelectMenuOption {
+    ChangeCharacterEvent::create_select_item(
+        text,
+        &ChangeCharacterEventParams {
+            user_id: user_id,
+            character_id: character_id,
+        },
+    )
+    .expect("How fail")
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Error> {
     let ephemeral = !permanent.unwrap_or(false);
@@ -419,31 +434,18 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
     for character in characters {
         let name = character.name.unwrap_or("Test".to_string());
 
-        character_options.push(roll_option(&name, "test", 33));
+        character_options.push(select_character_option(
+            &name,
+            character
+                .user_id
+                .expect(
+                    "No user id for character should not be possible as it is fetched by user id",
+                )
+                .parse()
+                .unwrap(),
+            character.id.expect("Character should have id"),
+        ));
     }
-
-    let select_menu = CreateSelectMenu::new(
-        "testing_menu",
-        poise::serenity_prelude::CreateSelectMenuKind::String {
-            options: vec![
-                roll_option(
-                    "🎲 disadvantage",
-                    "min(1d100,1d100)",
-                    character.id.ok_or(RpgError::NoCharacterSheet)?,
-                ),
-                roll_option(
-                    "🎲 advantage",
-                    "max(1d100,1d100)",
-                    character.id.ok_or(RpgError::NoCharacterSheet)?,
-                ),
-                roll_option(
-                    "🎲",
-                    "1d100",
-                    character.id.ok_or(RpgError::NoCharacterSheet)?,
-                ),
-            ],
-        },
-    );
 
     let character_dropdown = CreateSelectMenu::new(
         "character_dropdown",
@@ -451,6 +453,29 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
             options: character_options,
         },
     );
+
+    // let select_menu = CreateSelectMenu::new(
+    //     "testing_menu",
+    //     poise::serenity_prelude::CreateSelectMenuKind::String {
+    //         options: vec![
+    //             roll_option(
+    //                 "🎲 disadvantage",
+    //                 "min(1d100,1d100)",
+    //                 character.id.ok_or(RpgError::NoCharacterSheet)?,
+    //             ),
+    //             roll_option(
+    //                 "🎲 advantage",
+    //                 "max(1d100,1d100)",
+    //                 character.id.ok_or(RpgError::NoCharacterSheet)?,
+    //             ),
+    //             roll_option(
+    //                 "🎲",
+    //                 "1d100",
+    //                 character.id.ok_or(RpgError::NoCharacterSheet)?,
+    //             ),
+    //         ],
+    //     },
+    // );
 
     let mut rows = vec![
         // CreateActionRow::SelectMenu(select_menu),

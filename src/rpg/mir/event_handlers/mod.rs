@@ -3,6 +3,11 @@ pub mod roll_event;
 pub use roll_event::RollEvent;
 pub use roll_event::RollEventParams;
 
+pub mod change_character_event;
+
+pub use change_character_event::ChangeCharacterEvent;
+pub use change_character_event::ChangeCharacterEventParams;
+
 pub mod update_status_event;
 
 pub use update_status_event::UpdateStatusEvent;
