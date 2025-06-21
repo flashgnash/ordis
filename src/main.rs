@@ -75,7 +75,7 @@ use rpg::mir::status_admin;
 
 use rpg::mir::level_up;
 use rpg::mir::create_character;
-use rpg::mir::get_characters;
+use rpg::mir::characters;
 use rpg::mir::roll;
 use rpg::mir::delete_character;
 use rpg::mir::select_character;
@@ -489,7 +489,7 @@ async fn main() {
                 pull_stat(), pull_stats(), pull_spellsheet(),
                 get_mana(), set_mana(), mod_mana(), add_mana(), sub_mana(),
                 status(),status_admin(),
-                get_characters(), delete_character(),
+                characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 
                 level_up(), roll(),

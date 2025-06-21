@@ -73,7 +73,7 @@ impl fmt::Display for RpgError {
                 write!(f, "Character sheet is missing - Was it deleted?")
             }
             RpgError::NoCharacterSelected => write!(f, 
-                "No character selected (please select one with /get_characters and /select_character (id))"
+                "No character selected (please select one with /characters and /select_character (id))"
             ),
             RpgError::NoSpellSheet => write!(f, "Spell sheet is missing - please set one with the Set Spell Message button"),
             RpgError::SpellNotFound => write!(f, "Spell not found"),
