@@ -1,3 +1,6 @@
+pub mod commands;
+pub mod ordis;
+
 use crate::common::Error as Error;
 use crate::common::Context;
 use reqwest;
@@ -18,12 +21,8 @@ use lazy_static::lazy_static;
 #[derive(Debug)]
 pub enum LLMError {
     NoGuildId,
-
     NoProviderConfig,
     NoProviderConfigForModel
-
-
-    
 }
 
 impl fmt::Display for LLMError {
@@ -361,32 +360,6 @@ Do not respond with anything else under any circumstances";
 
 }
 
-pub async fn generate_ordis(message: &str, model: Option<&str>) -> Result<OpenAIResponse,Error> {
-    let now = Utc::now();
-
-    let messages = vec![            
-            Message {
-                role: Role::system,
-                content: format!(
-                    "You know the following information: The current time in UTC is {}. You are a discord bot. You have an ancestor called Johnny 5 who was the greatest discord bot of its time",
-                    now.format("%Y-%m-%d %H:%M:%S"))
-            },
-
-            Message {
-                role: Role::system,
-                content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
-            },
-
-            Message {
-                role: Role::user,
-                content:message.to_string(),
-            }
-        ];
-
-
-    return generate(model,messages).await;
-
-}
 pub async fn generate_translator(message: &str, lang1: &str, lang2:&str,model: Option<&str>) -> Result<OpenAIResponse,Error> {
 
     let now = Utc::now();
@@ -455,49 +428,6 @@ pub async fn translate_context(
 
 
 
-#[poise::command(slash_command, prefix_command)]
-pub async fn translate(ctx: Context<'_>, message:String) -> Result<(),Error> {
-
-    translate_internal(ctx,message).await?;
-
-    return Ok(());
-}
 
 
- 
-#[poise::command(slash_command, prefix_command)]
-pub async fn draw(ctx: Context<'_>, message:String) -> Result<(),Error> {
-
-    let msg = ctx.say("*Thinking, please wait...*").await?;
-
-    let response_message = generate_image(&message).await?;
-
-
-    println!("Generated image URL: {}",response_message);
-
-    let reply = CreateReply::default().content(response_message);
-
-    msg.edit(ctx, reply).await?;
-
-    return Ok(());
-}
- 
-
-#[poise::command(slash_command, prefix_command)]
-pub async fn ask(ctx: Context<'_>, message:String) -> Result<(),Error> {
-
-    let msg = ctx.say("*Thinking, please wait...*").await?;
-
-    let response = generate_ordis(&message,None).await?;
-
-    let response_message = &response.choices[0].message.content;
-
-    println!("{}",response_message);
-
-    let reply = CreateReply::default().content(response_message);
-
-    msg.edit(ctx, reply).await?;
-
-    return Ok(());
-}
  
