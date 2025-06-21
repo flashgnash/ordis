@@ -1,5 +1,6 @@
 
 
+use std::any::type_name;
 
 use common::ButtonEventSystem;
 use common::ButtonParams;
@@ -40,8 +41,6 @@ mod dice;
 
 mod db;
 
-mod auto_threads;
-
 mod voice;
 use voice::join_vc;
 use voice::music::play_music;
@@ -79,7 +78,10 @@ use rpg::mir::delete_character;
 use rpg::mir::select_character;
 
 
+use rpg::mir::cast_spell;
 use rpg::mir::set_spells;
+use rpg::mir::list_spells;
+use rpg::mir::end_turn;
 
 mod gpt;
 use gpt::ask;
@@ -385,6 +387,7 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
     let user_id = author.id.get();
+    let user_name = &author.name;
 
     let mut user = db::users::get_or_create(db_connection, user_id).unwrap();
 
@@ -457,8 +460,7 @@ async fn main() {
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 
-                level_up(), roll(),
-
+                cast_spell(), list_spells(), level_up(), roll(), end_turn(),
 
                 join_vc(),
                 play_music(),stop_music(),pause_music(),resume_music(),skip_song(),
@@ -480,7 +482,6 @@ async fn main() {
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .event_handler(Handler)
-        .event_handler(crate::auto_threads::Handler)
         .register_songbird()        
         .await;
     println!("Starting framework...");

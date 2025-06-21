@@ -15,13 +15,8 @@ use crate::common::HTTP_CLIENT;
 
 #[derive(Serialize, Deserialize)]
 pub enum Role {
-    #[allow(non_camel_case_types)]
     user,
-
-    #[allow(non_camel_case_types)]
     assistant,
-
-    #[allow(non_camel_case_types)]
     system
 }
 
@@ -245,8 +240,7 @@ fn string_to_bool(value: &str) -> Option<bool> {
     }
 }
 
-//This may be useful if models get expensive again
-#[allow(dead_code)]
+
 pub async fn model_selector(message:&str) -> Result<bool,Error> {
     let prompt = "
 You are a programming filter.
@@ -289,7 +283,7 @@ Do not respond with anything else under any circumstances";
 pub async fn generate_ordis(message: &str) -> Result<OpenAIResponse,Error> {
 
     // let use_gpt_4 = model_selector(message).await?;
-    let model = "gpt-4o-mini";
+    let mut model = "gpt-4o-mini";
 
     // if use_gpt_4 {
     //     model = "gpt-4";

@@ -14,6 +14,7 @@ use crate::common::sum_array;
 
 use meval::eval_str;
 
+extern crate regex;
 use regex::Regex;
 use std::fmt;
 
@@ -131,12 +132,6 @@ pub async fn roll_internal(dice: &String) -> Result<(String, f64, Vec<RollStatis
         statistics.push(statistic);
     }
 
-    return rolls;
-}
-
-pub async fn roll_internal(dice: &String) -> Result<(String, f64), Error> {
-    let (replaced, messages) = roll_replace(dice)?;
-
     let calc_result = eval_str(&replaced)?;
 
     let message = format!("{dice} {message}\n\n Result: __{calc_result}__");
@@ -151,28 +146,18 @@ pub async fn output_roll_message(
     roll: (String, f64),
     username: String,
 ) -> Result<(), Error> {
-    let colour = crate::common::get_author_colour(ctx).await?;
+    let (message, calc_result) = roll;
 
-    let embed = generate_roll_embed(roll, username, colour).await?;
+    let col = crate::common::get_author_colour(ctx).await?;
+
+    let embed = CreateEmbed::default()
+        .title(format!("Rolling for {username}..."))
+        .colour(col)
+        .description(format!("\n​\n{message}"));
 
     ctx.send(CreateReply::default().embed(embed)).await?;
 
     Ok(())
-}
-
-pub async fn generate_roll_embed(
-    roll: (String, f64),
-    username: String,
-    colour: Colour,
-) -> Result<CreateEmbed, Error> {
-    let (message, _) = roll;
-
-    let embed = CreateEmbed::default()
-        .title(format!("Rolling for {username}..."))
-        .colour(colour)
-        .description(format!("\n​\n{message}"));
-
-    Ok(embed)
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -186,7 +171,11 @@ pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
         statistic.user_name = Some(ctx.author().name.to_string());
     }
 
-    crate::common::log_if_failed_async(crate::elastic::post_to_elastic("ordis", &statistics)).await;
+    crate::common::log_if_failed_async(crate::elastic::post_to_elastic(
+        "ordis",
+        &statistics,
+    ))
+    .await;
 
     output_roll_message(
         ctx,

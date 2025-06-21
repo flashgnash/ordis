@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::common::Context;
 use crate::common::Error;
 
 use crate::db::models::Character;
