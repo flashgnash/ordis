@@ -52,6 +52,7 @@ use voice::music::skip_song;
 use songbird::SerenityInit;
 
 mod elastic;
+use elasticsearch::{auth::Credentials, Elasticsearch, http::transport::Transport};
 
 mod rpg;
 
@@ -89,8 +90,6 @@ use gpt::translate_context;
 use gpt::draw;
 use rand::prelude::*;
 use lazy_static::lazy_static;
-
-
 
 pub struct Handler;
 
@@ -446,8 +445,6 @@ async fn main() {
     //             println!("Event received with param: {}", val);
     //         }
     //     });
-
-
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {

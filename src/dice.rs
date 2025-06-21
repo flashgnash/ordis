@@ -40,6 +40,7 @@ pub struct RollStatistic {
     pub string: String,
     pub user_id: Option<u64>,
     pub user_name: Option<String>,
+    pub timestamp: Option<String>,
 }
 
 pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>, RollStatistic), DiceError> {
@@ -82,6 +83,7 @@ pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>, RollStatistic
         string: instance.to_string(),
         user_id: None,
         user_name: None,
+        timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH),
     };
 
     Ok((sum, dice_rolls, statistic))
@@ -170,7 +172,7 @@ pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
     }
 
     crate::common::log_if_failed_async(crate::elastic::post_to_elastic(
-        "roll_statistics",
+        "ordis",
         &statistics,
     ))
     .await;
