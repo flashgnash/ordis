@@ -1,3 +1,14 @@
+use poise::{Command, CreateReply};
+
+use crate::{
+    common::{Context, Error},
+    llm::{generate_agent, generate_image, OpenAIResponse, Personality},
+};
+
+pub async fn generate_ordis(message: &str, model: Option<&str>) -> Result<OpenAIResponse, Error> {
+    Ok(generate_agent(message, model, Personality::Ordis.get()).await?)
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn ask(ctx: Context<'_>, message: String) -> Result<(), Error> {
     let msg = ctx.say("*Thinking, please wait...*").await?;
@@ -30,9 +41,6 @@ pub async fn draw(ctx: Context<'_>, message: String) -> Result<(), Error> {
     return Ok(());
 }
 
-#[poise::command(slash_command, prefix_command)]
-pub async fn translate(ctx: Context<'_>, message: String) -> Result<(), Error> {
-    translate_internal(ctx, message).await?;
-
-    return Ok(());
+pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
+    return vec![draw(), ask()];
 }

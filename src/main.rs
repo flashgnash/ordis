@@ -84,10 +84,6 @@ use rpg::mir::select_character;
 use rpg::mir::set_spells;
 
 mod llm;
-use llm::ask;
-use llm::translate;
-use llm::translate_context;
-use llm::draw;
 use rand::prelude::*;
 use lazy_static::lazy_static;
 
@@ -484,7 +480,6 @@ async fn main() {
                 ping(), button_test(),
                 calc(), 
 
-                ask(), draw(), translate(),translate_context(),
 
                 pull_stat(), pull_stats(), pull_spellsheet(),
                 get_mana(), set_mana(), mod_mana(), add_mana(), sub_mana(),
@@ -500,7 +495,11 @@ async fn main() {
 
 
                 set_colour(), set_nick()
-            ],
+            ].into_iter()
+            .chain(llm::commands::commands())
+            .chain(llm::translator::commands())            
+
+            .collect::<Vec<_>>(),
 
             ..Default::default()
         })
