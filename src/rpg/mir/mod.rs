@@ -416,21 +416,31 @@ fn select_character_option(text: &str, user_id: u64, character_id: i32) -> Creat
     .expect("How fail")
 }
 
-pub fn advantage_roll_buttons(character_id: i32) -> CreateActionRow {
+pub fn advantage_roll_buttons(base_dice_string: &str, character_id: i32) -> CreateActionRow {
+    println!("{base_dice_string}");
+
     CreateActionRow::Buttons(vec![
-        roll_button("🎲 disadvantage", "min(1d100,1d100)", character_id),
-        roll_button("🎲", "1d100", character_id),
-        roll_button("🎲 advantage", "max(1d100,1d100)", character_id),
+        roll_button(
+            "🎲 disadvantage",
+            &format!("min({base_dice_string},{base_dice_string})"),
+            character_id,
+        ),
+        roll_button("🎲", &format!("{base_dice_string}"), character_id),
+        roll_button(
+            "🎲 advantage",
+            &format!("max({base_dice_string},{base_dice_string})"),
+            character_id,
+        ),
     ])
 }
 
-pub fn stat_roll_buttons(character_id: i32) -> CreateActionRow {
+pub fn stat_roll_buttons(base_dice_string: &str, character_id: i32) -> CreateActionRow {
     CreateActionRow::Buttons(vec![
-        roll_button("💪", "1d100+str", character_id),
-        roll_button("🐇", "1d100+agl", character_id),
-        roll_button("🛡️", "1d100+con", character_id),
-        roll_button("🧠", "1d100+kno", character_id),
-        roll_button("💬", "1d100+cha", character_id),
+        roll_button("💪", &format!("{base_dice_string}+str"), character_id),
+        roll_button("🐇", &format!("{base_dice_string}+agl"), character_id),
+        roll_button("🛡️", &format!("{base_dice_string}+con"), character_id),
+        roll_button("🧠", &format!("{base_dice_string}+kno"), character_id),
+        roll_button("💬", &format!("{base_dice_string}+cha"), character_id),
     ])
 }
 
@@ -483,10 +493,13 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
 
     let character_id = character.id.ok_or(RpgError::NoCharacterSheet)?;
 
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+
+    let default_roll = &stat_block.default_roll.unwrap_or("1d100".to_string());
     let mut rows = vec![
         // CreateActionRow::SelectMenu(select_menu),
-        advantage_roll_buttons(character_id),
-        stat_roll_buttons(character_id),
+        advantage_roll_buttons(default_roll, character_id),
+        stat_roll_buttons(default_roll, character_id),
         character_select_dropdown(db_connection, ctx.author().id.get()).await?,
     ];
 
@@ -978,10 +991,16 @@ pub async fn roll_with_char_sheet(
 ) -> Result<(String, f64), Error> {
     let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx, &character).await;
 
-    //TODO make this default configurable per server
-    let mut dice = dice_expression
-        .unwrap_or("1d100".to_string())
-        .to_lowercase();
+    let mut dice = stat_block_result
+        .as_ref()
+        .ok()
+        .and_then(|x| x.default_roll.as_ref())
+        .cloned()
+        .unwrap_or_else(|| "1d100".to_string());
+
+    if let Some(roll_expression) = dice_expression {
+        dice = roll_expression;
+    }
 
     //Replace d100 with 1d100, d6 with 1d6 etc
 

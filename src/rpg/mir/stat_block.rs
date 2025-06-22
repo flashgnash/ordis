@@ -25,6 +25,7 @@ pub struct StatBlock {
     pub max_soul: Option<i64>,
 
     pub hunger: Option<i64>,
+    pub default_roll: Option<String>,
 }
 
 impl fmt::Display for StatBlock {
@@ -64,6 +65,8 @@ impl CharacterSheetable for StatBlock {
             soul: None,
 
             hunger: None,
+
+            default_roll: None,
         };
     }
 
@@ -99,6 +102,9 @@ impl CharacterSheetable for StatBlock {
 
         self.hunger = deserialized_message.get("hunger").and_then(|v| v.as_i64());
 
+        self.default_roll = deserialized_message
+            .get("default_roll")
+            .and_then(|v| v.as_str().and_then(|d| Some(d.to_string())));
         Ok(())
     }
 
@@ -161,6 +167,8 @@ impl CharacterSheetable for StatBlock {
             "name": (string),
             "level": (number),
             "hunger": (number),
+
+            "default_roll": (string)
    
             "actions": (number),
             "reactions": (number),
