@@ -74,23 +74,26 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
 
     let placeholder_msg = ctx.send(placeholder).await?;
 
-    let spell_block_result: SpellSheet = super::get_sheet_of_sender(&ctx).await?;
+    if let Some(spell_block_result) = super::get_sheet_of_sender(&ctx).await? as Option<SpellSheet>
+    {
+        let spell_block: Value = serde_json::from_str(
+            &spell_block_result
+                .sheet_info
+                .jsonified_message
+                .expect("SpellBlock should always have json generated on construction"),
+        )?;
 
-    let spell_block: Value = serde_json::from_str(
-        &spell_block_result
-            .sheet_info
-            .jsonified_message
-            .expect("SpellBlock should always have json generated on construction"),
-    )?;
-
-    placeholder_msg
-        .edit(
-            ctx,
-            CreateReply::default()
-                .content(spell_block.to_string())
-                .ephemeral(true),
-        )
-        .await?;
+        placeholder_msg
+            .edit(
+                ctx,
+                CreateReply::default()
+                    .content(spell_block.to_string())
+                    .ephemeral(true),
+            )
+            .await?;
+    } else {
+        return Err(Box::new(RpgError::NoSpellSheet));
+    }
 
     Ok(())
 }
@@ -489,11 +492,15 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
     let placeholder_message = ctx.send(placeholder).await?;
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection)
+        .await?
+        .ok_or(RpgError::NoCharacterSelected)?;
 
     let character_id = character.id.ok_or(RpgError::NoCharacterSheet)?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let default_roll = &stat_block.default_roll.unwrap_or("1d100".to_string());
     let mut rows = vec![
@@ -538,9 +545,14 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
     let placeholder_message = ctx.send(placeholder).await?;
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
+
     let mana_message_content = get_mana_bar_message(&stat_block, &character, None);
 
     placeholder_message
@@ -554,7 +566,9 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let old_mana = character.mana.unwrap_or(0);
 
@@ -566,7 +580,10 @@ pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
+
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, None);
 
     let placeholder = CreateReply::default()
@@ -624,7 +641,9 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let old_mana = character.mana.unwrap_or(0);
 
@@ -638,7 +657,9 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, None);
 
     placeholder_message
@@ -656,7 +677,9 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let old_mana = character.mana.unwrap_or(0);
 
@@ -674,7 +697,10 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
+
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, None);
 
     placeholder_message
@@ -700,7 +726,9 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
 
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let old_mana = character.mana.unwrap_or(0);
 
@@ -716,7 +744,10 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
     ))
     .await?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
+
     let mana_message_content = get_mana_bar_message(&stat_block, &modified_character, None);
 
     placeholder_message
@@ -739,14 +770,19 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
     let placeholder_message = ctx.send(placeholder).await?;
 
     let db_connection = &mut db::establish_connection();
-    let character = get_user_character(&ctx, db_connection).await?;
+    let character = get_user_character(&ctx, db_connection)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let active_spells_map = ACTIVE_SPELLS.lock().await;
 
     if let Some(active_spells) =
         active_spells_map.get(&character.id.expect("Character ID should never be null"))
     {
-        let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+        let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+            .await?
+            .ok_or(RpgError::NoCharacterSheet)?;
+
         let max_mana = stat_block.energy_pool;
 
         for spell in active_spells.into_iter() {
@@ -806,8 +842,13 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
     let placeholder = CreateReply::default().content("*Thinking, please wait...*");
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
-    let spell_sheet: SpellSheet = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
+
+    let spell_sheet: SpellSheet = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let max_mana = stat_block.energy_pool;
 
@@ -835,7 +876,9 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
 
         let db_connection = &mut db::establish_connection();
 
-        let character = get_user_character(&ctx, db_connection).await?;
+        let character = get_user_character(&ctx, db_connection)
+            .await?
+            .ok_or(RpgError::NoCharacterSheet)?;
 
         let mana = character
             .mana
@@ -964,7 +1007,9 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let spell_sheet: SpellSheet = super::get_sheet_of_sender(&ctx).await?;
+    let spell_sheet: SpellSheet = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let spells = spell_sheet.spells.ok_or(RpgError::NoSpellSheet)?;
 
@@ -1061,20 +1106,25 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection).await?;
+    let mut nick = format!("{}\n(no character)", author.name.to_string());
 
-    let result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, &character).await?;
+    let result: (String, f64);
 
-    let mut nick = author.name.to_string();
+    if let Some(character) = get_user_character(&ctx, db_connection).await? {
+        result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, &character).await?;
 
-    if let Some(char_name) = &character.name {
-        nick = char_name.to_string();
-    } else if let Some(guild_id) = ctx.guild_id() {
-        let author_nick = author.nick_in(ctx, guild_id).await;
+        if let Some(char_name) = &character.name {
+            nick = char_name.to_string();
+        } else if let Some(guild_id) = ctx.guild_id() {
+            let author_nick = author.nick_in(ctx, guild_id).await;
 
-        if let Some(author_nick) = author_nick {
-            nick = author_nick;
+            if let Some(author_nick) = author_nick {
+                nick = author_nick;
+            }
         }
+    } else {
+        result =
+            crate::dice::roll_internal(&dice_expression.unwrap_or("1d100".to_string())).await?;
     }
 
     dice::output_roll_message(ctx, result, nick).await?;
@@ -1418,7 +1468,9 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
 
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let stats: Value = serde_json::from_str(
         &stat_block
@@ -1489,7 +1541,9 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
 
     let msg = ctx.send(thinking_message).await?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let reply = CreateReply::default().content(
         stat_block
@@ -1515,7 +1569,9 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
 
     // let stat_message = fetch_message_poise(&ctx, channel_id, message_id).await?;
 
-    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx).await?;
+    let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
+        .await?
+        .ok_or(RpgError::NoCharacterSheet)?;
 
     let stats: Value = serde_json::from_str(
         &stat_block

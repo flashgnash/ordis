@@ -291,14 +291,15 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 pub async fn get_user_character(
     ctx: &Context<'_>,
     db_connection: &mut SqliteConnection,
-) -> Result<db::models::Character, Error> {
+) -> Result<Option<db::models::Character>, Error> {
     let user = crate::common::get_user(ctx, db_connection).await?;
 
     if let Some(character_id) = user.selected_character {
-        return Ok(db::characters::get(db_connection, character_id)?);
+        return Ok(Some(db::characters::get(db_connection, character_id)?));
     }
 
-    Err(Box::new(RpgError::NoCharacterSelected))
+    Ok(None)
+
 }
 
 lazy_static! {
@@ -308,15 +309,20 @@ lazy_static! {
 
 
 
-pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Result<T,Error> {
+pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Result<Option<T>,Error> {
 
     let db_connection = &mut db::establish_connection();
-    let sheet = get_sheet(
-      ctx.serenity_context(),
-      &get_user_character(ctx,db_connection).await?
-    ).await?; 
 
-    return Ok(sheet)
+    if let Some(character) =  &get_user_character(ctx,db_connection).await? {
+        
+        let sheet = get_sheet(
+          ctx.serenity_context(),
+          character
+        ).await?; 
+
+        return Ok(Some(sheet))
+    }
+    Ok(None)
 }
 pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_prelude::Context,character: &Character) -> Result<T, Error> {
 
