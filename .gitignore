@@ -6,5 +6,3 @@
 .direnv
 .direnv/*
 result
-
-*.log
