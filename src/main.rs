@@ -1,6 +1,5 @@
 
 
-use std::any::type_name;
 
 use common::ButtonEventSystem;
 use common::ButtonParams;
@@ -28,6 +27,8 @@ use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
 
+
+
 mod common;
 use crate::common::Context;
 use crate::common::Data;
@@ -39,6 +40,8 @@ mod dice;
 
 mod db;
 
+mod auto_threads;
+
 mod voice;
 use voice::join_vc;
 use voice::music::play_music;
@@ -49,7 +52,7 @@ use voice::music::skip_song;
 
 use songbird::SerenityInit;
 
-mod elastic;
+
 
 mod rpg;
 
@@ -75,10 +78,7 @@ use rpg::mir::delete_character;
 use rpg::mir::select_character;
 
 
-use rpg::mir::cast_spell;
 use rpg::mir::set_spells;
-use rpg::mir::list_spells;
-use rpg::mir::end_turn;
 
 mod gpt;
 use gpt::ask;
@@ -87,6 +87,8 @@ use gpt::translate_context;
 use gpt::draw;
 use rand::prelude::*;
 use lazy_static::lazy_static;
+
+
 
 pub struct Handler;
 
@@ -384,7 +386,6 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
     let user_id = author.id.get();
-    let user_name = &author.name;
 
     let mut user = db::users::get_or_create(db_connection, user_id).unwrap();
 
@@ -443,6 +444,8 @@ async fn main() {
     //         }
     //     });
 
+
+
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
@@ -457,7 +460,8 @@ async fn main() {
                 get_characters(), delete_character(),
                 select_character(), create_character(), set_spells(),
                 
-                cast_spell(), list_spells(), level_up(), roll(), end_turn(),
+                level_up(), roll(),
+
 
                 join_vc(),
                 play_music(),stop_music(),pause_music(),resume_music(),skip_song(),
@@ -479,6 +483,7 @@ async fn main() {
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .event_handler(Handler)
+        .event_handler(crate::auto_threads::Handler)
         .register_songbird()        
         .await;
     println!("Starting framework...");

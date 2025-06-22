@@ -199,15 +199,6 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
         Ok(instance)
     }
 
-    async fn from_character(ctx: &poise::serenity_prelude::Context, character: &Character) -> Result<Self, Error> {
-        let message = Self::get_sheet_message(ctx, &character).await?;
-        let mut sheet = Self::from_message(ctx, message.channel_id, message.id).await?;
-
-        let sheet_info = sheet.mut_sheet_info();
-        sheet_info.character = Some(character.clone());
-
-        return Ok(sheet);
-    }
 
     async fn message_changed(
         ctx: &poise::serenity_prelude::Context,
@@ -263,7 +254,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
     ) -> Result<Self, Error> {
 
 
-        let (previous_hash, previous_block) = Self::get_previous_block(character);
+        let (_previous_hash, previous_block) = Self::get_previous_block(character);
 
         let mut sheet: Self;
 
