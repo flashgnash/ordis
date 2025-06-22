@@ -1,5 +1,6 @@
 use crate::common::HTTP_CLIENT;
 
+use poise::Command;
 use songbird::input::Compose;
 use songbird::input::YoutubeDl;
 
@@ -92,4 +93,14 @@ pub async fn stop_music(ctx: Context<'_>) -> Result<(), Error> {
     ctx.reply("Stopped music").await?;
 
     Ok(())
+}
+
+pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
+    return vec![
+        play_music(),
+        stop_music(),
+        pause_music(),
+        resume_music(),
+        skip_song(),
+    ];
 }
