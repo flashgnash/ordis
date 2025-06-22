@@ -10,6 +10,7 @@ use crate::common::Error;
 use crate::create_button_with_callback;
 use crate::create_select_option_with_callback;
 use crate::db;
+use crate::rpg::mir::stat_block::StatBlock;
 
 use super::super::RpgError;
 
@@ -90,10 +91,20 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
 
                         let char_id_i32 = char_id.as_i64().expect("Wrong char id") as i32;
 
+                        let db_connection = &mut db::establish_connection();
+                        let char = db::characters::get(db_connection, char_id_i32)
+                            .expect("Character should exist when switching");
+
+                        let stat_block: StatBlock = crate::rpg::get_sheet(&ctx, &char)
+                            .await
+                            .expect("No stat block?");
+
+                        let default_roll = &stat_block.default_roll.unwrap_or("1d100".to_string());
+
                         let rows = vec![
                             // CreateActionRow::SelectMenu(select_menu),
-                            super::super::advantage_roll_buttons(char_id_i32),
-                            super::super::stat_roll_buttons(char_id_i32),
+                            super::super::advantage_roll_buttons(default_roll, char_id_i32),
+                            super::super::stat_roll_buttons(default_roll, char_id_i32),
                             super::super::character_select_dropdown(
                                 db_connection,
                                 user_id.parse().unwrap(),
