@@ -1,130 +1,39 @@
-
-
-
 use common::ButtonEventSystem;
-use common::ButtonParams;
 use meval::eval_str;
 
 mod admin;
-use admin::colour_picker::set_colour;
-use admin::nickname::set_nick;
 
 use dotenv::dotenv;
 
 use poise::async_trait;
-use poise::serenity_prelude::ButtonStyle;
-use poise::serenity_prelude::CreateActionRow;
-use poise::serenity_prelude::CreateButton;
-use poise::serenity_prelude::CreateMessage;
 use poise::serenity_prelude as serenity;
+use poise::serenity_prelude::ButtonStyle;
+use poise::serenity_prelude::CreateButton;
+use poise::serenity_prelude::CreateSelectMenuOption;
 use poise::serenity_prelude::EventHandler;
 use poise::serenity_prelude::Ready;
-use poise::CreateReply;
 
 use serde::Serialize;
-use serde_json::Value;
 use tokio::sync::Mutex;
-use tokio::sync::MutexGuard;
-
-
-
 
 mod common;
 use crate::common::Context;
 use crate::common::Data;
 use crate::common::Error;
-use crate::common::fetch_message;
-use crate::common::fetch_message_chain;
-mod dice;
-// use dice::roll;
-
-mod db;
 
 mod auto_threads;
-
+mod db;
+mod dice;
+mod llm;
+mod rpg;
 mod voice;
-use voice::join_vc;
-use voice::music::play_music;
-use voice::music::stop_music;
-use voice::music::pause_music;
-use voice::music::resume_music;
-use voice::music::skip_song;
 
 use songbird::SerenityInit;
 
-
-
-mod rpg;
-
-use rpg::mir::pull_stats;
-use rpg::mir::pull_stat;
-use rpg::mir::pull_spellsheet;
-
-use rpg::mir::get_mana;
-use rpg::mir::set_mana;
-use rpg::mir::mod_mana;
-use rpg::mir::add_mana;
-use rpg::mir::sub_mana;
-
-
-use rpg::mir::status;
-use rpg::mir::status_admin;
-
-use rpg::mir::level_up;
-use rpg::mir::create_character;
-use rpg::mir::get_characters;
-use rpg::mir::roll;
-use rpg::mir::delete_character;
-use rpg::mir::select_character;
-
-
-use rpg::mir::set_spells;
-
-mod gpt;
-use gpt::ask;
-use gpt::translate;
-use gpt::translate_context;
-use gpt::draw;
-use rand::prelude::*;
 use lazy_static::lazy_static;
-
-
+use rand::prelude::*;
 
 pub struct Handler;
-
-
-
-fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
-    event_system.register_handler(TestEvent);
-}
-
-
-
-// Example event
-pub struct TestEvent;
-
-#[derive(Serialize)]
-pub struct TestEventParams {
-    key: String,
-}
-
-impl TestEvent {
-    fn create_button(text: &str, params: &TestEventParams, button_style: ButtonStyle) -> Result<CreateButton,Error> {
-        return create_button_with_callback::<Self,TestEventParams>(text,params,button_style);
-    }
-}
-
-#[async_trait]
-impl common::EventHandlerTrait for TestEvent {
-    async fn run(&self,ctx: &poise::serenity_prelude::Context,interaction: &poise::serenity_prelude::ComponentInteraction,params: &ButtonParams) {
-        if let Some(Value::String(val)) = params.get("key") {
-            println!("Event received with param: {}", val);
-            interaction.channel_id.send_message(ctx,CreateMessage::default().content(format!("Event received with param: {} from user {}", val, interaction.user.name))).await.expect("AAA");
-        }
-    }
-}
-// Example event end
-
 
 lazy_static! {
     static ref EVENT_SYSTEM: Mutex<ButtonEventSystem> = {
@@ -136,8 +45,6 @@ lazy_static! {
     };
 }
 
-
-
 #[async_trait]
 impl EventHandler for Handler {
     async fn message(
@@ -145,86 +52,10 @@ impl EventHandler for Handler {
         ctx: poise::serenity_prelude::Context,
         msg: poise::serenity_prelude::Message,
     ) {
-
         if msg.author.bot {
             return;
         }
 
-        if let Some(ref message_reference) = msg.message_reference {
-            let message_ref = message_reference.message_id.unwrap();
-            let channel_ref = message_reference.channel_id;
-
-            let original_message = fetch_message(&ctx, channel_ref, message_ref).await.unwrap();
-
-            if ctx.cache.current_user().id == original_message.author.id {
-                println!("That's me!");
-
-
-                let mut messages = vec![            
-
-                        gpt::Message {
-                            role: gpt::Role::system,
-                            content: "You are Ordis, the helpful AI assistant from the game Warframe. You should take on Ordis's personality when responding to prompts, while still being helpful and accurate".to_string()
-
-                        },
-                        // gpt::Message {
-                        //     role: gpt::Role::assistant,
-                        //     content: original_message.content.to_string()
-
-                        // },
-
-                        // gpt::Message {
-                        //     role: gpt::Role::user,
-                        //     content:msg.content.to_string(),
-
-                        // }
-                    ];
-
-
-                let mut message_chain = fetch_message_chain(&ctx, channel_ref, message_ref).await.unwrap();//("Fetch message chain failed");
-                message_chain.reverse();
-
-                for chain_message in message_chain {
-
-                    // println!("Message content: {}",chain_message.content);
-                    // Determine role based on whether the message author is the bot
-                    let role = if chain_message.author.id == ctx.cache.current_user().id  {
-                        gpt::Role::assistant
-                    } else {
-                        gpt::Role::user
-                    };
-
-                    messages.push(gpt::Message {
-                        role,
-                        content: chain_message.content.to_string(),
-                    });
-                }                   
-
-                messages.push(gpt::Message {
-                    role: gpt::Role::assistant,
-                    content: original_message.content.to_string()
-                });
-
-                messages.push(gpt::Message {
-                    role: gpt::Role::assistant,
-                    content: msg.content.to_string()
-                });
-
-                for message in &messages {
-                    println!("{}",message.content)
-                }
-
-
-                let response = gpt::generate_to_string("gpt-4o-mini",messages).await.unwrap();
-
-
-                if let Err(why) = &msg.reply(&ctx.http, response.to_string()).await {
-                    println!("Error sending message: {:?}", why);
-                }
-
-                return;
-            }
-        }
         if msg.content == "!ping" {
             if let Err(why) = msg.channel_id.say(&ctx.http, "Pong!").await {
                 println!("Error sending message: {:?}", why);
@@ -237,28 +68,35 @@ impl EventHandler for Handler {
         ctx: poise::serenity_prelude::Context,
         interaction: poise::serenity_prelude::Interaction,
     ) {
+        match interaction {
+            poise::serenity_prelude::Interaction::Component(component) => {
+                let event_system = EVENT_SYSTEM.lock().await;
 
-    match interaction {
-        poise::serenity_prelude::Interaction::Component(component) => {
+                component
+                    .create_response(&ctx, serenity::CreateInteractionResponse::Acknowledge)
+                    .await
+                    .expect("Huh");
 
-            let event_system = EVENT_SYSTEM.lock().await;
+                if let poise::serenity_prelude::ComponentInteractionDataKind::StringSelect {
+                    values,
+                } = &component.data.kind
+                {
+                    if let Some(selected) = values.get(0) {
+                        event_system.emit_event(&ctx, &component, selected).await;
+                        // Select menu event handler needs to use dropdown value not id
+                    }
+                } else {
+                    event_system
+                        .emit_event(&ctx, &component, &component.data.custom_id)
+                        .await;
+                }
 
-            
-            component.create_response(&ctx,
-                serenity::CreateInteractionResponse::Acknowledge
-            ).await.expect("Huh");
-
-            event_system.emit_event(&ctx,&component,&component.data.custom_id).await;    
-            
-
-           // component.channel_id.send_message(&ctx,CreateMessage::default().content(format!("Test "))).await.expect("Huh"); 
-
+                // component.channel_id.send_message(&ctx,CreateMessage::default().content(format!("Test "))).await.expect("Huh");
+            }
+            _ => {}
         }
-        _ => {}
     }
-        }
 
-    
     async fn ready(&self, _ctx: poise::serenity_prelude::Context, _ready: Ready) {
         println!("Bot is connected!");
     }
@@ -287,26 +125,42 @@ fn get_random(vec: &Vec<&str>) -> String {
     return vec[index].to_string();
 }
 
-
-
-
-
-
-
 #[derive(Serialize)]
 struct Callback<T>
 where
-T: Serialize
+    T: Serialize,
 {
     name: String,
-    params: T
+    params: T,
 }
 
-fn create_button_with_callback<T,P>(text:&str,callback_params: &P,button_style:ButtonStyle) -> Result<CreateButton,Error>
-where P: Serialize
- 
+fn create_button_with_callback<T, P>(
+    text: &str,
+    callback_params: &P,
+    button_style: ButtonStyle,
+) -> Result<CreateButton, Error>
+where
+    P: Serialize,
 {
+    let json = create_callback::<T, P>(callback_params)?;
+    Ok(CreateButton::new(json).label(text).style(button_style))
+}
 
+fn create_select_option_with_callback<T, P>(
+    text: &str,
+    callback_params: &P,
+) -> Result<CreateSelectMenuOption, Error>
+where
+    P: Serialize,
+{
+    let json = create_callback::<T, P>(callback_params)?;
+    Ok(CreateSelectMenuOption::new(text, json).label(text))
+}
+
+fn create_callback<T, P>(callback_params: &P) -> Result<String, Error>
+where
+    P: Serialize,
+{
     let callback_name = std::any::type_name::<T>()
         .split("::")
         .last()
@@ -316,51 +170,15 @@ where P: Serialize
 
     let callback_serializable = Callback {
         name: callback_name,
-        params: callback_params
+        params: callback_params,
     };
-
 
     let json = serde_json::to_string(&callback_serializable)?;
 
-    Ok(CreateButton::new(json).label(text).style(button_style))
-    
+    Ok(json)
+    // Ok(CreateButton::new(json).label(text).style(button_style))
 }
 
-
-#[poise::command(slash_command, prefix_command)]
-async fn button_test(ctx: Context<'_>) -> Result<(), Error> {
-    // Define buttons as variables
-
-    let rows = vec![
-        CreateActionRow::Buttons(vec![
-
-            TestEvent::create_button("Click me!",
-                &TestEventParams {
-                    key: "Hello world!".to_string()
-                },
-                ButtonStyle::Primary
-            )?,
-
-            TestEvent::create_button("Click me!",
-                &TestEventParams {
-                    key: "Testing world!".to_string()
-                },
-                
-                ButtonStyle::Primary
-            )?
-        ])
-    ];
-    
-    let msg = CreateReply::default()
-        .content("Hello")
-        .components(rows);
-
-    // Send message with action row
-    ctx.send( msg ).await?;
-
-    Ok(())
-
-}
 #[poise::command(slash_command, prefix_command)]
 async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     let quotes : Vec<&str> = vec![
@@ -389,11 +207,10 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
     let mut user = db::users::get_or_create(db_connection, user_id).unwrap();
 
-    let characters = db::characters::get_from_user_id(db_connection,user_id)?;
-
+    let characters = db::characters::get_from_user_id(db_connection, user_id)?;
 
     for character in characters {
-        println!("{}",character.name.expect("Character has no name"));
+        println!("{}", character.name.expect("Character has no name"));
     }
 
     user.count = Some(user.count.unwrap_or(0) + 1);
@@ -416,9 +233,8 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
 #[tokio::main]
 async fn main() {
-
     dotenv().ok();
-    
+
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let intents = serenity::GatewayIntents::non_privileged()
         | serenity::GatewayIntents::GUILD_MESSAGES
@@ -427,50 +243,37 @@ async fn main() {
         | serenity::GatewayIntents::MESSAGE_CONTENT
         | serenity::GatewayIntents::GUILD_PRESENCES;
 
-
     let mut event_system = EVENT_SYSTEM.lock().await;
 
-    register_events(&mut event_system);
     rpg::mir::register_events(&mut event_system);
 
     // crate::rpg::register_events(&mut event_system);
 
-    drop(event_system); 
+    drop(event_system);
 
-    // event_system.register_handler("test_event", 
+    // event_system.register_handler("test_event",
     //     |ctx: &poise::serenity_prelude::Context, params: &ButtonParams| {
     //         if let Some(Value::String(val)) = params.get("key") {
     //             println!("Event received with param: {}", val);
     //         }
     //     });
 
-
-
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![
-                ping(), button_test(),
-                calc(), 
+            commands: vec![ping(), calc()]
+                .into_iter()
+                .chain(llm::discord::commands())
+                .chain(llm::discord::translator::commands())
+                .chain(voice::music::commands())
+                .chain(voice::commands())
+                .chain(admin::commands())
+                .chain(rpg::mir::commands())
+                .collect::<Vec<_>>(),
 
-                ask(), draw(), translate(),translate_context(),
-
-                pull_stat(), pull_stats(), pull_spellsheet(),
-                get_mana(), set_mana(), mod_mana(), add_mana(), sub_mana(),
-                status(),status_admin(),
-                get_characters(), delete_character(),
-                select_character(), create_character(), set_spells(),
-                
-                level_up(), roll(),
-
-
-                join_vc(),
-                play_music(),stop_music(),pause_music(),resume_music(),skip_song(),
-
-
-                set_colour(), set_nick()
-            ],
-
-            ..Default::default()
+            ..Default::default() // TODO make this configurable via environment variables
+                                 // IE have a list of module names to import, and a dictionary in main it matches them against
+                                 // This way I can disable the RPG commands in Ordis and the admin commands in Sentient Bob
+                                 // while sharing the same codebase
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
@@ -484,7 +287,8 @@ async fn main() {
         .framework(framework)
         .event_handler(Handler)
         .event_handler(crate::auto_threads::Handler)
-        .register_songbird()        
+        .event_handler(crate::llm::discord::reply_handler::ReplyHandler)
+        .register_songbird()
         .await;
     println!("Starting framework...");
     client.unwrap().start().await.unwrap();

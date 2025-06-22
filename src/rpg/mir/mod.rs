@@ -7,6 +7,9 @@ use poise::serenity_prelude::CreateActionRow;
 use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
+use poise::serenity_prelude::CreateSelectMenu;
+use poise::serenity_prelude::CreateSelectMenuOption;
+use poise::Command;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
@@ -47,6 +50,9 @@ pub mod event_handlers;
 use event_handlers::RollEvent;
 use event_handlers::RollEventParams;
 
+use event_handlers::ChangeCharacterEvent;
+use event_handlers::ChangeCharacterEventParams;
+
 use event_handlers::UpdateStatusEvent;
 use event_handlers::UpdateStatusEventParams;
 
@@ -55,6 +61,7 @@ use event_handlers::ChangeManaEventParams;
 
 pub fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
     event_system.register_handler(RollEvent);
+    event_system.register_handler(ChangeCharacterEvent);
     event_system.register_handler(UpdateStatusEvent);
     event_system.register_handler(ChangeManaEvent);
 }
@@ -387,6 +394,81 @@ fn roll_button(text: &str, dice_string: &str, character_id: i32) -> CreateButton
     .expect("How fail")
 }
 
+fn roll_option(text: &str, dice_string: &str, character_id: i32) -> CreateSelectMenuOption {
+    RollEvent::create_select_item(
+        text,
+        &RollEventParams {
+            dice_string: dice_string.to_string(),
+            character_id: character_id,
+        },
+    )
+    .expect("How fail")
+}
+
+fn select_character_option(text: &str, user_id: u64, character_id: i32) -> CreateSelectMenuOption {
+    ChangeCharacterEvent::create_select_item(
+        text,
+        &ChangeCharacterEventParams {
+            user_id: user_id,
+            character_id: character_id,
+        },
+    )
+    .expect("How fail")
+}
+
+pub fn advantage_roll_buttons(character_id: i32) -> CreateActionRow {
+    CreateActionRow::Buttons(vec![
+        roll_button("🎲 disadvantage", "min(1d100,1d100)", character_id),
+        roll_button("🎲", "1d100", character_id),
+        roll_button("🎲 advantage", "max(1d100,1d100)", character_id),
+    ])
+}
+
+pub fn stat_roll_buttons(character_id: i32) -> CreateActionRow {
+    CreateActionRow::Buttons(vec![
+        roll_button("💪", "1d100+str", character_id),
+        roll_button("🐇", "1d100+agl", character_id),
+        roll_button("🛡️", "1d100+con", character_id),
+        roll_button("🧠", "1d100+kno", character_id),
+        roll_button("💬", "1d100+cha", character_id),
+    ])
+}
+
+pub async fn character_select_dropdown(
+    db_connection: &mut SqliteConnection,
+    user_id: u64,
+) -> Result<CreateActionRow, Error> {
+    let characters = db::characters::get_from_user_id(db_connection, user_id)?;
+
+    let mut character_options: Vec<CreateSelectMenuOption> = vec![];
+
+    for character in characters {
+        let name = character.name.unwrap_or("Test".to_string());
+
+        character_options.push(select_character_option(
+            &name,
+            character
+                .user_id
+                .expect(
+                    "No user id for character should not be possible as it is fetched by user id",
+                )
+                .parse()
+                .unwrap(),
+            character.id.expect("Character should have id"),
+        ));
+    }
+
+    let character_dropdown = CreateSelectMenu::new(
+        "character_dropdown",
+        poise::serenity_prelude::CreateSelectMenuKind::String {
+            options: character_options,
+        },
+    )
+    .placeholder("Select a character...");
+
+    Ok(CreateActionRow::SelectMenu(character_dropdown))
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Error> {
     let ephemeral = !permanent.unwrap_or(false);
@@ -399,53 +481,13 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    // embed.description("Test");
+    let character_id = character.id.ok_or(RpgError::NoCharacterSheet)?;
 
     let mut rows = vec![
-        CreateActionRow::Buttons(vec![
-            roll_button(
-                "🎲 disadvantage",
-                "min(1d100,1d100)",
-                character.id.ok_or(RpgError::NoCharacterSheet)?,
-            ),
-            roll_button(
-                "🎲",
-                "1d100",
-                character.id.ok_or(RpgError::NoCharacterSheet)?,
-            ),
-            roll_button(
-                "🎲 advantage",
-                "max(1d100,1d100)",
-                character.id.ok_or(RpgError::NoCharacterSheet)?,
-            ),
-        ]),
-        CreateActionRow::Buttons(vec![
-            roll_button(
-                "💪",
-                "1d100+str",
-                character.id.ok_or(RpgError::NoCharacterSheet)?,
-            ),
-            roll_button(
-                "🐇",
-                "1d100+agl",
-                character.id.ok_or(RpgError::NoCharacterSheet)?,
-            ),
-            roll_button(
-                "🛡️",
-                "1d100+con",
-                character.id.ok_or(RpgError::NoCharacterSheet)?,
-            ),
-            roll_button(
-                "🧠",
-                "1d100+kno",
-                character.id.ok_or(RpgError::NoCharacterSheet)?,
-            ),
-            roll_button(
-                "💬",
-                "1d100+cha",
-                character.id.ok_or(RpgError::NoCharacterSheet)?,
-            ),
-        ]),
+        // CreateActionRow::SelectMenu(select_menu),
+        advantage_roll_buttons(character_id),
+        stat_roll_buttons(character_id),
+        character_select_dropdown(db_connection, ctx.author().id.get()).await?,
     ];
 
     if !ephemeral {
@@ -932,7 +974,7 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn roll_with_char_sheet(
     ctx: &poise::serenity_prelude::Context,
     dice_expression: Option<String>,
-    character: Character,
+    character: &Character,
 ) -> Result<(String, f64), Error> {
     let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx, &character).await;
 
@@ -1002,11 +1044,13 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let character = get_user_character(&ctx, db_connection).await?;
 
-    let result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, character).await?;
+    let result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, &character).await?;
 
     let mut nick = author.name.to_string();
 
-    if let Some(guild_id) = ctx.guild_id() {
+    if let Some(char_name) = &character.name {
+        nick = char_name.to_string();
+    } else if let Some(guild_id) = ctx.guild_id() {
         let author_nick = author.nick_in(ctx, guild_id).await;
 
         if let Some(author_nick) = author_nick {
@@ -1251,7 +1295,7 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
                     placeholder.edit(
                         ctx,
                         CreateReply::default()
-                            .content("You don't have a character with that id. Please do /get_characters to list your character sheets.")
+                            .content("You don't have a character with that id. Please do /characters to list your character sheets.")
                             .ephemeral(true),
                     ).await?;
 
@@ -1301,7 +1345,7 @@ pub async fn set_spells(ctx: Context<'_>, msg: crate::serenity::Message) -> Resu
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn characters(ctx: Context<'_>) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
     let author = &ctx.author();
@@ -1320,16 +1364,22 @@ pub async fn get_characters(ctx: Context<'_>) -> Result<(), Error> {
             .unwrap_or("No channel ID".to_string());
 
         character_messages.push(format!(
-            "- {character_id}: {character_name} (in channel <#{channel_id}>)"
+            "- **{character_name}**\n-# <#{channel_id}> [#{character_id}]"
         ))
     }
 
-    let character_list_message = "Characters:\n".to_string() + &character_messages.join("\n");
+    let rows = vec![
+        // CreateActionRow::SelectMenu(select_menu),
+        character_select_dropdown(db_connection, ctx.author().id.get()).await?,
+    ];
+
+    let character_list_message = "Characters:\n".to_string() + &character_messages.join("\n\n");
 
     let reply = CreateReply::default()
         .content(format!(
-            "You have ({num_characters}) character(s): {character_list_message}"
+            "You have ({num_characters}) character(s): {character_list_message}\n\nChange character:"
         ))
+        .components(rows)
         .ephemeral(true);
 
     let _ = ctx.send(reply).await;
@@ -1461,4 +1511,26 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
     msg.edit(ctx, reply).await?;
 
     return Ok(());
+}
+
+pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
+    return vec![
+        pull_stat(),
+        pull_stats(),
+        pull_spellsheet(),
+        get_mana(),
+        set_mana(),
+        mod_mana(),
+        add_mana(),
+        sub_mana(),
+        status(),
+        status_admin(),
+        characters(),
+        delete_character(),
+        select_character(),
+        create_character(),
+        set_spells(),
+        level_up(),
+        roll(),
+    ];
 }

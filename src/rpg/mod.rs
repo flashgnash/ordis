@@ -23,9 +23,9 @@ use crate::common::Error;
 use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::MessageId;
 
-use crate::gpt::generate_to_string;
-use crate::gpt::Message;
-use crate::gpt::Role;
+use crate::llm::generate_to_string;
+use crate::llm::Message;
+use crate::llm::Role;
 
 use crate::db;
 
@@ -73,7 +73,7 @@ impl fmt::Display for RpgError {
                 write!(f, "Character sheet is missing - Was it deleted?")
             }
             RpgError::NoCharacterSelected => write!(f, 
-                "No character selected (please select one with /get_characters and /select_character (id))"
+                "No character selected (please select one with /characters and /select_character (id))"
             ),
             RpgError::NoSpellSheet => write!(f, "Spell sheet is missing - please set one with the Set Spell Message button"),
             RpgError::SpellNotFound => write!(f, "Spell not found"),
@@ -136,7 +136,6 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
         sheet_info.original_message = Some(message.to_string());
 
-        let model = "gpt-4o-mini";
 
         let preprompt = Self::PROMPT.to_string();
 
@@ -151,15 +150,17 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
             },
         ];
 
-        let response = generate_to_string(model, messages).await?;
+        let response = generate_to_string(None, messages).await?;
 
-        sheet_info.jsonified_message = Some(response);
+        let response_filtered = response.replace("```json","").replace("```","");
+
+        sheet_info.jsonified_message = Some(response_filtered);
 
         sheet_info.deserialized_message = Some(serde_json::from_str(
             &sheet_info
                 .jsonified_message
                 .clone()
-                .expect("This property was literally just set"),
+                .expect("This property was just set"),
         )?);
 
         instance.post_init()?;

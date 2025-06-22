@@ -1,10 +1,12 @@
 use poise::serenity_prelude::ButtonStyle;
 use poise::serenity_prelude::CreateButton;
+use poise::serenity_prelude::CreateSelectMenuOption;
 use serde::Serialize;
 
 use crate::common;
 use crate::common::Error;
 use crate::create_button_with_callback;
+use crate::create_select_option_with_callback;
 use crate::db;
 
 use super::super::RpgError;
@@ -29,6 +31,13 @@ impl RollEvent {
         button_style: ButtonStyle,
     ) -> Result<CreateButton, Error> {
         return create_button_with_callback::<Self, RollEventParams>(text, params, button_style);
+    }
+
+    pub fn create_select_item(
+        text: &str,
+        params: &RollEventParams,
+    ) -> Result<CreateSelectMenuOption, Error> {
+        return create_select_option_with_callback::<Self, RollEventParams>(text, params);
     }
 }
 
@@ -56,7 +65,7 @@ impl common::EventHandlerTrait for RollEvent {
                 .expect("Remove this expect later");
 
                 let result =
-                    super::super::roll_with_char_sheet(ctx, Some(dice_string.to_string()), char)
+                    super::super::roll_with_char_sheet(ctx, Some(dice_string.to_string()), &char)
                         .await
                         .expect("This is bad practise");
 
@@ -67,7 +76,7 @@ impl common::EventHandlerTrait for RollEvent {
 
                 let embed = crate::dice::generate_roll_embed(
                     result,
-                    interaction.user.name.to_string(),
+                    &char.name.unwrap_or("Test".to_string()),
                     colour,
                 )
                 .await
@@ -77,13 +86,7 @@ impl common::EventHandlerTrait for RollEvent {
 
                 interaction
                     .channel_id
-                    .send_message(
-                        ctx,
-                        CreateMessage::default().embed(embed), // CreateMessage::default().content(format!(
-                                                               // "Rolling for {}:\n {}",
-                                                               // interaction.user.name, result
-                                                               // )),
-                    )
+                    .send_message(ctx, CreateMessage::default().embed(embed))
                     .await
                     .expect("AAA");
             }
