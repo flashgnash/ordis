@@ -936,10 +936,16 @@ pub async fn roll_with_char_sheet(
 ) -> Result<(String, f64), Error> {
     let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx, &character).await;
 
-    //TODO make this default configurable per server
-    let mut dice = dice_expression
-        .unwrap_or("1d100".to_string())
-        .to_lowercase();
+    let mut dice = stat_block_result
+        .as_ref()
+        .ok()
+        .and_then(|x| x.default_roll.as_ref())
+        .cloned()
+        .unwrap_or_else(|| "1d100".to_string());
+
+    if let Some(roll_expression) = dice_expression {
+        dice = roll_expression;
+    }
 
     //Replace d100 with 1d100, d6 with 1d6 etc
 
