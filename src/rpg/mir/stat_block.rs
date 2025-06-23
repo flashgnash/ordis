@@ -203,7 +203,6 @@ impl CharacterSheetable for StatBlock {
             }
         }    
         If there are missing values, interpret them as null
-        If you are expecting a value in a specific format but it is incorrect, instead set the value as 'ERROR - (explanation)'
         You should translate these stats into a json dictionary.
         All keys should be lower case and spell corrected. Respond with only valid json
 

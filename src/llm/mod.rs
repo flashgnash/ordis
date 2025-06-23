@@ -98,7 +98,7 @@ lazy_static! {
             ProviderConfig {
                 endpoint: "https://api.openai.com/v1/chat/completions",
                 access_token_env: "OPENAI_TOKEN",
-                valid_models: &["gpt-3.5-turbo", "gpt-4", "gpt-4o-mini"],
+                valid_models: &["gpt-3.5-turbo", "gpt-4", "gpt-4o-mini", "gpt-4.1-nano"],
             },
         );
         map.insert(

@@ -150,7 +150,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
             },
         ];
 
-        let response = generate_to_string(None, messages).await?;
+        let response = generate_to_string(Some("gpt-4.1-nano"), messages).await?;
 
         let response_filtered = response.replace("```json","").replace("```","");
 
