@@ -203,8 +203,8 @@ impl CharacterSheetable for StatBlock {
             }
         }    
         If there are missing values, interpret them as null
-        You should translate these stats into a json dictionary.
-        All keys should be lower case and spell corrected. Respond with only valid json
+        You should translate these stats into a minified json dictionary.
+        All keys should be lower case and spell corrected. Respond with only valid, minified json
 
         DO NOT USE BACKTICKS OR BACKSLASHES IN YOUR RESPONSE
 
