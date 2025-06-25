@@ -202,7 +202,7 @@ impl CharacterSheetable for StatBlock {
                 "kno": (number),
             }
         }    
-        If there are missing values, interpret them as null
+        If there are missing values, ignore them (don't make a key for them)
         You should translate these stats into a minified json dictionary.
         All keys should be lower case and spell corrected. Respond with only valid, minified json
 

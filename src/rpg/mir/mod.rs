@@ -110,6 +110,7 @@ pub async fn generate_status_embed(
         .clone()
         .unwrap_or("".to_string());
 
+    println!("Get stat block");
     let stat_block: StatBlock = super::get_sheet(&ctx, character).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &character, None);
 
@@ -489,15 +490,19 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
     let placeholder = CreateReply::default()
         .content("*Thinking, please wait...*")
         .ephemeral(ephemeral);
+
     let placeholder_message = ctx.send(placeholder).await?;
+
     let db_connection = &mut db::establish_connection();
 
+    println!("Get user char");
     let character = get_user_character(&ctx, db_connection)
         .await?
         .ok_or(RpgError::NoCharacterSelected)?;
 
     let character_id = character.id.ok_or(RpgError::NoCharacterSheet)?;
 
+    println!("Get sheet of sender");
     let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
