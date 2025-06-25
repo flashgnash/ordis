@@ -507,7 +507,12 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
-    let default_roll = &stat_block.default_roll.unwrap_or("1d100".to_string());
+    let default_roll = if stat_block.default_roll.as_deref().unwrap_or("").is_empty() {
+        "1d100"
+    } else {
+        stat_block.default_roll.as_ref().unwrap()
+    };
+
     let mut rows = vec![
         // CreateActionRow::SelectMenu(select_menu),
         advantage_roll_buttons(default_roll, character_id),
