@@ -52,6 +52,7 @@ impl CharacterSheetable for StatBlock {
                 character: None,
                 deserialized_message: None,
             },
+
             stats: None,
             energy_pool: None,
 
@@ -88,23 +89,30 @@ impl CharacterSheetable for StatBlock {
         self.hp = deserialized_message
             .get("current_hp")
             .and_then(|v| v.as_i64());
+
         self.max_hp = deserialized_message.get("hp").and_then(|v| v.as_i64());
 
         self.soul = deserialized_message
             .get("current_soul")
             .and_then(|v| v.as_i64());
+
         self.max_soul = deserialized_message.get("soul").and_then(|v| v.as_i64());
 
         self.armour = deserialized_message
             .get("current_armour")
             .and_then(|v| v.as_i64());
+
         self.max_armour = deserialized_message.get("armour").and_then(|v| v.as_i64());
 
         self.hunger = deserialized_message.get("hunger").and_then(|v| v.as_i64());
 
         self.default_roll = deserialized_message
             .get("default_roll")
-            .and_then(|v| v.as_str().and_then(|d| Some(d.to_string())));
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .or(Some("1d100".to_string()));
+
         Ok(())
     }
 
@@ -121,6 +129,7 @@ impl CharacterSheetable for StatBlock {
                 .clone()
                 .expect("Character sheet should always generate jsonified message"),
         );
+
         char.stat_block_hash = self.sheet_info.message_hash.clone();
 
         self.sheet_info.character = Some(char);
@@ -202,8 +211,7 @@ impl CharacterSheetable for StatBlock {
                 "kno": (number),
             }
         }    
-        If there are missing keys on the character sheet, ignore them and do not make a key
-        If there are keys with no value, treat them as null
+        If there are missing values, ignore them (don't make a key for them)
         You should translate these stats into a minified json dictionary.
         All keys should be lower case and spell corrected. Respond with only valid, minified json
 
