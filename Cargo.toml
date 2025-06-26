@@ -22,3 +22,5 @@ dotenv = "0.15.0"
 songbird = { version = "0.4.3", features = ["builtin-queue"] }
 symphonia = { version = "0.5.4", features = ["aac", "mp3", "isomp4", "alac"] }
 async-trait = "0.1.83"
+phf = "0.11.2"
+phf_macros = "0.11.2"

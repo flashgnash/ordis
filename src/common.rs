@@ -12,6 +12,26 @@ use diesel::sqlite::SqliteConnection;
 
 use lazy_static::lazy_static;
 use poise::serenity_prelude as serenity;
+use serenity::model::guild::Emoji;
+use serenity::model::id::GuildId;
+
+use lazy_static::lazy_static;
+
+use std::collections::HashMap;
+use std::fmt;
+use tokio::sync::Mutex;
+
+#[derive(Debug)]
+pub enum EmojiError {
+    NotFound,
+}
+
+impl fmt::Display for EmojiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl std::error::Error for EmojiError {}
 
 use async_trait::async_trait;
 use sha2::{Digest, Sha256};
@@ -220,6 +240,119 @@ pub async fn check_admin(
     }
 }
 
+lazy_static! {
+    static ref EMOJI_CACHE: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+}
+
+pub async fn refresh_emojis(ctx: Context<'_>) {
+    println!("Refreshing emoji cache");
+
+    let guild_ids_list_string = std::env::var("EMOJI_GUILDS").expect(
+        "missing EMOJI_GUILDS (comma separated list of guild IDs to search for custom emojis)",
+    );
+
+    let guild_ids = guild_ids_list_string.split(",");
+
+    let mut cache = EMOJI_CACHE.lock().await;
+    for guild_id_string in guild_ids {
+        let guild_id = GuildId::from(safe_to_u64(guild_id_string));
+
+        if let Ok(emojis) = guild_id.emojis(&ctx).await {
+            for emoji in emojis {
+                cache.insert(
+                    emoji.name.clone(),
+                    format!("<:{}:{}>", emoji.name, emoji.id),
+                );
+            }
+        }
+    }
+}
+
+async fn refresh_if_empty(ctx: Context<'_>) {
+    let cache = EMOJI_CACHE.lock().await;
+    let empty = cache.is_empty();
+    drop(cache);
+    if empty {
+        refresh_emojis(ctx).await;
+    }
+}
+
+pub async fn get_emojis(ctx: Context<'_>) -> HashMap<String, String> {
+    refresh_if_empty(ctx).await;
+
+    let cache = EMOJI_CACHE.lock().await;
+    return cache.clone();
+}
+
+pub async fn get_emoji(ctx: Context<'_>, emoji_name: &str) -> Option<String> {
+    refresh_if_empty(ctx).await;
+
+    let cache = EMOJI_CACHE.lock().await;
+
+    let result = cache.get(emoji_name);
+
+    if let Some(emoji_name) = result {
+        return Some(emoji_name.clone());
+    } else {
+        return None;
+    }
+}
+
+pub async fn emojify_custom(ctx: Context<'_>, text: &str, emoji_pattern: &str) -> String {
+    let mut new_string = "".to_string();
+
+    for char in text.chars() {
+        let char_lower = char.to_lowercase().to_string();
+
+        // let mut string_replacement = &char_lower;
+
+        let emoji_name = &emoji_pattern.replace("{}", &char_lower);
+
+        println!("{emoji_name}");
+
+        if let Some(emoji) = get_emoji(ctx, emoji_name).await {
+            new_string = new_string + &emoji + " "
+        } else {
+            new_string = new_string + &char_lower + " "
+        }
+    }
+
+    return new_string.to_string();
+}
+
+pub async fn emojify_char(
+    character: &char,
+    emoji_pattern: Option<&str>,
+    ctx: Option<Context<'_>>,
+) -> Result<String, Error> {
+    let char_lower = character.to_lowercase();
+
+    if let Some(pattern) = emoji_pattern {
+        let pattern_replaced = pattern.replace("{}", &char_lower.to_string());
+
+        if let Some(context) = ctx {
+            match (get_emoji(context, &pattern_replaced).await) {
+                Some(emoji) => return Ok(emoji),
+                None => return Ok(pattern_replaced),
+            };
+        }
+
+        Ok(pattern_replaced)
+    } else {
+        Ok(format!(":regional_indicator_{}:", &char_lower))
+    }
+}
+
+pub async fn emojify_string(message: &str) -> Result<String, Error> {
+    let mut new_string = "".to_string();
+
+    for char in message.chars() {
+        new_string = new_string + &emojify_char(&char, None, None).await? + " ";
+    }
+
+    Ok(new_string.to_string())
+}
+
 pub async fn fetch_message_chain(
     ctx: &poise::serenity_prelude::Context,
     channel_id: poise::serenity_prelude::ChannelId,
@@ -284,6 +417,16 @@ pub fn safe_to_number(s: &str) -> i32 {
     }
 
     return part_stripped.parse::<i32>().unwrap();
+}
+
+pub fn safe_to_u64(s: &str) -> u64 {
+    let part_stripped = strip_non_numerical(s);
+
+    if part_stripped.len() == 0 {
+        return 0;
+    }
+
+    return part_stripped.parse::<u64>().unwrap();
 }
 
 // &[i32] is a slice reference (which means it doesn't borrow the variable)

@@ -24,7 +24,7 @@
 
         run-migration = pkgs.writeShellScriptBin "run-migration" (''diesel migration run'');
 
-        build-and-debug = pkgs.writeShellScriptBin "build-and-debug" (''cargo build && lldb'');
+        build-and-debug = pkgs.writeShellScriptBin "build-and-debug" (''cargo run'');
 
         gen-up = pkgs.writeShellApplication {
           name = "gen-up";
