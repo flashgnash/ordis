@@ -21,7 +21,6 @@ use crate::common::Context;
 use crate::common::Data;
 use crate::common::Error;
 
-mod auto_threads;
 mod db;
 mod dice;
 mod llm;
@@ -286,7 +285,8 @@ async fn main() {
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .event_handler(Handler)
-        .event_handler(crate::auto_threads::Handler)
+        .event_handler(crate::admin::auto_threads::Handler)
+        .event_handler(crate::admin::auto_react::Handler)
         .event_handler(crate::llm::discord::reply_handler::ReplyHandler)
         .register_songbird()
         .await;
