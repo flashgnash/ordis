@@ -17,19 +17,6 @@ use lazy_static::lazy_static;
 use std::fmt;
 use tokio::sync::Mutex;
 
-use emoji;
-
-pub fn discord_name_to_emoji(name: &str) -> Option<String> {
-    let key = name.trim_matches(':');
-
-    let emoji_char = emoji::search::search_annotation(key, "en")
-        .into_iter()
-        .map(|e| format!("{}", e.glyph))
-        .nth(0);
-
-    return emoji_char;
-}
-
 #[derive(Debug)]
 pub enum EmojiError {
     NotFound,

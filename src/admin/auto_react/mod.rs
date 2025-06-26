@@ -4,6 +4,8 @@ use poise::serenity_prelude::ReactionType;
 
 use crate::common::{self, get_emoji};
 
+use emojis;
+
 // use poise::serenity_prelude::model::channel::Channel;
 
 static REACT_FLAG: &str = "-autoReact";
@@ -49,9 +51,15 @@ impl poise::serenity_prelude::EventHandler for Handler {
                                 name: Some("SOme emoji name".to_string()),
                             };
                         } else {
-                            reaction = ReactionType::Unicode(
-                                common::discord_name_to_emoji(emoji_string).expect("???"),
+                            let emoji_unicode = emojis::get_by_shortcode(
+                                &emoji_string.replace(":", "").to_string(),
                             );
+                            if let Some(emoji_unicode_char) = emoji_unicode {
+                                reaction =
+                                    ReactionType::Unicode(emoji_unicode_char.as_str().to_string());
+                            } else {
+                                reaction = ReactionType::Unicode("❓".to_string());
+                            }
                         }
 
                         let _ = msg.react(&ctx.http, reaction).await;
