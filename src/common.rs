@@ -10,14 +10,10 @@ use serde_json::{from_str, Value};
 use crate::db;
 use diesel::sqlite::SqliteConnection;
 
-use lazy_static::lazy_static;
 use poise::serenity_prelude as serenity;
-use serenity::model::guild::Emoji;
-use serenity::model::id::GuildId;
 
 use lazy_static::lazy_static;
 
-use std::collections::HashMap;
 use std::fmt;
 use tokio::sync::Mutex;
 
