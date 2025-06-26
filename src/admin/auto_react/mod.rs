@@ -2,6 +2,8 @@ pub struct Handler;
 use poise::async_trait;
 use poise::serenity_prelude::ReactionType;
 
+use crate::common::{self, get_emoji};
+
 // use poise::serenity_prelude::model::channel::Channel;
 
 static REACT_FLAG: &str = "-autoReact";
@@ -32,10 +34,27 @@ impl poise::serenity_prelude::EventHandler for Handler {
                         .map(str::trim)
                         .filter(|s| !s.is_empty());
 
-                    for emoji in emojis {
-                        let _ = msg
-                            .react(&ctx.http, ReactionType::Unicode(emoji.into()))
-                            .await;
+                    for emoji_string in emojis {
+                        let emoji = get_emoji(&ctx, emoji_string).await;
+                        println!("Ooga");
+
+                        let reaction: ReactionType;
+
+                        if let Some(emoji) = emoji {
+                            println!("Booga {}", emoji);
+
+                            reaction = ReactionType::Custom {
+                                id: emoji.id,
+                                animated: false,
+                                name: Some("SOme emoji name".to_string()),
+                            };
+                        } else {
+                            reaction = ReactionType::Unicode(
+                                common::discord_name_to_emoji(emoji_string).expect("???"),
+                            );
+                        }
+
+                        let _ = msg.react(&ctx.http, reaction).await;
                     }
                 }
             }

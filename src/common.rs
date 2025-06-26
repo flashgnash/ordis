@@ -3,7 +3,7 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 use std::collections::HashMap;
 
-use poise::serenity_prelude::{Colour, GuildId, Message, UserId};
+use poise::serenity_prelude::{Colour, Emoji, GuildId, Message, UserId};
 use serde::Deserialize;
 use serde_json::{from_str, Value};
 
@@ -16,6 +16,19 @@ use lazy_static::lazy_static;
 
 use std::fmt;
 use tokio::sync::Mutex;
+
+use emoji;
+
+pub fn discord_name_to_emoji(name: &str) -> Option<String> {
+    let key = name.trim_matches(':');
+
+    let emoji_char = emoji::search::search_annotation(key, "en")
+        .into_iter()
+        .map(|e| format!("{}", e.glyph))
+        .nth(0);
+
+    return emoji_char;
+}
 
 #[derive(Debug)]
 pub enum EmojiError {
@@ -237,34 +250,41 @@ pub async fn check_admin(
 }
 
 lazy_static! {
-    static ref EMOJI_CACHE: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref EMOJI_CACHE: Mutex<HashMap<String, Emoji>> = Mutex::new(HashMap::new());
 }
 
-pub async fn refresh_emojis(ctx: Context<'_>) {
+pub async fn refresh_emojis(ctx: &poise::serenity_prelude::Context) {
     println!("Refreshing emoji cache");
 
-    let guild_ids_list_string = std::env::var("EMOJI_GUILDS").expect(
-        "missing EMOJI_GUILDS (comma separated list of guild IDs to search for custom emojis)",
-    );
-
-    let guild_ids = guild_ids_list_string.split(",");
+    let guild_ids: Vec<GuildId> = if let Ok(guilds_str) = std::env::var("EMOJI_GUILDS") {
+        guilds_str
+            .split(',')
+            .map(|s| GuildId::from(safe_to_u64(s)))
+            .collect()
+    } else {
+        let ids = ctx.cache.guilds();
+        if ids.is_empty() {
+            println!("No EMOJI_GUILDS and no cached guilds. Emoji cache empty.");
+            return;
+        }
+        ids.into_iter().collect()
+    };
 
     let mut cache = EMOJI_CACHE.lock().await;
-    for guild_id_string in guild_ids {
-        let guild_id = GuildId::from(safe_to_u64(guild_id_string));
-
-        if let Ok(emojis) = guild_id.emojis(&ctx).await {
+    for guild_id in guild_ids {
+        if let Ok(emojis) = guild_id.emojis(ctx).await {
             for emoji in emojis {
-                cache.insert(
-                    emoji.name.clone(),
-                    format!("<:{}:{}>", emoji.name, emoji.id),
-                );
+                cache.insert(emoji.name.clone(), emoji);
             }
         }
     }
 }
 
-async fn refresh_if_empty(ctx: Context<'_>) {
+pub fn format_emoji_string(emoji: Emoji) -> String {
+    return format!("<:{}:{}>", emoji.name, emoji.id);
+}
+
+async fn refresh_if_empty(ctx: &poise::serenity_prelude::Context) {
     let cache = EMOJI_CACHE.lock().await;
     let empty = cache.is_empty();
     drop(cache);
@@ -273,17 +293,22 @@ async fn refresh_if_empty(ctx: Context<'_>) {
     }
 }
 
-pub async fn get_emojis(ctx: Context<'_>) -> HashMap<String, String> {
+pub async fn get_emojis(ctx: &poise::serenity_prelude::Context) -> HashMap<String, Emoji> {
     refresh_if_empty(ctx).await;
 
     let cache = EMOJI_CACHE.lock().await;
     return cache.clone();
 }
 
-pub async fn get_emoji(ctx: Context<'_>, emoji_name: &str) -> Option<String> {
+pub async fn get_emoji(ctx: &poise::serenity_prelude::Context, emoji_name: &str) -> Option<Emoji> {
     refresh_if_empty(ctx).await;
 
     let cache = EMOJI_CACHE.lock().await;
+
+    println!(
+        "Trying to get emoji {emoji_name}, cache len {}",
+        cache.len()
+    );
 
     let result = cache.get(emoji_name);
 
@@ -306,8 +331,8 @@ pub async fn emojify_custom(ctx: Context<'_>, text: &str, emoji_pattern: &str) -
 
         println!("{emoji_name}");
 
-        if let Some(emoji) = get_emoji(ctx, emoji_name).await {
-            new_string = new_string + &emoji + " "
+        if let Some(emoji) = get_emoji(ctx.serenity_context(), emoji_name).await {
+            new_string = format!("{new_string}{emoji} ")
         } else {
             new_string = new_string + &char_lower + " "
         }
@@ -327,8 +352,8 @@ pub async fn emojify_char(
         let pattern_replaced = pattern.replace("{}", &char_lower.to_string());
 
         if let Some(context) = ctx {
-            match (get_emoji(context, &pattern_replaced).await) {
-                Some(emoji) => return Ok(emoji),
+            match (get_emoji(context.serenity_context(), &pattern_replaced).await) {
+                Some(emoji) => return Ok(format_emoji_string(emoji)),
                 None => return Ok(pattern_replaced),
             };
         }

@@ -24,3 +24,4 @@ symphonia = { version = "0.5.4", features = ["aac", "mp3", "isomp4", "alac"] }
 async-trait = "0.1.83"
 phf = "0.11.2"
 phf_macros = "0.11.2"
+emoji = "0.2.1"
