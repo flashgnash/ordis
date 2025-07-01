@@ -7,3 +7,4 @@
 .direnv/*
 result
 .opencode.json
+.opencode
