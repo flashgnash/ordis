@@ -17,3 +17,8 @@ pub mod change_mana_event;
 
 pub use change_mana_event::ChangeManaEvent;
 pub use change_mana_event::ChangeManaEventParams;
+
+pub mod delete_message_event;
+
+pub use delete_message_event::DeleteMessageEvent;
+pub use delete_message_event::DeleteMessageEventParams;

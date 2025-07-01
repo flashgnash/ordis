@@ -3,11 +3,13 @@ pub mod spells;
 
 use lazy_static::lazy_static;
 use tokio::sync::Mutex;
+use tokio::time::sleep;
 
 use std::any::Any;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt;
+use std::time::Duration;
 
 
 // use crate::db;
@@ -136,24 +138,43 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
         sheet_info.original_message = Some(message.to_string());
 
+        let mut response_filtered: String = "asdhjka".to_string();
 
-        let preprompt = Self::PROMPT.to_string();
+        let mut valid = false;
 
-        let messages = vec![
-            Message {
-                role: Role::system,
-                content: preprompt,
-            },
-            Message {
-                role: Role::user,
-                content: message.to_string(),
-            },
-        ];
+        println!("Attempting to get json from openai");
 
-        let response = generate_to_string(None, messages).await?;
 
-        let response_filtered = response.replace("```json","").replace("```","");
+        while ! valid {
+            println!("Attempt");
+            let preprompt = Self::PROMPT.to_string();
 
+            let messages = vec![
+                Message {
+                    role: Role::system,
+                    content: preprompt,
+                },
+                Message {
+                    role: Role::user,
+                    content: message.to_string(),
+                },
+            ];
+
+            let response = generate_to_string(None, messages).await?;
+            let cleaned = response.replace("```json", "").replace("```", "");
+
+            if serde_json::from_str::<serde_json::Value>(&cleaned).is_ok() {
+              valid = true;
+              response_filtered = cleaned;
+            }
+            else{
+                println!("Failed");
+                sleep(Duration::from_millis(500)).await;
+            }
+
+        };
+
+       
         sheet_info.jsonified_message = Some(response_filtered);
 
         sheet_info.deserialized_message = Some(serde_json::from_str(
@@ -241,11 +262,16 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
         let mut sheet = Self::from_string(&stat_message.content).await?;
         let sheet_info = sheet.mut_sheet_info();
 
+        println!("b");
+
         sheet_info.message_hash = Some(crate::common::hash(&stat_message.content));
         sheet_info.character = Some(character.clone());
         sheet_info.changed = true;
+
+        println!("c");
         sheet.update_character();
 
+        println!("d");
         Ok(sheet)
 
     }
@@ -299,7 +325,6 @@ pub async fn get_user_character(
     }
 
     Ok(None)
-
 }
 
 lazy_static! {

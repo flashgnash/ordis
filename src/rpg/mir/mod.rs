@@ -64,6 +64,7 @@ pub fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
     event_system.register_handler(ChangeCharacterEvent);
     event_system.register_handler(UpdateStatusEvent);
     event_system.register_handler(ChangeManaEvent);
+    event_system.register_handler(event_handlers::DeleteMessageEvent);
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -110,6 +111,7 @@ pub async fn generate_status_embed(
         .clone()
         .unwrap_or("".to_string());
 
+    println!("Get stat block");
     let stat_block: StatBlock = super::get_sheet(&ctx, character).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &character, None);
 
@@ -489,20 +491,29 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
     let placeholder = CreateReply::default()
         .content("*Thinking, please wait...*")
         .ephemeral(ephemeral);
+
     let placeholder_message = ctx.send(placeholder).await?;
+
     let db_connection = &mut db::establish_connection();
 
+    println!("Get user char");
     let character = get_user_character(&ctx, db_connection)
         .await?
         .ok_or(RpgError::NoCharacterSelected)?;
 
     let character_id = character.id.ok_or(RpgError::NoCharacterSheet)?;
 
+    println!("Get sheet of sender");
     let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
-    let default_roll = &stat_block.default_roll.unwrap_or("1d100".to_string());
+    let default_roll = if stat_block.default_roll.as_deref().unwrap_or("").is_empty() {
+        "1d100"
+    } else {
+        stat_block.default_roll.as_ref().unwrap()
+    };
+
     let mut rows = vec![
         // CreateActionRow::SelectMenu(select_menu),
         advantage_roll_buttons(default_roll, character_id),
@@ -519,6 +530,11 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
                 },
             )
             .expect("How fail"),
+            event_handlers::DeleteMessageEvent::create_button(
+                "🗑️",
+                &event_handlers::DeleteMessageEventParams {},
+            )
+            .expect("Failed to create delete button"),
         ]));
     }
 
