@@ -64,6 +64,7 @@ pub fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
     event_system.register_handler(ChangeCharacterEvent);
     event_system.register_handler(UpdateStatusEvent);
     event_system.register_handler(ChangeManaEvent);
+    event_system.register_handler(event_handlers::DeleteMessageEvent);
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -529,6 +530,11 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
                 },
             )
             .expect("How fail"),
+            event_handlers::DeleteMessageEvent::create_button(
+                "🗑️",
+                &event_handlers::DeleteMessageEventParams {},
+            )
+            .expect("Failed to create delete button"),
         ]));
     }
 
