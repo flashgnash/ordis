@@ -1,5 +1,7 @@
 use poise::Command;
 
+pub mod auto_react;
+pub mod auto_threads;
 pub mod colour_picker;
 pub mod nickname;
 
