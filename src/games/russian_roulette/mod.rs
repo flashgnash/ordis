@@ -1,9 +1,13 @@
 use std::collections::HashMap;
+use std::time::UNIX_EPOCH;
 
 use crate::common::Context;
 use crate::common::Error;
 
+use std::time::{Duration, SystemTime};
+
 use poise::serenity_prelude::ChannelId;
+use poise::serenity_prelude::Timestamp;
 use poise::Command;
 use rand::prelude::*;
 
@@ -30,7 +34,7 @@ pub async fn russian_roulette(ctx: Context<'_>) -> Result<(), Error> {
             rng.gen_range(1..(bullets_left))
         };
         println!("roll: {roll}");
-        if (roll != bullets_left) {
+        if (roll != bullets_left - 1) {
             let count = map
                 .entry(ctx.channel_id())
                 .and_modify(|c| *c += 1)
@@ -52,6 +56,25 @@ pub async fn russian_roulette(ctx: Context<'_>) -> Result<(), Error> {
         .or_insert(0);
 
     ctx.say("Bang!").await?;
+
+    if let Some(guild_id) = ctx.guild_id() {
+        if let Ok(mut member) = guild_id.member(ctx, ctx.author().id).await {
+            let unix_now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs();
+
+            let timeout =
+                Timestamp::from_unix_timestamp(unix_now as i64 + 5 * 60).expect("Valid timestamp");
+
+            let _ = member
+                .disable_communication_until_datetime(ctx, timeout)
+                .await?;
+
+            println!("Attempted to time out member");
+        }
+    }
+
     Ok(())
 }
 
