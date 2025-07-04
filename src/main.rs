@@ -2,6 +2,7 @@ use common::ButtonEventSystem;
 use meval::eval_str;
 
 mod admin;
+mod games;
 
 use dotenv::dotenv;
 
@@ -20,6 +21,8 @@ mod common;
 use crate::common::Context;
 use crate::common::Data;
 use crate::common::Error;
+
+mod dictionary;
 
 mod db;
 mod dice;
@@ -266,6 +269,7 @@ async fn main() {
                 .chain(voice::music::commands())
                 .chain(voice::commands())
                 .chain(admin::commands())
+                .chain(games::russian_roulette::commands())
                 .chain(rpg::mir::commands())
                 .collect::<Vec<_>>(),
 

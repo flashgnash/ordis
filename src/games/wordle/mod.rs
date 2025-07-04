@@ -1,9 +1,8 @@
 // use crate::common::emojify_char;
 use crate::common::emojify_custom;
-use crate::common::emojify_string;
-use crate::common::get_emojis;
 use crate::common::Context;
 use crate::common::Error;
+use crate::dictionary;
 
 mod models;
 
@@ -13,8 +12,6 @@ use crate::common::emojify_char;
 
 use lazy_static::lazy_static;
 use tokio::sync::Mutex;
-
-use crate::dictionary;
 
 lazy_static! {
     static ref CURRENT_WORDLE: Mutex<Option<Wordle>> = Mutex::new(None);
@@ -111,7 +108,7 @@ pub async fn get_wordle(ctx: Context<'_>, string_length: Option<usize>) -> Resul
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn guess_wordle(ctx: Context<'_>, guess: String) -> Result<(), Error> {
-    let emojis = get_emojis(ctx).await;
+    let emojis = crate::common::get_emojis(&ctx.serenity_context()).await;
 
     let mut msg: String = "".to_string();
 
