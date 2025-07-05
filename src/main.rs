@@ -1,3 +1,5 @@
+use std::env;
+
 use common::ButtonEventSystem;
 use meval::eval_str;
 
@@ -14,6 +16,8 @@ use poise::serenity_prelude::CreateSelectMenuOption;
 use poise::serenity_prelude::EventHandler;
 use poise::serenity_prelude::Ready;
 
+use poise::Command;
+use regex::Regex;
 use serde::Serialize;
 use tokio::sync::Mutex;
 
@@ -233,6 +237,22 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+type CommandFn = fn() -> Vec<Command<crate::common::Data, crate::common::Error>>;
+
+struct Module {
+    path: &'static str,
+    func: CommandFn,
+}
+
+macro_rules! mod_entry {
+    ($func:path) => {
+        Module {
+            path: stringify!($func),
+            func: $func,
+        }
+    };
+}
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
@@ -260,18 +280,59 @@ async fn main() {
     //         }
     //     });
 
+    let modules = vec![
+        // mod_entry(base::commands),
+        mod_entry!(llm::discord::commands),
+        mod_entry!(llm::discord::translator::commands),
+        mod_entry!(voice::music::commands),
+        mod_entry!(voice::commands),
+        mod_entry!(admin::commands),
+        mod_entry!(rpg::mir::commands),
+        mod_entry!(games::russian_roulette::commands),
+    ];
+
+    let disabled_var = env::var("DISABLED_MODULES").unwrap_or_default();
+    let disabled_regex: Vec<Regex> = if disabled_var.trim().is_empty() {
+        Vec::new()
+    } else {
+        disabled_var
+            .split(',')
+            .filter_map(|s| {
+                let pat = s.trim().replace("*", ".*");
+                let pat = format!("^{}(::commands)?$", pat);
+                Regex::new(&pat).ok()
+            })
+            .collect()
+    };
+
+    if disabled_regex.is_empty() {
+        println!("No disabled modules.");
+    } else {
+        println!("Disabled modules:");
+        for m in &modules {
+            if disabled_regex.iter().any(|r| r.is_match(m.path)) {
+                println!(" - {}", m.path.replace("::commands", ""));
+            }
+        }
+    }
+
+    println!("Enabled modules:");
+    for m in &modules {
+        if disabled_regex.iter().all(|r| !r.is_match(m.path)) {
+            println!(" - {}", m.path.replace("::commands", ""));
+        }
+    }
+
+    // Then later filter modules:
+    let commands: Vec<Command<crate::common::Data, crate::common::Error>> = modules
+        .into_iter()
+        .filter(|m| !disabled_regex.iter().any(|r| r.is_match(m.path)))
+        .flat_map(|m| (m.func)())
+        .collect();
+
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping(), calc()]
-                .into_iter()
-                .chain(llm::discord::commands())
-                .chain(llm::discord::translator::commands())
-                .chain(voice::music::commands())
-                .chain(voice::commands())
-                .chain(admin::commands())
-                .chain(games::russian_roulette::commands())
-                .chain(rpg::mir::commands())
-                .collect::<Vec<_>>(),
+            commands: commands,
 
             ..Default::default() // TODO make this configurable via environment variables
                                  // IE have a list of module names to import, and a dictionary in main it matches them against
