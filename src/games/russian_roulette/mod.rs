@@ -31,7 +31,7 @@ pub async fn russian_roulette(ctx: Context<'_>) -> Result<(), Error> {
     if bullets_left > 1 {
         let roll = {
             let mut rng = rand::thread_rng();
-            rng.gen_range(1..(bullets_left))
+            rng.gen_range(1..=bullets_left)
         };
         println!("roll: {roll}");
         if (roll != bullets_left - 1) {
