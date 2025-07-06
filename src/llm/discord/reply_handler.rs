@@ -44,6 +44,7 @@ impl EventHandler for ReplyHandler {
                 let mut messages = vec![llm::Message {
                     role: llm::Role::system,
                     content: crate::llm::Personality::Ordis.get().to_string(),
+                    name: None,
                 }];
 
                 let mut message_chain = fetch_message_chain(&ctx, channel_ref, message_ref)
@@ -52,6 +53,7 @@ impl EventHandler for ReplyHandler {
                 message_chain.reverse();
 
                 for chain_message in message_chain {
+                    let author_name = chain_message.author.name.to_string();
                     if !crate::llm::contains_badness(
                         &chain_message.content,
                         &*super::DISALLOWED_CATEGORIES,
@@ -67,13 +69,18 @@ impl EventHandler for ReplyHandler {
 
                         messages.push(llm::Message {
                             role,
-                            content: chain_message.content.to_string(),
+                            content: format!(
+                                "The following message was sent by the user {}. Message: {}",
+                                chain_message.author.name,
+                                chain_message.content.to_string()
+                            ),
+                            name: Some(author_name),
                         });
                     } else {
                         messages.push(llm::Message {
                             role: llm::Role::user,
-                            content: "BZZZZT (it seems static has prevented you from reading this message)"
-                                .to_string(),
+                            content: format!("{}: BZZZZT (it seems static has prevented you from reading this message)",chain_message.author.name).to_string(),
+                            name:  Some(author_name)
                         })
                     }
                 }
@@ -81,11 +88,13 @@ impl EventHandler for ReplyHandler {
                 messages.push(llm::Message {
                     role: llm::Role::assistant,
                     content: original_message.content.to_string(),
+                    name: None,
                 });
 
                 messages.push(llm::Message {
                     role: llm::Role::assistant,
                     content: msg.content.to_string(),
+                    name: None,
                 });
 
                 for message in &messages {
@@ -109,13 +118,14 @@ impl EventHandler for ReplyHandler {
             {
                 response = "Sorry, I'm afraid I can't respond to that.".to_string();
             } else {
-                response = crate::llm::discord::generate_ordis(&msg.content, None)
-                    .await
-                    .expect("LLM call failed in event handler")
-                    .choices[0]
-                    .message
-                    .content
-                    .to_string();
+                response =
+                    crate::llm::discord::generate_ordis(&msg.content, Some(&msg.author.name), None)
+                        .await
+                        .expect("LLM call failed in event handler")
+                        .choices[0]
+                        .message
+                        .content
+                        .to_string();
             }
 
             println!("{}", response);

@@ -23,8 +23,12 @@ lazy_static! {
     ];
 }
 
-pub async fn generate_ordis(message: &str, model: Option<&str>) -> Result<OpenAIResponse, Error> {
-    Ok(generate_agent(message, model, Personality::Ordis.get()).await?)
+pub async fn generate_ordis(
+    message: &str,
+    author: Option<&str>,
+    model: Option<&str>,
+) -> Result<OpenAIResponse, Error> {
+    Ok(generate_agent(message, model, author, Personality::Ordis.get()).await?)
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -36,7 +40,7 @@ pub async fn ask(ctx: Context<'_>, message: String) -> Result<(), Error> {
     if crate::llm::contains_badness(&message, &*DISALLOWED_CATEGORIES).await? {
         response_message = "Sorry, I'm afraid I can't respond to that".to_string();
     } else {
-        let response = generate_ordis(&message, None).await?;
+        let response = generate_ordis(&message, Some(&ctx.author().name), None).await?;
 
         response_message = response.choices[0].message.content.to_string();
 

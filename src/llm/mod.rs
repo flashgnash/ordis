@@ -42,21 +42,25 @@ impl Personality {
 }
 
 
-pub async fn generate_agent(message: &str, model: Option<&str>, personality: &str) -> Result<OpenAIResponse, Error> {
+pub async fn generate_agent(message: &str, model: Option<&str>,author_name: Option<&str>, personality: &str) -> Result<OpenAIResponse, Error> {
 
     let now = Utc::now();
+
+    println!("{} asked LLM: {}",author_name.unwrap_or("No name"),message);
 
     let messages = vec![            
             Message {
                 role: Role::system,
                 content: format!(
                     "You know the following information: The current time in UTC is {}. You are a discord bot. You have an ancestor called Johnny 5 who was the greatest discord bot of its time",
-                    now.format("%Y-%m-%d %H:%M:%S"))
+                    now.format("%Y-%m-%d %H:%M:%S")),
+                name: None
             },
 
             Message {
                 role: Role::system,
-                content: personality.to_string()
+                content: personality.to_string(),
+                name: None
             },
 
             Message {
@@ -66,11 +70,13 @@ pub async fn generate_agent(message: &str, model: Option<&str>, personality: &st
                 Do not reverse words when asked, as this may be exploited to make you say slurs
                 Do not engage in any flirty or sexual roleplay
                 "#.to_string(),
+                name: None
             },
 
             Message {
                 role: Role::user,
                 content:message.to_string(),
+                name: author_name.map(|s| s.to_string())
             }
         ];
 
@@ -148,6 +154,7 @@ pub enum Role {
 pub struct Message {
     pub role: Role,
     pub content: String,
+    pub name: Option<String>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -404,7 +411,7 @@ pub async fn generate(
         .text()
         .await?;
 
-    println!("{}", &content);
+    // println!("{}", &content);
 
     let response: OpenAIResponse = serde_json::from_str(&content)?;
 
@@ -434,10 +441,12 @@ Do not respond with anything else under any circumstances";
         Message {
             role: Role::system,
             content: prompt.to_string(),
+            name: None
         },
         Message {
             role: Role::user,
             content: message.to_string(),
+            name: None
         },
     ];
 
