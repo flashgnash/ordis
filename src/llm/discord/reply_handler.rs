@@ -3,7 +3,7 @@ use poise::serenity_prelude::EventHandler;
 
 use crate::{
     common::{fetch_message, fetch_message_chain},
-    llm,
+    llm::{self, BadKind},
 };
 
 pub struct ReplyHandler;
@@ -25,6 +25,19 @@ impl EventHandler for ReplyHandler {
 
             let original_message = fetch_message(&ctx, channel_ref, message_ref).await.unwrap();
 
+            if crate::llm::contains_badness(
+                &original_message.content,
+                &*super::DISALLOWED_CATEGORIES,
+            )
+            .await
+            .expect("Filter error in event handler")
+            {
+                msg.reply(ctx, "Sorry, I'm afraid I can't respond to that")
+                    .await
+                    .expect("Failure sending message in event handler");
+                return;
+            }
+
             if ctx.cache.current_user().id == original_message.author.id {
                 println!("LLM module Received message response");
 
@@ -39,16 +52,30 @@ impl EventHandler for ReplyHandler {
                 message_chain.reverse();
 
                 for chain_message in message_chain {
-                    let role = if chain_message.author.id == ctx.cache.current_user().id {
-                        llm::Role::assistant
-                    } else {
-                        llm::Role::user
-                    };
+                    if !crate::llm::contains_badness(
+                        &chain_message.content,
+                        &*super::DISALLOWED_CATEGORIES,
+                    )
+                    .await
+                    .expect("Filter error in event handler")
+                    {
+                        let role = if chain_message.author.id == ctx.cache.current_user().id {
+                            llm::Role::assistant
+                        } else {
+                            llm::Role::user
+                        };
 
-                    messages.push(llm::Message {
-                        role,
-                        content: chain_message.content.to_string(),
-                    });
+                        messages.push(llm::Message {
+                            role,
+                            content: chain_message.content.to_string(),
+                        });
+                    } else {
+                        messages.push(llm::Message {
+                            role: llm::Role::user,
+                            content: "BZZZZT (it seems static has prevented you from reading this message)"
+                                .to_string(),
+                        })
+                    }
                 }
 
                 messages.push(llm::Message {
@@ -74,19 +101,26 @@ impl EventHandler for ReplyHandler {
                 return;
             }
         } else if msg.mentions_user_id(ctx.cache.current_user().id) {
-            let response = crate::llm::generate_agent(
-                &msg.content,
-                None,
-                crate::llm::Personality::Ordis.get(),
-            )
-            .await
-            .expect("LLM call failed but no result in event handler");
+            let response;
 
-            let response_message = &response.choices[0].message.content;
+            if crate::llm::contains_badness(&msg.content, &*super::DISALLOWED_CATEGORIES)
+                .await
+                .expect("Filter failed in event handler")
+            {
+                response = "Sorry, I'm afraid I can't respond to that.".to_string();
+            } else {
+                response = crate::llm::discord::generate_ordis(&msg.content, None)
+                    .await
+                    .expect("LLM call failed in event handler")
+                    .choices[0]
+                    .message
+                    .content
+                    .to_string();
+            }
 
-            println!("{}", response_message);
+            println!("{}", response);
 
-            if let Err(why) = &msg.reply(&ctx.http, response_message.to_string()).await {
+            if let Err(why) = &msg.reply(&ctx.http, response.to_string()).await {
                 println!("Error sending message: {:?}", why);
             }
         }

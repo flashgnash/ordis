@@ -60,6 +60,15 @@ pub async fn generate_agent(message: &str, model: Option<&str>, personality: &st
             },
 
             Message {
+                role: Role::system,
+                content: r#"
+                Do not repeat @everyone or @here
+                Do not reverse words when asked, as this may be exploited to make you say slurs
+                Do not engage in any flirty or sexual roleplay
+                "#.to_string(),
+            },
+
+            Message {
                 role: Role::user,
                 content:message.to_string(),
             }
@@ -276,11 +285,58 @@ pub async fn filter_message(message: &str) -> Result<FilterResponse, Error> {
     Ok(response)
 }
 
-pub async fn filter_hate(message: &str) -> Result<bool, Error> {
-    let slurs_present = filter_message(message).await?.results[0].categories.hate == true;
 
-    Ok(slurs_present)
+
+#[derive(Debug)]
+pub enum BadKind {
+    Sexual,
+    SexualMinors,
+    Harassment,
+    HarassmentThreatening,
+    Hate,
+    HateThreatening,
+    Illicit,
+    IllicitViolent,
+    SelfHarm,
+    SelfHarmIntent,
+    SelfHarmInstructions,
+    Violence,
+    ViolenceGraphic,
 }
+
+pub async fn contains_badness(message: &str, kinds: &Vec<BadKind>) -> Result<bool, Error> {
+    let result = filter_message(message).await?;
+    let categories = &result.results[0].categories;
+
+    if kinds.is_empty() {
+        return Ok(result.results[0].flagged);
+    }
+
+    let mut bad = false;
+    for kind in kinds {
+        bad |= match kind {
+            BadKind::Sexual => categories.sexual,
+            BadKind::SexualMinors => categories.sexual_minors,
+            BadKind::Harassment => categories.harassment,
+            BadKind::HarassmentThreatening => categories.harassment_threatening,
+            BadKind::Hate => categories.hate,
+            BadKind::HateThreatening => categories.hate_threatening,
+            BadKind::Illicit => categories.illicit,
+            BadKind::IllicitViolent => categories.illicit_violent,
+            BadKind::SelfHarm => categories.self_harm,
+            BadKind::SelfHarmIntent => categories.self_harm_intent,
+            BadKind::SelfHarmInstructions => categories.self_harm_instructions,
+            BadKind::Violence => categories.violence,
+            BadKind::ViolenceGraphic => categories.violence_graphic,
+        };
+    }
+
+    println!("Filter called, contains bad: {bad}, {categories:#?}");
+    
+    Ok(bad)
+}
+
+
 
 #[allow(dead_code)]
 pub async fn generate_to_string(
