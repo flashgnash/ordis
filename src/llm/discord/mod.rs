@@ -20,7 +20,6 @@ lazy_static! {
         BadKind::SelfHarm,
         BadKind::SelfHarmIntent,
         BadKind::SelfHarmInstructions,
-        BadKind::Harassment
     ];
 }
 
