@@ -3,7 +3,7 @@ use poise::serenity_prelude::EventHandler;
 
 use crate::{
     common::{fetch_message, fetch_message_chain},
-    llm::{self, BadKind},
+    llm::{self},
 };
 
 pub struct ReplyHandler;
@@ -25,21 +25,21 @@ impl EventHandler for ReplyHandler {
 
             let original_message = fetch_message(&ctx, channel_ref, message_ref).await.unwrap();
 
-            if crate::llm::contains_badness(
-                &original_message.content,
-                &*super::DISALLOWED_CATEGORIES,
-            )
-            .await
-            .expect("Filter error in event handler")
-            {
-                msg.reply(ctx, "Sorry, I'm afraid I can't respond to that")
-                    .await
-                    .expect("Failure sending message in event handler");
-                return;
-            }
-
             if ctx.cache.current_user().id == original_message.author.id {
                 println!("LLM module Received message response");
+
+                if crate::llm::contains_badness(
+                    &original_message.content,
+                    &*super::DISALLOWED_CATEGORIES,
+                )
+                .await
+                .expect("Filter error in event handler")
+                {
+                    msg.reply(ctx, "Sorry, I'm afraid I can't respond to that")
+                        .await
+                        .expect("Failure sending message in event handler");
+                    return;
+                }
 
                 let mut messages = vec![llm::Message {
                     role: llm::Role::system,
