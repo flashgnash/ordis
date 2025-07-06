@@ -69,11 +69,7 @@ impl EventHandler for ReplyHandler {
 
                         messages.push(llm::Message {
                             role,
-                            content: format!(
-                                "The following message was sent by the user {}. Message: {}",
-                                chain_message.author.name,
-                                chain_message.content.to_string()
-                            ),
+                            content: chain_message.content.to_string(),
                             name: Some(author_name),
                         });
                     } else {
