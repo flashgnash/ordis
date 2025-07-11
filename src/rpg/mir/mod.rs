@@ -99,7 +99,7 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-static BAR_LENGTH: i32 = 17;
+static BAR_LENGTH: i32 = 16;
 
 pub async fn generate_status_embed(
     ctx: &poise::serenity_prelude::Context,
@@ -439,16 +439,59 @@ pub fn advantage_roll_buttons(base_dice_string: &str, character_id: i32) -> Crea
     ])
 }
 
-pub fn stat_roll_buttons(base_dice_string: &str, character_id: i32) -> CreateActionRow {
-    CreateActionRow::Buttons(vec![
-        roll_button("💪", &format!("{base_dice_string}+str"), character_id),
-        roll_button("🐇", &format!("{base_dice_string}+agl"), character_id),
-        roll_button("🛡️", &format!("{base_dice_string}+con"), character_id),
-        roll_button("🧠", &format!("{base_dice_string}+kno"), character_id),
-        roll_button("💬", &format!("{base_dice_string}+cha"), character_id),
-    ])
+lazy_static! {
+    static ref ROLL_EMOJIS: HashMap<&'static str, (&'static str, u8)> = {
+        let mut m = HashMap::new();
+        m.insert("str", ("💪", 1));
+        m.insert("agl", ("🐇", 2));
+        m.insert("con", ("🛡️", 3));
+        m.insert("kno", ("🧠", 4));
+        m.insert("cha", ("💬", 5));
+
+        m.insert("body", ("🧍‍♂️ Body", 6));
+        m.insert("mobility", ("👟 Mobility", 7));
+        m.insert("intuition", ("🔎 Intuition", 8));
+        m.insert("arcane", ("🪄 Arcane", 9));
+        m
+    };
 }
 
+pub fn stat_roll_buttons(
+    base_dice_string: &str,
+    character_id: i32,
+    stat_block: Option<serde_json::Value>,
+) -> CreateActionRow {
+    let mut stat_keys = if let Some(Value::Object(map)) = stat_block {
+        map.into_iter()
+            .filter_map(|(key, value)| (value != Value::Null).then(|| key))
+            .collect::<Vec<_>>()
+    } else {
+        vec!["str", "agl", "con", "kno", "cha"]
+            .into_iter()
+            .map(String::from)
+            .collect()
+    };
+
+    stat_keys.sort_by_key(|k| {
+        ROLL_EMOJIS
+            .get(k.as_str())
+            .map(|(_, order)| *order)
+            .unwrap_or(255)
+    });
+
+    let buttons = stat_keys
+        .iter()
+        .map(|stat| {
+            let emoji = ROLL_EMOJIS
+                .get(stat.as_str())
+                .map(|(e, _)| *e)
+                .unwrap_or("🎲");
+            roll_button(emoji, &format!("{base_dice_string}+{stat}"), character_id)
+        })
+        .collect();
+
+    CreateActionRow::Buttons(buttons)
+}
 pub async fn character_select_dropdown(
     db_connection: &mut SqliteConnection,
     user_id: u64,
@@ -514,10 +557,12 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
         stat_block.default_roll.as_ref().unwrap()
     };
 
+    let stats_dict = stat_block.stats;
+
     let mut rows = vec![
         // CreateActionRow::SelectMenu(select_menu),
         advantage_roll_buttons(default_roll, character_id),
-        stat_roll_buttons(default_roll, character_id),
+        stat_roll_buttons(default_roll, character_id, stats_dict),
         character_select_dropdown(db_connection, ctx.author().id.get()).await?,
     ];
 
@@ -1082,7 +1127,13 @@ pub async fn roll_with_char_sheet(
             {
                 for (stat, value) in stats_object {
                     if let Some(int_value) = value.as_i64() {
-                        let stat_mod = int_value / 10;
+                        let stat_mod;
+                        if let Some(formula) = stat_block.modifier_formula.clone() {
+                            stat_mod = formula.replace("stat", &(int_value).to_string())
+                        } else {
+                            stat_mod = (int_value / 10).to_string()
+                        }
+
                         str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
                     }
                 }

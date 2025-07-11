@@ -104,7 +104,11 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
                         let rows = vec![
                             // CreateActionRow::SelectMenu(select_menu),
                             super::super::advantage_roll_buttons(default_roll, char_id_i32),
-                            super::super::stat_roll_buttons(default_roll, char_id_i32),
+                            super::super::stat_roll_buttons(
+                                default_roll,
+                                char_id_i32,
+                                stat_block.stats,
+                            ),
                             super::super::character_select_dropdown(
                                 db_connection,
                                 user_id.parse().unwrap(),
