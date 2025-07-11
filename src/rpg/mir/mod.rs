@@ -1082,7 +1082,13 @@ pub async fn roll_with_char_sheet(
             {
                 for (stat, value) in stats_object {
                     if let Some(int_value) = value.as_i64() {
-                        let stat_mod = int_value / 10;
+                        let stat_mod;
+                        if let Some(formula) = stat_block.modifier_formula.clone() {
+                            stat_mod = formula.replace("stat", &(int_value).to_string())
+                        } else {
+                            stat_mod = (int_value / 10).to_string()
+                        }
+
                         str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
                     }
                 }

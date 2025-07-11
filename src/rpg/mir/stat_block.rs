@@ -25,7 +25,9 @@ pub struct StatBlock {
     pub max_soul: Option<i64>,
 
     pub hunger: Option<i64>,
+
     pub default_roll: Option<String>,
+    pub modifier_formula: Option<String>,
 }
 
 impl fmt::Display for StatBlock {
@@ -68,6 +70,7 @@ impl CharacterSheetable for StatBlock {
             hunger: None,
 
             default_roll: None,
+            modifier_formula: None,
         };
     }
 
@@ -112,6 +115,12 @@ impl CharacterSheetable for StatBlock {
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
             .or(Some("1d100".to_string()));
+
+        self.modifier_formula = deserialized_message
+            .get("modifier_formula")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
 
         Ok(())
     }
@@ -178,6 +187,7 @@ impl CharacterSheetable for StatBlock {
             "hunger": (number),
 
             "default_roll": (string)
+            "modifier_formula": (string)
    
             "actions": (number),
             "reactions": (number),
@@ -209,6 +219,11 @@ impl CharacterSheetable for StatBlock {
                 "int": (number),
                 "cha": (number),
                 "kno": (number),
+
+                "body": (number),
+                "mobility": (number),
+                "arcane": (number),
+                "intuition": (number),
             }
         }    
         If there are missing values, ignore them (don't make a key for them)
