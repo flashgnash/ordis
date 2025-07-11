@@ -439,14 +439,60 @@ pub fn advantage_roll_buttons(base_dice_string: &str, character_id: i32) -> Crea
     ])
 }
 
-pub fn stat_roll_buttons(base_dice_string: &str, character_id: i32) -> CreateActionRow {
-    CreateActionRow::Buttons(vec![
-        roll_button("💪", &format!("{base_dice_string}+str"), character_id),
-        roll_button("🐇", &format!("{base_dice_string}+agl"), character_id),
-        roll_button("🛡️", &format!("{base_dice_string}+con"), character_id),
-        roll_button("🧠", &format!("{base_dice_string}+kno"), character_id),
-        roll_button("💬", &format!("{base_dice_string}+cha"), character_id),
-    ])
+lazy_static! {
+    static ref ROLL_EMOJIS: HashMap<String, String> = {
+        let mut m = HashMap::new();
+        m.insert("str".to_string(), "💪".to_string());
+        m.insert("agl".to_string(), "🐇".to_string());
+        m.insert("con".to_string(), "🛡️".to_string());
+        m.insert("kno".to_string(), "🧠".to_string());
+        m.insert("cha".to_string(), "💬".to_string());
+
+        m.insert("body".to_string(), "🧍‍♂️body".to_string());
+        m.insert("mobility".to_string(), "👟 mobility".to_string());
+        m.insert("intuition".to_string(), "🔎 intuition".to_string());
+        m.insert("arcane".to_string(), "🪄 arcane".to_string());
+        m
+    };
+}
+
+pub fn stat_roll_buttons(
+    base_dice_string: &str,
+    character_id: i32,
+    stat_block: Option<serde_json::Value>,
+) -> CreateActionRow {
+    let stat_keys;
+
+    if let Some(Value::Object(map)) = stat_block {
+        stat_keys = map
+            .into_iter()
+            .filter_map(|(key, value)| {
+                if value != Value::Null {
+                    Some(key)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<String>>();
+    } else {
+        stat_keys = vec![
+            "str".to_string(),
+            "agl".to_string(),
+            "con".to_string(),
+            "kno".to_string(),
+            "cha".to_string(),
+        ];
+    }
+
+    let buttons = stat_keys
+        .iter()
+        .filter_map(|stat| {
+            ROLL_EMOJIS.get(&*stat).map(|emoji| {
+                roll_button(emoji, &format!("{base_dice_string}+{stat}"), character_id)
+            })
+        })
+        .collect();
+    CreateActionRow::Buttons(buttons)
 }
 
 pub async fn character_select_dropdown(
@@ -514,10 +560,12 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
         stat_block.default_roll.as_ref().unwrap()
     };
 
+    let stats_dict = stat_block.stats;
+
     let mut rows = vec![
         // CreateActionRow::SelectMenu(select_menu),
         advantage_roll_buttons(default_roll, character_id),
-        stat_roll_buttons(default_roll, character_id),
+        stat_roll_buttons(default_roll, character_id, stats_dict),
         character_select_dropdown(db_connection, ctx.author().id.get()).await?,
     ];
 
