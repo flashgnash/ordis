@@ -1090,6 +1090,17 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+lazy_static! {
+    static ref MODIFIER_FORMULAS: HashMap<&'static str, &'static str> = {
+        let mut m = HashMap::new();
+        m.insert("mir", "floor(stat/10)");
+        m.insert("deitus", "stat");
+        m.insert("5e", "floor((stat - 10) / 2)");
+
+        m
+    };
+}
+
 pub async fn roll_with_char_sheet(
     ctx: &poise::serenity_prelude::Context,
     dice_expression: Option<String>,
@@ -1129,7 +1140,13 @@ pub async fn roll_with_char_sheet(
                     if let Some(int_value) = value.as_i64() {
                         let stat_mod;
                         if let Some(formula) = stat_block.modifier_formula.clone() {
-                            stat_mod = formula.replace("stat", &(int_value).to_string())
+                            let mut formula = formula.clone();
+                            for (key, val) in MODIFIER_FORMULAS.iter() {
+                                formula = formula.replace(key, val);
+                            }
+
+                            stat_mod =
+                                format!("({})", formula.replace("stat", &(int_value).to_string()));
                         } else {
                             stat_mod = (int_value / 10).to_string()
                         }
