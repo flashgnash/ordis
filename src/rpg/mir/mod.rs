@@ -222,9 +222,9 @@ pub async fn generate_status_embed(
                     // Only include the pair if the value is not null
                     if value != Value::Null {
                         Some(format!(
-                            "| {} +{}",
+                            "| {} {}",
                             key,
-                            (value.as_f64().expect("value of stat was nan") / 10 as f64).floor()
+                            (value.as_f64().expect("value of stat was nan") as f64).floor()
                         ))
                     } else {
                         None
