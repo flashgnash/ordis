@@ -153,10 +153,12 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
                 Message {
                     role: Role::system,
                     content: preprompt,
+                    name: None
                 },
                 Message {
                     role: Role::user,
                     content: message.to_string(),
+                    name: None
                 },
             ];
 
