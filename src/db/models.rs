@@ -11,7 +11,6 @@ pub struct User {
     pub count: Option<i32>,
     pub selected_character: Option<i32>,
 }
-
 impl Character {
     pub fn new_empty() -> Character {
         Character {
@@ -61,4 +60,13 @@ pub struct Character {
     pub mana: Option<i32>,
     pub mana_readout_channel_id: Option<String>,
     pub mana_readout_message_id: Option<String>,
+}
+
+#[derive(Queryable, Selectable, AsChangeset)]
+#[diesel(table_name = schema::servers)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+#[derive(Insertable, Clone)]
+pub struct Server {
+    pub id: String,
+    pub default_roll_channel: Option<String>,
 }
