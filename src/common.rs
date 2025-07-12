@@ -109,6 +109,7 @@ impl ButtonEventSystem {
 
 pub fn get_channel_tags(channel: &GuildChannel) -> HashMap<String, Vec<String>> {
     if let Some(topic) = &channel.topic {
+        // println!("{topic}");
         let mut map: HashMap<String, Vec<String>> = HashMap::new();
 
         for line in topic.lines() {
@@ -121,7 +122,7 @@ pub fn get_channel_tags(channel: &GuildChannel) -> HashMap<String, Vec<String>> 
             map.insert(key, values);
         }
 
-        map;
+        return map;
     }
 
     HashMap::new()

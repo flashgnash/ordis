@@ -5,6 +5,7 @@ use poise::serenity_prelude::GuildChannel;
 
 // use poise::serenity_prelude::model::channel::Channel;
 
+static THREAD_FLAG: &str = "threadChannel";
 #[async_trait]
 impl poise::serenity_prelude::EventHandler for Handler {
     async fn message(
@@ -21,7 +22,7 @@ impl poise::serenity_prelude::EventHandler for Handler {
 
         if let Some(channel) = &guild_channel {
             let tags = crate::common::get_channel_tags(channel);
-            if (tags.contains_key("-threadChannel")) {
+            if (tags.contains_key(THREAD_FLAG)) {
                 channel
                     .create_thread_from_message(
                         ctx,

@@ -1167,6 +1167,8 @@ pub async fn roll_with_char_sheet(
     Ok(dice::roll_internal(&str_replaced).await?)
 }
 
+static ROLL_CHANNEL_FLAG: &str = "rollChannel";
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
     let placeholder = CreateReply::default()
@@ -1178,11 +1180,24 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
     let author = ctx.author();
 
     let db_connection = &mut db::establish_connection();
-    let channel;
-    if let Some(guild) = ctx.guild() {
-        channel = get_roll_channel(db_connection, &guild.id)?.unwrap_or(ctx.channel_id());
+
+    let use_roll_channel = if let Some(guild_channel) = ctx.guild_channel().await {
+        let tags = crate::common::get_channel_tags(&guild_channel);
+        !tags.contains_key(ROLL_CHANNEL_FLAG)
     } else {
-        channel = ctx.channel_id();
+        true
+    };
+
+    let channel;
+    if use_roll_channel {
+        if let Some(guild) = ctx.guild() {
+            channel = get_roll_channel(db_connection, &guild.id)?;
+        } else {
+            channel = None;
+        };
+    } else {
+        println!("Ignoring dedicated roll channel because this channel is whitelisted");
+        channel = None; //I hate this duplication, next rust version I can use && in the if let Some statement
     }
 
     // ctx.reply(format!("{}", channel.get())).await?;
@@ -1208,7 +1223,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
             crate::dice::roll_internal(&dice_expression.unwrap_or("1d100".to_string())).await?;
     }
 
-    dice::output_roll_message(ctx, result, nick, Some(channel)).await?;
+    dice::output_roll_message(ctx, result, nick, channel).await?;
 
     Ok(())
 }

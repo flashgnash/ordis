@@ -8,7 +8,7 @@ use emojis;
 
 // use poise::serenity_prelude::model::channel::Channel;
 
-static REACT_FLAG: &str = "-autoReact";
+static REACT_FLAG: &str = "autoReact";
 
 #[async_trait]
 impl poise::serenity_prelude::EventHandler for Handler {
@@ -27,7 +27,7 @@ impl poise::serenity_prelude::EventHandler for Handler {
         if let Some(channel) = &guild_channel {
             let tags = crate::common::get_channel_tags(&channel);
 
-            if let Some(emojis) = tags.get("-autoReact") {
+            if let Some(emojis) = tags.get(REACT_FLAG) {
                 for emoji_string in emojis {
                     let emoji = get_emoji(&ctx, emoji_string).await;
                     println!("Ooga");
