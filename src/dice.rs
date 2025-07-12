@@ -1,5 +1,7 @@
+use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::Colour;
 use poise::serenity_prelude::CreateEmbed;
+use poise::serenity_prelude::CreateMessage;
 use poise::CreateReply;
 use rand::prelude::*;
 
@@ -118,10 +120,23 @@ pub async fn output_roll_message(
     ctx: Context<'_>,
     roll: (String, f64),
     username: String,
+    channel: Option<ChannelId>,
 ) -> Result<(), Error> {
     let colour = crate::common::get_author_colour(ctx).await?;
 
     let embed = generate_roll_embed(roll, &username, colour).await?;
+
+    if let Some(channel) = channel {
+        if channel != ctx.channel_id() {
+            channel
+                .send_message(ctx, CreateMessage::default().embed(embed.clone()))
+                .await?;
+            ctx.send(CreateReply::default().embed(embed).ephemeral(true))
+                .await?;
+
+            return Ok(());
+        }
+    }
 
     ctx.send(CreateReply::default().embed(embed)).await?;
 
@@ -158,6 +173,7 @@ pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
             )
             .await
             .unwrap_or(ctx.author().name.to_string()),
+        None,
     )
     .await?;
 

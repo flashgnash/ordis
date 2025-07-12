@@ -237,6 +237,10 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+pub fn base_commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
+    return vec![ping(), calc()];
+}
+
 type CommandFn = fn() -> Vec<Command<crate::common::Data, crate::common::Error>>;
 
 struct Module {
@@ -281,7 +285,7 @@ async fn main() {
     //     });
 
     let modules = vec![
-        // mod_entry(base::commands),
+        mod_entry!(base_commands),
         mod_entry!(llm::discord::commands),
         mod_entry!(llm::discord::translator::commands),
         mod_entry!(voice::music::commands),
@@ -333,11 +337,7 @@ async fn main() {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: commands,
-
-            ..Default::default() // TODO make this configurable via environment variables
-                                 // IE have a list of module names to import, and a dictionary in main it matches them against
-                                 // This way I can disable the RPG commands in Ordis and the admin commands in Sentient Bob
-                                 // while sharing the same codebase
+            ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
@@ -355,6 +355,7 @@ async fn main() {
         .event_handler(crate::llm::discord::reply_handler::ReplyHandler)
         .register_songbird()
         .await;
+
     println!("Starting framework...");
     client.unwrap().start().await.unwrap();
 }

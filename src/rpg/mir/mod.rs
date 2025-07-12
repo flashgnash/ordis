@@ -3,12 +3,17 @@ pub mod stat_block;
 
 use lazy_static::lazy_static;
 use poise::serenity_prelude::ButtonStyle;
+use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::CreateActionRow;
 use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
 use poise::serenity_prelude::CreateSelectMenu;
 use poise::serenity_prelude::CreateSelectMenuOption;
+use poise::serenity_prelude::Guild;
+use poise::serenity_prelude::GuildId;
+use poise::serenity_prelude::Member;
+use poise::serenity_prelude::PartialMember;
 use poise::Command;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
@@ -22,6 +27,7 @@ use super::spells::SpellType;
 use spell_sheet::SpellSheet;
 use stat_block::StatBlock;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::common;
@@ -1172,6 +1178,14 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
     let author = ctx.author();
 
     let db_connection = &mut db::establish_connection();
+    let channel;
+    if let Some(guild) = ctx.guild() {
+        channel = get_roll_channel(db_connection, &guild.id)?.unwrap_or(ctx.channel_id());
+    } else {
+        channel = ctx.channel_id();
+    }
+
+    // ctx.reply(format!("{}", channel.get())).await?;
 
     let mut nick = format!("{}\n(no character)", author.name.to_string());
 
@@ -1194,7 +1208,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
             crate::dice::roll_internal(&dice_expression.unwrap_or("1d100".to_string())).await?;
     }
 
-    dice::output_roll_message(ctx, result, nick).await?;
+    dice::output_roll_message(ctx, result, nick, Some(channel)).await?;
 
     Ok(())
 }
@@ -1623,6 +1637,58 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
     return Ok(());
 }
 
+pub fn get_roll_channel(
+    db_connection: &mut SqliteConnection,
+    guild: &GuildId,
+) -> Result<Option<ChannelId>, Error> {
+    let server = db::servers::get_or_create(db_connection, guild.get())?;
+
+    let channel_id = server
+        .default_roll_channel
+        .and_then(|s| s.parse::<ChannelId>().ok());
+
+    Ok(channel_id)
+}
+
+#[poise::command(slash_command)]
+pub async fn set_roll_channel(ctx: Context<'_>) -> Result<(), Error> {
+    if let Some(guild) = ctx.partial_guild().await {
+        if let Some(perms) = common::get_author_perms(ctx).await {
+            if perms.manage_channels() {
+                let db_connection = &mut db::establish_connection();
+                let mut server = db::servers::get_or_create(db_connection, guild.id.get())?;
+                server.default_roll_channel = Some(ctx.channel_id().get().to_string());
+                db::servers::update(db_connection, &server)?;
+
+                ctx.reply("Set the roll channel successfully").await?;
+            } else {
+                ctx.reply("I'm sorry Dave, I can't let you do that").await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[poise::command(slash_command)]
+pub async fn unset_roll_channel(ctx: Context<'_>) -> Result<(), Error> {
+    if let Some(guild) = ctx.partial_guild().await {
+        if let Some(perms) = common::get_author_perms(ctx).await {
+            if perms.manage_channels() {
+                let db_connection = &mut db::establish_connection();
+
+                let mut server = db::servers::get_or_create(db_connection, guild.id.get())?;
+                server.default_roll_channel = None;
+                db::servers::update(db_connection, &server)?;
+
+                ctx.reply("Unset the roll channel successfully").await?;
+            } else {
+                ctx.reply("I'm sorry Dave, I can't let you do that").await?;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[poise::command(
     slash_command,
     // description_localized = "Pull a single stat from your character sheet"
@@ -1657,6 +1723,8 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
 
 pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
     return vec![
+        set_roll_channel(),
+        unset_roll_channel(),
         pull_stat(),
         pull_stats(),
         pull_spellsheet(),

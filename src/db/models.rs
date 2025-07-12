@@ -62,7 +62,7 @@ pub struct Character {
     pub mana_readout_message_id: Option<String>,
 }
 
-#[derive(Queryable, Selectable, AsChangeset)]
+#[derive(Queryable, Selectable, AsChangeset, Debug)]
 #[diesel(table_name = schema::servers)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 #[derive(Insertable, Clone)]
