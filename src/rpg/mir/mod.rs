@@ -462,6 +462,15 @@ lazy_static! {
     };
 }
 
+lazy_static! {
+    static ref PRESET_FORMULAS: HashMap<&'static str, &'static str> = {
+        let mut m = HashMap::new();
+        m.insert("mir", "floor(stat/10)");
+        m.insert("deitus", "stat");
+        m.insert("5e", "floor((stat - 10) / 2)");
+        m
+    };
+}
 pub fn stat_roll_buttons(
     base_dice_string: &str,
     character_id: i32,
@@ -478,6 +487,7 @@ pub fn stat_roll_buttons(
             .collect()
     };
 
+    println!("stat keys: {stat_keys:#?}");
     stat_keys.sort_by_key(|k| {
         ROLL_EMOJIS
             .get(k.as_str())
@@ -1133,14 +1143,18 @@ pub async fn roll_with_char_sheet(
             {
                 for (stat, value) in stats_object {
                     if let Some(int_value) = value.as_i64() {
-                        let stat_mod;
-                        if let Some(formula) = stat_block.modifier_formula.clone() {
-                            stat_mod = formula.replace("stat", &(int_value).to_string())
+                        let stat_mod = if let Some(formula) = stat_block.modifier_formula.clone() {
+                            let formula_with_presets: String = PRESET_FORMULAS
+                                .iter()
+                                .fold(formula.to_string(), |acc, (k, v)| acc.replace(k, v));
+
+                            formula_with_presets.replace("stat", &(int_value).to_string())
                         } else {
-                            stat_mod = (int_value / 10).to_string()
-                        }
+                            (int_value / 10).to_string()
+                        };
 
                         str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
+                        println!("replaced string {str_replaced}");
                     }
                 }
             }

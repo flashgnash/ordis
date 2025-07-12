@@ -66,10 +66,21 @@ impl common::EventHandlerTrait for RollEvent {
                 )
                 .expect("Remove this expect later");
 
-                let result =
+                let result_or_err =
                     super::super::roll_with_char_sheet(ctx, Some(dice_string.to_string()), &char)
-                        .await
-                        .expect("This is bad practise");
+                        .await;
+
+                let result = match result_or_err {
+                    Ok(v) => v,
+                    Err(e) => {
+                        interaction
+                            .channel_id
+                            .send_message(ctx, CreateMessage::default().content(format!("{}", e)))
+                            .await
+                            .expect("I give up");
+                        return;
+                    }
+                };
 
                 let colour =
                     crate::common::get_user_colour(ctx, interaction.guild_id, interaction.user.id)

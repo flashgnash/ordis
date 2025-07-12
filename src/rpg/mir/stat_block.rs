@@ -186,8 +186,9 @@ impl CharacterSheetable for StatBlock {
             "level": (number),
             "hunger": (number),
 
-            "default_roll": (string)
-            "modifier_formula": (string)
+            "default_roll": (string),
+           
+            "modifier_formula": (string),
    
             "actions": (number),
             "reactions": (number),
@@ -227,6 +228,7 @@ impl CharacterSheetable for StatBlock {
             }
         }    
         If there are missing values, ignore them (don't make a key for them)
+        Particularly with stats it is IMPERATIVE that keys are not included if not present in the sheet
         You should translate these stats into a minified json dictionary.
         All keys should be lower case and spell corrected. Respond with only valid, minified json
 
