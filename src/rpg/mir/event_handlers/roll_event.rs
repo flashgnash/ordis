@@ -103,6 +103,7 @@ impl common::EventHandlerTrait for RollEvent {
                         .create_followup(
                             ctx,
                             CreateInteractionResponseFollowup::default()
+                                .content(format!("(sent your roll to <#{channel_id}>) for you"))
                                 .ephemeral(true)
                                 .embed(embed),
                         )

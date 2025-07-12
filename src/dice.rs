@@ -131,8 +131,13 @@ pub async fn output_roll_message(
             channel
                 .send_message(ctx, CreateMessage::default().embed(embed.clone()))
                 .await?;
-            ctx.send(CreateReply::default().embed(embed).ephemeral(true))
-                .await?;
+            ctx.send(
+                CreateReply::default()
+                    .embed(embed)
+                    .ephemeral(true)
+                    .content(format!("(sent your roll to <#{channel}>) for you")),
+            )
+            .await?;
 
             return Ok(());
         }
