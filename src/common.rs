@@ -4,7 +4,7 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 use std::{borrow::Cow, collections::HashMap};
 
 use poise::serenity_prelude::{
-    Colour, Emoji, GuildId, Message, PartialMember, Permissions, UserId,
+    Colour, Emoji, GuildChannel, GuildId, Message, PartialMember, Permissions, UserId,
 };
 use serde::Deserialize;
 use serde_json::{from_str, Value};
@@ -105,6 +105,26 @@ impl ButtonEventSystem {
             }
         }
     }
+}
+
+pub fn get_channel_tags(channel: &GuildChannel) -> HashMap<String, Vec<String>> {
+    if let Some(topic) = &channel.topic {
+        let mut map: HashMap<String, Vec<String>> = HashMap::new();
+
+        for line in topic.lines() {
+            let mut parts = line.trim().splitn(2, ' ');
+            let key = parts.next().unwrap().trim_start_matches('-').to_string();
+            let values = parts
+                .next()
+                .map(|v| v.split(',').map(str::to_string).collect())
+                .unwrap_or_else(Vec::new);
+            map.insert(key, values);
+        }
+
+        map;
+    }
+
+    HashMap::new()
 }
 
 pub async fn get_author_perms(ctx: Context<'_>) -> Option<Permissions> {
