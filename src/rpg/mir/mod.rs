@@ -228,9 +228,9 @@ pub async fn generate_status_embed(
                     // Only include the pair if the value is not null
                     if value != Value::Null {
                         Some(format!(
-                            "| {} +{}",
+                            "| {} {}",
                             key,
-                            (value.as_f64().expect("value of stat was nan") / 10 as f64).floor()
+                            (value.as_f64().expect("value of stat was nan") as f64).floor()
                         ))
                     } else {
                         None
@@ -1104,6 +1104,17 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
     // return Err(Box::new(crate::stat_puller::RpgError::SpellNotFound));
 
     Ok(())
+}
+
+lazy_static! {
+    static ref MODIFIER_FORMULAS: HashMap<&'static str, &'static str> = {
+        let mut m = HashMap::new();
+        m.insert("mir", "floor(stat/10)");
+        m.insert("deitus", "stat");
+        m.insert("5e", "floor((stat - 10) / 2)");
+
+        m
+    };
 }
 
 pub async fn roll_with_char_sheet(
