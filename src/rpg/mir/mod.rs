@@ -579,23 +579,22 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
         // CreateActionRow::SelectMenu(select_menu),
         advantage_roll_buttons(default_roll, character_id),
         stat_roll_buttons(default_roll, character_id, stats_dict),
-        character_select_dropdown(db_connection, ctx.author().id.get()).await?,
     ];
 
-    if !ephemeral {
+    if ephemeral {
+        rows.push(character_select_dropdown(db_connection, ctx.author().id.get()).await?);
+    } else {
         rows.push(CreateActionRow::Buttons(vec![
             UpdateStatusEvent::create_button(
                 "♻️",
                 &UpdateStatusEventParams {
                     character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
                 },
-            )
-            .expect("How fail"),
+            )?,
             event_handlers::DeleteMessageEvent::create_button(
                 "🗑️",
                 &event_handlers::DeleteMessageEventParams {},
-            )
-            .expect("Failed to create delete button"),
+            )?,
         ]));
     }
 
@@ -1104,17 +1103,6 @@ pub async fn list_spells(ctx: Context<'_>) -> Result<(), Error> {
     // return Err(Box::new(crate::stat_puller::RpgError::SpellNotFound));
 
     Ok(())
-}
-
-lazy_static! {
-    static ref MODIFIER_FORMULAS: HashMap<&'static str, &'static str> = {
-        let mut m = HashMap::new();
-        m.insert("mir", "floor(stat/10)");
-        m.insert("deitus", "stat");
-        m.insert("5e", "floor((stat - 10) / 2)");
-
-        m
-    };
 }
 
 pub async fn roll_with_char_sheet(
