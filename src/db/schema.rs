@@ -20,6 +20,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    servers (id) {
+        id -> Text,
+        default_roll_channel -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     users (id) {
         id -> Text,
         username -> Nullable<Text>,
@@ -35,5 +42,6 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     characters,
+    servers,
     users,
 );

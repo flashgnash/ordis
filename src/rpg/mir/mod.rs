@@ -3,12 +3,17 @@ pub mod stat_block;
 
 use lazy_static::lazy_static;
 use poise::serenity_prelude::ButtonStyle;
+use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::CreateActionRow;
 use poise::serenity_prelude::CreateButton;
 use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
 use poise::serenity_prelude::CreateSelectMenu;
 use poise::serenity_prelude::CreateSelectMenuOption;
+use poise::serenity_prelude::Guild;
+use poise::serenity_prelude::GuildId;
+use poise::serenity_prelude::Member;
+use poise::serenity_prelude::PartialMember;
 use poise::Command;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
@@ -22,6 +27,7 @@ use super::spells::SpellType;
 use spell_sheet::SpellSheet;
 use stat_block::StatBlock;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::common;
@@ -222,9 +228,9 @@ pub async fn generate_status_embed(
                     // Only include the pair if the value is not null
                     if value != Value::Null {
                         Some(format!(
-                            "| {} +{}",
+                            "| {} {}",
                             key,
-                            (value.as_f64().expect("value of stat was nan") / 10 as f64).floor()
+                            (value.as_f64().expect("value of stat was nan") as f64).floor()
                         ))
                     } else {
                         None
@@ -458,6 +464,15 @@ lazy_static! {
     };
 }
 
+lazy_static! {
+    static ref PRESET_FORMULAS: HashMap<&'static str, &'static str> = {
+        let mut m = HashMap::new();
+        m.insert("mir", "floor(stat/10)");
+        m.insert("deitus", "stat");
+        m.insert("5e", "floor((stat - 10) / 2)");
+        m
+    };
+}
 pub fn stat_roll_buttons(
     base_dice_string: &str,
     character_id: i32,
@@ -474,6 +489,7 @@ pub fn stat_roll_buttons(
             .collect()
     };
 
+    println!("stat keys: {stat_keys:#?}");
     stat_keys.sort_by_key(|k| {
         ROLL_EMOJIS
             .get(k.as_str())
@@ -580,24 +596,24 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
         advantage_roll_buttons(default_roll, character_id),
     ];
 
-    rows.extend(stat_roll_buttons(default_roll, character_id, stats_dict));
-
-    rows.push(character_select_dropdown(db_connection, ctx.author().id.get()).await?);
-
     if !ephemeral {
+        rows.extend(stat_roll_buttons(default_roll, character_id, stats_dict));
+    }
+
+    if ephemeral {
+        rows.push(character_select_dropdown(db_connection, ctx.author().id.get()).await?);
+    } else {
         rows.push(CreateActionRow::Buttons(vec![
             UpdateStatusEvent::create_button(
                 "♻️",
                 &UpdateStatusEventParams {
                     character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
                 },
-            )
-            .expect("How fail"),
+            )?,
             event_handlers::DeleteMessageEvent::create_button(
                 "🗑️",
                 &event_handlers::DeleteMessageEventParams {},
-            )
-            .expect("Failed to create delete button"),
+            )?,
         ]));
     }
 
@@ -1156,20 +1172,18 @@ pub async fn roll_with_char_sheet(
             {
                 for (stat, value) in stats_object {
                     if let Some(int_value) = value.as_i64() {
-                        let stat_mod;
-                        if let Some(formula) = stat_block.modifier_formula.clone() {
-                            let mut formula = formula.clone();
-                            for (key, val) in MODIFIER_FORMULAS.iter() {
-                                formula = formula.replace(key, val);
-                            }
+                        let stat_mod = if let Some(formula) = stat_block.modifier_formula.clone() {
+                            let formula_with_presets: String = PRESET_FORMULAS
+                                .iter()
+                                .fold(formula.to_string(), |acc, (k, v)| acc.replace(k, v));
 
-                            stat_mod =
-                                format!("({})", formula.replace("stat", &(int_value).to_string()));
+                            formula_with_presets.replace("stat", &(int_value).to_string())
                         } else {
-                            stat_mod = (int_value / 10).to_string()
-                        }
+                            (int_value / 10).to_string()
+                        };
 
                         str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
+                        println!("replaced string {str_replaced}");
                     }
                 }
             }
@@ -1196,6 +1210,8 @@ pub async fn roll_with_char_sheet(
     Ok(dice::roll_internal(&str_replaced).await?)
 }
 
+static ROLL_CHANNEL_FLAG: &str = "rollChannel";
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
     let placeholder = CreateReply::default()
@@ -1207,6 +1223,27 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
     let author = ctx.author();
 
     let db_connection = &mut db::establish_connection();
+
+    let use_roll_channel = if let Some(guild_channel) = ctx.guild_channel().await {
+        let tags = crate::common::get_channel_tags(&guild_channel);
+        !tags.contains_key(ROLL_CHANNEL_FLAG)
+    } else {
+        true
+    };
+
+    let channel;
+    if use_roll_channel {
+        if let Some(guild) = ctx.guild() {
+            channel = get_roll_channel(db_connection, &guild.id)?;
+        } else {
+            channel = None;
+        };
+    } else {
+        println!("Ignoring dedicated roll channel because this channel is whitelisted");
+        channel = None; //I hate this duplication, next rust version I can use && in the if let Some statement
+    }
+
+    // ctx.reply(format!("{}", channel.get())).await?;
 
     let mut nick = format!("{}\n(no character)", author.name.to_string());
 
@@ -1229,7 +1266,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
             crate::dice::roll_internal(&dice_expression.unwrap_or("1d100".to_string())).await?;
     }
 
-    dice::output_roll_message(ctx, result, nick).await?;
+    dice::output_roll_message(ctx, result, nick, channel).await?;
 
     Ok(())
 }
@@ -1658,6 +1695,58 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
     return Ok(());
 }
 
+pub fn get_roll_channel(
+    db_connection: &mut SqliteConnection,
+    guild: &GuildId,
+) -> Result<Option<ChannelId>, Error> {
+    let server = db::servers::get_or_create(db_connection, guild.get())?;
+
+    let channel_id = server
+        .default_roll_channel
+        .and_then(|s| s.parse::<ChannelId>().ok());
+
+    Ok(channel_id)
+}
+
+#[poise::command(slash_command)]
+pub async fn set_roll_channel(ctx: Context<'_>) -> Result<(), Error> {
+    if let Some(guild) = ctx.partial_guild().await {
+        if let Some(perms) = common::get_author_perms(ctx).await {
+            if perms.manage_channels() {
+                let db_connection = &mut db::establish_connection();
+                let mut server = db::servers::get_or_create(db_connection, guild.id.get())?;
+                server.default_roll_channel = Some(ctx.channel_id().get().to_string());
+                db::servers::update(db_connection, &server)?;
+
+                ctx.reply("Set the roll channel successfully").await?;
+            } else {
+                ctx.reply("I'm sorry Dave, I can't let you do that").await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+#[poise::command(slash_command)]
+pub async fn unset_roll_channel(ctx: Context<'_>) -> Result<(), Error> {
+    if let Some(guild) = ctx.partial_guild().await {
+        if let Some(perms) = common::get_author_perms(ctx).await {
+            if perms.manage_channels() {
+                let db_connection = &mut db::establish_connection();
+
+                let mut server = db::servers::get_or_create(db_connection, guild.id.get())?;
+                server.default_roll_channel = None;
+                db::servers::update(db_connection, &server)?;
+
+                ctx.reply("Unset the roll channel successfully").await?;
+            } else {
+                ctx.reply("I'm sorry Dave, I can't let you do that").await?;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[poise::command(
     slash_command,
     // description_localized = "Pull a single stat from your character sheet"
@@ -1692,6 +1781,8 @@ pub async fn pull_stat(ctx: Context<'_>, stat_name: String) -> Result<(), Error>
 
 pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
     return vec![
+        set_roll_channel(),
+        unset_roll_channel(),
         pull_stat(),
         pull_stats(),
         pull_spellsheet(),

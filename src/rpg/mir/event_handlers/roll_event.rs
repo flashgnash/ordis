@@ -1,5 +1,6 @@
 use poise::serenity_prelude::ButtonStyle;
 use poise::serenity_prelude::CreateButton;
+use poise::serenity_prelude::CreateInteractionResponseFollowup;
 use poise::serenity_prelude::CreateSelectMenuOption;
 use serde::Serialize;
 
@@ -8,6 +9,7 @@ use crate::common::Error;
 use crate::create_button_with_callback;
 use crate::create_select_option_with_callback;
 use crate::db;
+use crate::rpg::mir::get_roll_channel;
 
 use super::super::RpgError;
 
@@ -64,10 +66,21 @@ impl common::EventHandlerTrait for RollEvent {
                 )
                 .expect("Remove this expect later");
 
-                let result =
+                let result_or_err =
                     super::super::roll_with_char_sheet(ctx, Some(dice_string.to_string()), &char)
-                        .await
-                        .expect("This is bad practise");
+                        .await;
+
+                let result = match result_or_err {
+                    Ok(v) => v,
+                    Err(e) => {
+                        interaction
+                            .channel_id
+                            .send_message(ctx, CreateMessage::default().content(format!("{}", e)))
+                            .await
+                            .expect("I give up");
+                        return;
+                    }
+                };
 
                 let colour =
                     crate::common::get_user_colour(ctx, interaction.guild_id, interaction.user.id)
@@ -84,11 +97,36 @@ impl common::EventHandlerTrait for RollEvent {
 
                 // ctx.send(embed).await?;
 
-                interaction
-                    .channel_id
-                    .send_message(ctx, CreateMessage::default().embed(embed))
-                    .await
-                    .expect("AAA");
+                let channel;
+                if let Some(guild_id) = interaction.guild_id {
+                    channel = get_roll_channel(db_connection, &guild_id).expect("woohoo");
+                } else {
+                    channel = None;
+                }
+
+                if let Some(channel_id) = channel {
+                    channel_id
+                        .send_message(ctx, CreateMessage::default().embed(embed.clone()))
+                        .await
+                        .expect("AAA");
+
+                    interaction
+                        .create_followup(
+                            ctx,
+                            CreateInteractionResponseFollowup::default()
+                                .content(format!("(sent your roll to <#{channel_id}>) for you"))
+                                .ephemeral(true)
+                                .embed(embed),
+                        )
+                        .await
+                        .expect("AAA");
+                } else {
+                    interaction
+                        .channel_id
+                        .send_message(ctx, CreateMessage::default().embed(embed))
+                        .await
+                        .expect("AAA");
+                }
             }
         }
     }
