@@ -492,10 +492,20 @@ pub fn stat_roll_buttons(
         })
         .collect();
 
-    buttons
-        .chunks(5)
-        .map(|chunk| CreateActionRow::Buttons(chunk.to_vec()))
-        .collect()
+    let row_count = (buttons.len() + 4) / 5; // max 5 per row
+    let mut rows = Vec::new();
+    let mut start = 0;
+
+    for i in 0..row_count {
+        let remaining = buttons.len() - start;
+        let per_row = (remaining + row_count - i - 1) / (row_count - i); // balance evenly
+        rows.push(CreateActionRow::Buttons(
+            buttons[start..start + per_row].to_vec(),
+        ));
+        start += per_row;
+    }
+
+    rows
 }
 
 pub async fn character_select_dropdown(
