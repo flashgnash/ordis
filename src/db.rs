@@ -2,6 +2,8 @@ pub mod models;
 pub mod schema;
 
 pub mod characters;
+
+pub mod servers;
 pub mod users;
 
 use self::models::*;

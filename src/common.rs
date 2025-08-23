@@ -1,9 +1,11 @@
 pub struct Data {} // User data, which is stored and accessible in all command invocations
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
-use poise::serenity_prelude::{Colour, Emoji, GuildId, Message, UserId};
+use poise::serenity_prelude::{
+    Colour, Emoji, GuildChannel, GuildId, Message, PartialMember, Permissions, UserId,
+};
 use serde::Deserialize;
 use serde_json::{from_str, Value};
 
@@ -103,6 +105,49 @@ impl ButtonEventSystem {
             }
         }
     }
+}
+
+pub fn get_channel_tags(channel: &GuildChannel) -> HashMap<String, Vec<String>> {
+    if let Some(topic) = &channel.topic {
+        // println!("{topic}");
+        let mut map: HashMap<String, Vec<String>> = HashMap::new();
+
+        for line in topic.lines() {
+            let mut parts = line.trim().splitn(2, ' ');
+            let key = parts.next().unwrap().trim_start_matches('-').to_string();
+            let values = parts
+                .next()
+                .map(|v| v.split(',').map(str::to_string).collect())
+                .unwrap_or_else(Vec::new);
+            map.insert(key, values);
+        }
+
+        return map;
+    }
+
+    HashMap::new()
+}
+
+pub async fn get_author_perms(ctx: Context<'_>) -> Option<Permissions> {
+    if let Some(guild) = ctx.partial_guild().await {
+        if let Some(channel) = ctx.guild_channel().await {
+            if let Some(member) = ctx.author_member().await {
+                // let partial_member = guild.member(ctx, ctx.author()).await?;
+
+                let partial: PartialMember = match member {
+                    Cow::Owned(member) => member.into(),
+                    Cow::Borrowed(member) => member.clone().into(),
+                };
+
+                return Some(guild.partial_member_permissions_in(
+                    &channel,
+                    ctx.author().id,
+                    &partial,
+                ));
+            }
+        }
+    }
+    None
 }
 
 pub fn uid_to_rgb(uid: u64) -> (u8, u8, u8) {
