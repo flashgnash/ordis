@@ -89,7 +89,6 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
 
                         let char_id_i32 = char_id.as_i64().expect("Wrong char id") as i32;
 
-                        let db_connection = &mut db::establish_connection();
                         let char = db::characters::get(char_id_i32)
                             .expect("Character should exist when switching");
 
@@ -102,14 +101,6 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
                         let mut rows = vec![
                             // CreateActionRow::SelectMenu(select_menu),
                             super::super::advantage_roll_buttons(default_roll, char_id_i32),
-                            super::super::stat_roll_buttons(
-                                default_roll,
-                                char_id_i32,
-                                stat_block.stats,
-                            ),
-                            super::super::character_select_dropdown(user_id.parse().unwrap())
-                                .await
-                                .expect("asda"),
                         ];
 
                         let stat_roll_buttons = super::super::stat_roll_buttons(
@@ -118,12 +109,10 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
                             stat_block.stats,
                         );
 
-                        let char_select_dropdown = super::super::character_select_dropdown(
-                            db_connection,
-                            user_id.parse().unwrap(),
-                        )
-                        .await
-                        .expect("asda");
+                        let char_select_dropdown =
+                            super::super::character_select_dropdown(user_id.parse().unwrap())
+                                .await
+                                .expect("asda");
 
                         rows.extend(stat_roll_buttons);
 
