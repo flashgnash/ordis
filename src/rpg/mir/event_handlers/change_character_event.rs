@@ -101,21 +101,27 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
 
                         let default_roll = &stat_block.default_roll.unwrap_or("1d100".to_string());
 
-                        let rows = vec![
+                        let mut rows = vec![
                             // CreateActionRow::SelectMenu(select_menu),
                             super::super::advantage_roll_buttons(default_roll, char_id_i32),
-                            super::super::stat_roll_buttons(
-                                default_roll,
-                                char_id_i32,
-                                stat_block.stats,
-                            ),
-                            super::super::character_select_dropdown(
-                                db_connection,
-                                user_id.parse().unwrap(),
-                            )
-                            .await
-                            .expect("asda"),
                         ];
+
+                        let stat_roll_buttons = super::super::stat_roll_buttons(
+                            default_roll,
+                            char_id_i32,
+                            stat_block.stats,
+                        );
+
+                        let char_select_dropdown = super::super::character_select_dropdown(
+                            db_connection,
+                            user_id.parse().unwrap(),
+                        )
+                        .await
+                        .expect("asda");
+
+                        rows.extend(stat_roll_buttons);
+
+                        rows.push(char_select_dropdown);
 
                         interaction
                             .edit_followup(
