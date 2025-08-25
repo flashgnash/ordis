@@ -5,22 +5,47 @@ use poise::{Command, CreateReply};
 
 use crate::{
     common::{Context, Error},
-    llm::{generate_agent, generate_image, OpenAIResponse, Personality},
+    llm::{generate_agent, generate_image, BadKind, OpenAIResponse, Personality},
 };
 
-pub async fn generate_ordis(message: &str, model: Option<&str>) -> Result<OpenAIResponse, Error> {
-    Ok(generate_agent(message, model, Personality::Ordis.get()).await?)
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref DISALLOWED_CATEGORIES: Vec<BadKind> = vec![
+        BadKind::Sexual,
+        BadKind::SexualMinors,
+        BadKind::HarassmentThreatening,
+        BadKind::Hate,
+        BadKind::IllicitViolent,
+        BadKind::SelfHarm,
+        BadKind::SelfHarmIntent,
+        BadKind::SelfHarmInstructions,
+    ];
+}
+
+pub async fn generate_ordis(
+    message: &str,
+    author: Option<&str>,
+    model: Option<&str>,
+) -> Result<OpenAIResponse, Error> {
+    Ok(generate_agent(message, model, author, Personality::Ordis.get()).await?)
 }
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn ask(ctx: Context<'_>, message: String) -> Result<(), Error> {
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let response = generate_ordis(&message, None).await?;
+    let response_message: String;
 
-    let response_message = &response.choices[0].message.content;
+    if crate::llm::contains_badness(&message, &*DISALLOWED_CATEGORIES).await? {
+        response_message = "Sorry, I'm afraid I can't respond to that".to_string();
+    } else {
+        let response = generate_ordis(&message, Some(&ctx.author().name), None).await?;
 
-    println!("{}", response_message);
+        response_message = response.choices[0].message.content.to_string();
+
+        println!("{}", response_message);
+    }
 
     let reply = CreateReply::default().content(response_message);
 
@@ -33,9 +58,15 @@ pub async fn ask(ctx: Context<'_>, message: String) -> Result<(), Error> {
 pub async fn draw(ctx: Context<'_>, message: String) -> Result<(), Error> {
     let msg = ctx.say("*Thinking, please wait...*").await?;
 
-    let response_message = generate_image(&message).await?;
+    let response_message;
 
-    println!("Generated image URL: {}", response_message);
+    if crate::llm::contains_badness(&message, &*DISALLOWED_CATEGORIES).await? {
+        response_message = "Sorry, I'm afraid I can't respond to that.".to_string();
+    } else {
+        response_message = generate_image(&message).await?;
+    }
+
+    // println!("Generated image URL: {}", response_message);
 
     let reply = CreateReply::default().content(response_message);
 
