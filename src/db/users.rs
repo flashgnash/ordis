@@ -1,7 +1,7 @@
+use crate::common::Error;
+use crate::db::*;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-
-use crate::db::*;
 
 #[allow(dead_code)]
 pub fn create(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
@@ -15,8 +15,10 @@ pub fn create(connection: &mut SqliteConnection, user: &User) -> Result<(), DbEr
 }
 
 #[allow(dead_code)]
-pub fn get(connection: &mut SqliteConnection, user_id: u64) -> Result<User, DbError> {
+pub fn get(user_id: u64) -> Result<User, Error> {
     use self::schema::users::dsl::*;
+
+    let connection = &mut crate::db::POOL.get()?;
 
     let mut users_result = users
         .filter(id.eq(user_id.to_string()))
@@ -29,12 +31,14 @@ pub fn get(connection: &mut SqliteConnection, user_id: u64) -> Result<User, DbEr
         let user = users_result.remove(0);
         Ok(user)
     } else {
-        Err(DbError::NotFound)
+        Err(Box::new(DbError::NotFound))
     }
 }
 
-pub fn get_or_create(connection: &mut SqliteConnection, user_id: u64) -> Result<User, DbError> {
-    let user_result = get(connection, user_id);
+pub fn get_or_create(user_id: u64) -> Result<User, Error> {
+    let connection = &mut crate::db::POOL.get()?;
+
+    let user_result = get(user_id);
 
     match user_result {
         Ok(v) => Ok(v),
@@ -56,8 +60,10 @@ pub fn get_or_create(connection: &mut SqliteConnection, user_id: u64) -> Result<
 }
 
 #[allow(dead_code)]
-pub fn update(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
+pub fn update(user: &User) -> Result<(), Error> {
     use self::schema::users::dsl::*;
+
+    let connection = &mut crate::db::POOL.get()?;
 
     let user_id = &user.id.to_string();
 
@@ -71,8 +77,9 @@ pub fn update(connection: &mut SqliteConnection, user: &User) -> Result<(), DbEr
 }
 
 #[allow(dead_code)]
-pub fn unset_character(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
+pub fn unset_character(user: &User) -> Result<(), Error> {
     use self::schema::users::dsl::*;
+    let connection = &mut crate::db::POOL.get()?;
 
     let user_id = &user.id.to_string();
 

@@ -65,6 +65,8 @@ pub enum RpgError {
 
     JsonNotInitialised,
     TestingError,
+
+    InvalidCharacterError
 }
 
 impl fmt::Display for RpgError {
@@ -315,13 +317,12 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
 }
 pub async fn get_user_character(
-    ctx: &Context<'_>,
-    db_connection: &mut SqliteConnection,
+    ctx: &Context<'_>
 ) -> Result<Option<db::models::Character>, Error> {
-    let user = crate::common::get_user(ctx, db_connection).await?;
+    let user = crate::common::get_user(ctx ).await?;
 
     if let Some(character_id) = user.selected_character {
-        return Ok(Some(db::characters::get(db_connection, character_id)?));
+        return Ok(Some(db::characters::get(character_id)?));
     }
 
     Ok(None)
@@ -336,9 +337,7 @@ lazy_static! {
 
 pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Result<Option<T>,Error> {
 
-    let db_connection = &mut db::establish_connection();
-
-    if let Some(character) =  &get_user_character(ctx,db_connection).await? {
+    if let Some(character) =  &get_user_character(ctx).await? {
         
         let sheet = get_sheet(
           ctx.serenity_context(),
@@ -386,7 +385,7 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_pr
             .clone()
             .expect("Tried to update a non existent character?!");
 
-        let _ = db::characters::update(db_connection, &new_char);
+        let _ = db::characters::update(&new_char);
     }
 
     Ok(character_sheet.clone())

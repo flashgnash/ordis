@@ -66,7 +66,6 @@ impl common::EventHandlerTrait for ChangeManaEvent {
                 let db_connection = &mut db::establish_connection();
 
                 let mut char = db::characters::get(
-                    db_connection,
                     char_id
                         .as_i64()
                         .ok_or(RpgError::TestingError)
@@ -81,7 +80,7 @@ impl common::EventHandlerTrait for ChangeManaEvent {
                         + mana_change.as_i64().expect("Should always be i64") as i32,
                 );
 
-                db::characters::update(db_connection, &char).expect("Argh");
+                db::characters::update(&char).expect("Argh");
 
                 let embed = super::super::generate_status_embed(ctx, &char)
                     .await

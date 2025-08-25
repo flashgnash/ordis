@@ -237,15 +237,12 @@ pub fn draw_bar(
         + &background.repeat(length - current_length.clamp(0, length));
 }
 
-pub async fn get_user(
-    ctx: &Context<'_>,
-    db_connection: &mut SqliteConnection,
-) -> Result<db::models::User, Error> {
+pub async fn get_user(ctx: &Context<'_>) -> Result<db::models::User, Error> {
     let author = &ctx.author();
 
     let user_id = author.id.get();
 
-    Ok(db::users::get_or_create(db_connection, user_id)?)
+    Ok(db::users::get_or_create(user_id)?)
 }
 
 pub fn hash(content: &str) -> String {

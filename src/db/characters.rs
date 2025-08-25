@@ -1,11 +1,14 @@
+use crate::common::Error;
+use crate::db::DbError;
+use crate::db::*;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
 
-use crate::db::*;
-
 #[allow(dead_code)]
-pub fn create(connection: &mut SqliteConnection, character: &Character) -> Result<(), DbError> {
+pub fn create(character: &Character) -> Result<(), Error> {
     println!("Creating character");
+
+    let connection = &mut crate::db::POOL.get()?;
 
     let _ = diesel::insert_into(schema::characters::table)
         .values(character)
@@ -14,12 +17,10 @@ pub fn create(connection: &mut SqliteConnection, character: &Character) -> Resul
     return Ok(());
 }
 
-pub fn delete(
-    connection: &mut SqliteConnection,
-    character_id: i32,
-    owner_id: u64,
-) -> Result<(), DbError> {
+pub fn delete(character_id: i32, owner_id: u64) -> Result<(), Error> {
     use self::schema::characters::dsl::*;
+
+    let connection = &mut crate::db::POOL.get()?;
 
     diesel::delete(
         characters
@@ -31,18 +32,19 @@ pub fn delete(
     Ok(())
 }
 
-pub fn delete_global(connection: &mut SqliteConnection, character_id: i32) -> QueryResult<usize> {
+pub fn delete_global(character_id: i32) -> Result<QueryResult<usize>, Error> {
     use self::schema::characters::dsl::*;
 
-    diesel::delete(characters.filter(id.eq(character_id))).execute(connection)
+    let connection = &mut crate::db::POOL.get()?;
+
+    Ok(diesel::delete(characters.filter(id.eq(character_id))).execute(connection))
 }
 
 #[allow(dead_code)]
-pub fn get_from_user_id(
-    connection: &mut SqliteConnection,
-    user: u64,
-) -> Result<Vec<Character>, DbError> {
+pub fn get_from_user_id(user: u64) -> Result<Vec<Character>, Error> {
     use self::schema::characters::dsl::*;
+
+    let connection = &mut crate::db::POOL.get()?;
 
     let characters_result = characters
         .filter(user_id.eq(user.to_string()))
@@ -53,13 +55,15 @@ pub fn get_from_user_id(
     if characters_result.len() > 0 {
         Ok(characters_result)
     } else {
-        Err(DbError::NotFound)
+        Err(Box::new(DbError::NotFound))
     }
 }
 
 #[allow(dead_code)]
-pub fn get_latest(connection: &mut SqliteConnection, user: u64) -> Result<Character, DbError> {
+pub fn get_latest(user: u64) -> Result<Character, crate::common::Error> {
     use self::schema::characters::dsl::*;
+
+    let connection = &mut crate::db::POOL.get()?;
 
     let mut characters_result = characters
         .filter(user_id.eq(user.to_string())) // Filter by user_id
@@ -73,13 +77,16 @@ pub fn get_latest(connection: &mut SqliteConnection, user: u64) -> Result<Charac
         let character = characters_result.remove(0);
         Ok(character)
     } else {
-        Err(DbError::NotFound)
+        Err(Box::new(DbError::NotFound))
     }
 }
 
 #[allow(dead_code)]
-pub fn get(connection: &mut SqliteConnection, character_id: i32) -> Result<Character, DbError> {
+pub fn get(character_id: i32) -> Result<Character, Error> {
     use self::schema::characters::dsl::*;
+    use crate::db::DbError;
+
+    let connection = &mut crate::db::POOL.get()?;
 
     let mut characters_result = characters
         .filter(id.eq(Some(character_id)))
@@ -92,16 +99,14 @@ pub fn get(connection: &mut SqliteConnection, character_id: i32) -> Result<Chara
         let character = characters_result.remove(0);
         Ok(character)
     } else {
-        Err(DbError::NotFound)
+        Err(Box::new(DbError::NotFound))
     }
 }
 #[allow(dead_code)]
-pub fn get_by_char_sheet(
-    connection: &mut SqliteConnection,
-    channel_id: u64,
-    message_id: u64,
-) -> Result<Character, DbError> {
+pub fn get_by_char_sheet(channel_id: u64, message_id: u64) -> Result<Character, Error> {
     use self::schema::characters::dsl::*;
+
+    let connection = &mut crate::db::POOL.get()?;
 
     let mut characters_result = characters
         .filter(stat_block_channel_id.eq(channel_id.to_string()))
@@ -115,12 +120,14 @@ pub fn get_by_char_sheet(
         let character = characters_result.remove(0);
         Ok(character)
     } else {
-        Err(DbError::NotFound)
+        Err(Box::new(DbError::NotFound))
     }
 }
 
-pub fn update(connection: &mut SqliteConnection, character: &Character) -> Result<(), DbError> {
+pub fn update(character: &Character) -> Result<(), Error> {
     use self::schema::characters::dsl::*;
+
+    let connection = &mut crate::db::POOL.get()?;
 
     let character_id = &character
         .id

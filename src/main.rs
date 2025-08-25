@@ -211,16 +211,16 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
     let user_id = author.id.get();
 
-    let mut user = db::users::get_or_create(db_connection, user_id).unwrap();
+    let mut user = db::users::get_or_create(user_id).unwrap();
 
-    let characters = db::characters::get_from_user_id(db_connection, user_id)?;
+    let characters = db::characters::get_from_user_id(user_id)?;
 
     for character in characters {
         println!("{}", character.name.expect("Character has no name"));
     }
 
     user.count = Some(user.count.unwrap_or(0) + 1);
-    let _ = db::users::update(db_connection, &user);
+    let _ = db::users::update(&user);
     let count;
 
     match user.count {

@@ -65,7 +65,6 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
                     .expect("AAA");
 
                 let char = db::characters::get(
-                    db_connection,
                     char_id
                         .as_i64()
                         .ok_or(RpgError::TestingError)
@@ -74,15 +73,14 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
                 .expect("Remove this expect later");
 
                 let mut user =
-                    db::users::get_or_create(db_connection, user_id.as_u64().expect("ddd"))
-                        .expect("asdasd");
+                    db::users::get_or_create(user_id.as_u64().expect("ddd")).expect("asdasd");
 
                 let comparison_user_id = interaction.user.id;
 
                 if let Some(user_id) = char.user_id.clone() {
                     if &user_id.to_string() == &comparison_user_id.to_string() {
                         user.selected_character = Some(char_id.as_i64().expect("asdasd") as i32);
-                        db::users::update(db_connection, &user).expect("I hate this system");
+                        db::users::update(&user).expect("I hate this system");
                         println!("aaa {char_id}");
 
                         let embed = super::super::generate_status_embed(ctx, &char)
@@ -92,7 +90,7 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
                         let char_id_i32 = char_id.as_i64().expect("Wrong char id") as i32;
 
                         let db_connection = &mut db::establish_connection();
-                        let char = db::characters::get(db_connection, char_id_i32)
+                        let char = db::characters::get(char_id_i32)
                             .expect("Character should exist when switching");
 
                         let stat_block: StatBlock = crate::rpg::get_sheet(&ctx, &char)
@@ -109,12 +107,9 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
                                 char_id_i32,
                                 stat_block.stats,
                             ),
-                            super::super::character_select_dropdown(
-                                db_connection,
-                                user_id.parse().unwrap(),
-                            )
-                            .await
-                            .expect("asda"),
+                            super::super::character_select_dropdown(user_id.parse().unwrap())
+                                .await
+                                .expect("asda"),
                         ];
 
                         interaction

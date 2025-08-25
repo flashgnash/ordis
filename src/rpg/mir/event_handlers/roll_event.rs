@@ -55,10 +55,7 @@ impl common::EventHandlerTrait for RollEvent {
             if let Some(Value::String(dice_string)) = params.get("dice_string") {
                 println!("Event received with param: {}", dice_string);
 
-                let db_connection = &mut db::establish_connection();
-
                 let char = db::characters::get(
-                    db_connection,
                     char_id
                         .as_i64()
                         .ok_or(RpgError::TestingError)
@@ -99,7 +96,7 @@ impl common::EventHandlerTrait for RollEvent {
 
                 let channel;
                 if let Some(guild_id) = interaction.guild_id {
-                    channel = get_roll_channel(db_connection, &guild_id).expect("woohoo");
+                    channel = get_roll_channel(&guild_id).expect("woohoo");
                 } else {
                     channel = None;
                 }

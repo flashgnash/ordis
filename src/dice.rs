@@ -12,7 +12,6 @@ use crate::common::safe_to_number;
 
 use crate::common::join_to_string;
 use crate::common::sum_array;
-use crate::rpg::get_user_character;
 
 use meval::eval_str;
 

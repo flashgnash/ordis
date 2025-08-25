@@ -37,6 +37,7 @@ use crate::common::Context;
 use crate::common::Error;
 use crate::db;
 use crate::db::models::Character;
+use crate::db::DbError;
 
 use diesel::SqliteConnection;
 
@@ -269,7 +270,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
     let placeholder_message = ctx.send(placeholder).await?;
     let db_connection = &mut db::establish_connection();
 
-    let character = db::characters::get(db_connection, character_id)?;
+    let character = db::characters::get(character_id)?;
 
     let mut rows = vec![
         CreateActionRow::Buttons(vec![
@@ -508,11 +509,8 @@ pub fn stat_roll_buttons(
 
     CreateActionRow::Buttons(buttons)
 }
-pub async fn character_select_dropdown(
-    db_connection: &mut SqliteConnection,
-    user_id: u64,
-) -> Result<CreateActionRow, Error> {
-    let characters = db::characters::get_from_user_id(db_connection, user_id)?;
+pub async fn character_select_dropdown(user_id: u64) -> Result<CreateActionRow, Error> {
+    let characters = db::characters::get_from_user_id(user_id)?;
 
     let mut character_options: Vec<CreateSelectMenuOption> = vec![];
 
@@ -556,7 +554,7 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
     let db_connection = &mut db::establish_connection();
 
     println!("Get user char");
-    let character = get_user_character(&ctx, db_connection)
+    let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSelected)?;
 
@@ -582,7 +580,7 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
     ];
 
     if ephemeral {
-        rows.push(character_select_dropdown(db_connection, ctx.author().id.get()).await?);
+        rows.push(character_select_dropdown(ctx.author().id.get()).await?);
     } else {
         rows.push(CreateActionRow::Buttons(vec![
             UpdateStatusEvent::create_button(
@@ -619,9 +617,8 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
         .content("*Thinking, please wait...*")
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
-    let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection)
+    let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
@@ -642,13 +639,13 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection)
+    let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
     let old_mana = character.mana.unwrap_or(0);
 
-    let modified_character = set_mana_internal(ctx, db_connection, character, mana).await?;
+    let modified_character = set_mana_internal(ctx, character, mana).await?;
 
     ctx.reply(format!(
         "Modified energy. Change: {}",
@@ -695,7 +692,6 @@ fn get_mana_bar_message(
 
 async fn set_mana_internal(
     _ctx: Context<'_>, // No longer needed, cba to remove from existing function calls
-    db_connection: &mut SqliteConnection,
     character: Character,
     mana: i32,
 ) -> Result<Character, Error> {
@@ -703,7 +699,7 @@ async fn set_mana_internal(
 
     new_character.mana = Some(mana);
 
-    db::characters::update(db_connection, &new_character)?;
+    db::characters::update(&new_character)?;
 
     Ok(new_character)
 }
@@ -717,7 +713,7 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection)
+    let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
@@ -725,7 +721,7 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 
     let calc_result = old_mana + modifier;
 
-    let modified_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
+    let modified_character = set_mana_internal(ctx, character, calc_result).await?;
 
     ctx.reply(format!(
         "Modified energy. Change: {}",
@@ -753,7 +749,7 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 
     let db_connection = &mut db::establish_connection();
 
-    let character = get_user_character(&ctx, db_connection)
+    let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
@@ -761,7 +757,7 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
 
     let calc_result = old_mana - modifier;
 
-    let modified_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
+    let modified_character = set_mana_internal(ctx, character, calc_result).await?;
 
     // character.mana = Some(calc_result);
 
@@ -800,9 +796,7 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let db_connection = &mut db::establish_connection();
-
-    let character = get_user_character(&ctx, db_connection)
+    let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
@@ -812,7 +806,7 @@ pub async fn mod_mana(ctx: Context<'_>, modifier: String) -> Result<(), Error> {
 
     let calc_result = meval::eval_str(expression)? as i32;
 
-    let modified_character = set_mana_internal(ctx, db_connection, character, calc_result).await?;
+    let modified_character = set_mana_internal(ctx, character, calc_result).await?;
 
     ctx.reply(format!(
         "Modified energy. Change: {}",
@@ -846,7 +840,7 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
     let placeholder_message = ctx.send(placeholder).await?;
 
     let db_connection = &mut db::establish_connection();
-    let character = get_user_character(&ctx, db_connection)
+    let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
@@ -877,8 +871,7 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
             let new_mana = cur_mana + spell.cost.as_ref().ok_or(RpgError::NoSpellCost)?.mana;
 
             if new_mana >= 0 {
-                let modified_char =
-                    set_mana_internal(ctx, db_connection, character.clone(), new_mana).await?;
+                let modified_char = set_mana_internal(ctx, character.clone(), new_mana).await?;
 
                 let cast_time = &spell
                     .cast_time
@@ -950,9 +943,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
 
         let spell_name = common::capitalize_first_letter(&spell_name);
 
-        let db_connection = &mut db::establish_connection();
-
-        let character = get_user_character(&ctx, db_connection)
+        let character = get_user_character(&ctx)
             .await?
             .ok_or(RpgError::NoCharacterSheet)?;
 
@@ -967,8 +958,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
                 let new_mana = mana + spell.cost.clone().ok_or(RpgError::NoSpellCost)?.mana;
 
                 if new_mana >= 0 {
-                    modified_char =
-                        Some(set_mana_internal(ctx, db_connection, character, new_mana).await?);
+                    modified_char = Some(set_mana_internal(ctx, character, new_mana).await?);
 
                     placeholder_message
                         .edit(
@@ -1203,8 +1193,6 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let author = ctx.author();
 
-    let db_connection = &mut db::establish_connection();
-
     let use_roll_channel = if let Some(guild_channel) = ctx.guild_channel().await {
         let tags = crate::common::get_channel_tags(&guild_channel);
         !tags.contains_key(ROLL_CHANNEL_FLAG)
@@ -1215,7 +1203,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
     let channel;
     if use_roll_channel {
         if let Some(guild) = ctx.guild() {
-            channel = get_roll_channel(db_connection, &guild.id)?;
+            channel = get_roll_channel(&guild.id)?;
         } else {
             channel = None;
         };
@@ -1230,7 +1218,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let result: (String, f64);
 
-    if let Some(character) = get_user_character(&ctx, db_connection).await? {
+    if let Some(character) = get_user_character(&ctx).await? {
         result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, &character).await?;
 
         if let Some(char_name) = &character.name {
@@ -1264,14 +1252,12 @@ pub async fn create_character(
                 .ephemeral(true),
         )
         .await?;
-    let db_connection = &mut db::establish_connection();
 
     let author = &ctx.author();
 
     let user_id = author.id.get();
 
-    let result =
-        db::characters::get_by_char_sheet(db_connection, msg.channel_id.get(), msg.id.get());
+    let result = db::characters::get_by_char_sheet(msg.channel_id.get(), msg.id.get());
 
     match result {
         Ok(character) => {
@@ -1350,17 +1336,17 @@ pub async fn create_character(
             mana_readout_message_id: None,
         };
 
-        let _ = db::characters::create(db_connection, &new_character)?;
+        let _ = db::characters::create(&new_character)?;
 
-        let new_character = db::characters::get_latest(db_connection, user_id)?;
+        let new_character = db::characters::get_latest(user_id)?;
 
-        let mut user = db::users::get_or_create(db_connection, user_id)?;
+        let mut user = db::users::get_or_create(user_id)?;
 
         let mut extra_text: &str = "";
 
         if user.selected_character == None {
             user.selected_character = new_character.id;
-            db::users::update(db_connection, &user)?;
+            db::users::update(&user)?;
 
             extra_text = "(and selected as default)";
         }
@@ -1385,15 +1371,13 @@ pub async fn create_character(
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(), Error> {
-    let db_connection = &mut db::establish_connection();
-
     let author = &ctx.author();
     let user_id = author.id.get();
 
-    let user = db::users::get(db_connection, user_id)?;
+    let user = db::users::get(user_id)?;
     if user.selected_character == Some(character_id) {
         println!("Removing selected character");
-        db::users::unset_character(db_connection, &user)?;
+        db::users::unset_character(&user)?;
     }
 
     let is_admin = common::check_admin(
@@ -1404,12 +1388,12 @@ pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(),
     .await;
 
     if is_admin {
-        db::characters::delete_global(db_connection, character_id)?; //TODO if the bot goes public, this needs to also filter by guild
-                                                                     // (don't let people delete other guilds' characters just because they're admin in their own one.)
-                                                                     // This could even be done via the check admin function, if provided with the guild ID the character belongs to instead
-                                                                     // of the current guild ID (not currently an issue as I whitelist which guilds the bot can join anyway)
+        db::characters::delete_global(character_id)?; //TODO if the bot goes public, this needs to also filter by guild
+                                                      // (don't let people delete other guilds' characters just because they're admin in their own one.)
+                                                      // This could even be done via the check admin function, if provided with the guild ID the character belongs to instead
+                                                      // of the current guild ID (not currently an issue as I whitelist which guilds the bot can join anyway)
     } else {
-        db::characters::delete(db_connection, character_id, user_id)?;
+        db::characters::delete(character_id, user_id)?;
     }
 
     let reply =
@@ -1433,68 +1417,63 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
 
     let author = &ctx.author();
     let user_id = author.id.get();
-    let mut user = db::users::get_or_create(db_connection, user_id)?;
+    let mut user = db::users::get_or_create(user_id)?;
 
-    let character = db::characters::get(db_connection, character_id);
+    let character = db::characters::get(character_id);
 
-    match character {
-        Ok(char) => {
-            let comparison_user_id = Some(user.id.clone());
+    if let Ok(char) = character {
+        let comparison_user_id = Some(user.id.clone());
 
-            if char.user_id.eq(&comparison_user_id)
-                || common::check_admin(
+        if char.user_id.eq(&comparison_user_id)
+            || common::check_admin(
+                ctx,
+                ctx.guild_id().ok_or(RpgError::NoGuildId)?,
+                ctx.author().id,
+            )
+            .await
+        {
+            user.selected_character = Some(character_id);
+            db::users::update(&user)?;
+            let char_name = char.name.unwrap_or("No Name".to_string());
+
+            placeholder
+                .edit(
                     ctx,
-                    ctx.guild_id().ok_or(RpgError::NoGuildId)?,
-                    ctx.author().id,
+                    CreateReply::default()
+                        .content(format!("Selected character {char_name}"))
+                        .ephemeral(true),
                 )
-                .await
-            {
-                user.selected_character = Some(character_id);
-                db::users::update(db_connection, &user)?;
-                let char_name = char.name.unwrap_or("No Name".to_string());
-
-                placeholder
-                    .edit(
-                        ctx,
-                        CreateReply::default()
-                            .content(format!("Selected character {char_name}"))
-                            .ephemeral(true),
-                    )
-                    .await?;
-            } else {
-                placeholder
-                    .edit(
-                        ctx,
-                        CreateReply::default()
-                            .content(format!("Error: That's not your character!"))
-                            .ephemeral(true),
-                    )
-                    .await?;
-            }
-
-            return Ok(());
+                .await?;
+        } else {
+            placeholder
+                .edit(
+                    ctx,
+                    CreateReply::default()
+                        .content(format!("Error: That's not your character!"))
+                        .ephemeral(true),
+                )
+                .await?;
         }
 
-        Err(e) => {
-            match e {
-                db::DbError::NotFound => {
-                    // Handle specific error
-                    println!("Caught NotFound error");
+        Ok(())
+    } else if let Err(e) = character {
+        //TODO this is going to cause silent errors
+        // Handle specific error
+        println!("Caught NotFound error {e}");
 
-                    placeholder.edit(
+        placeholder.edit(
                         ctx,
                         CreateReply::default()
                             .content("You don't have a character with that id. Please do /characters to list your character sheets.")
                             .ephemeral(true),
                     ).await?;
 
-                    return Ok(());
-                } // _ => {
-                  //     return Err(Box::new(e));
-                  // }
-            }
-        }
-    }
+        Ok(())
+    } else {
+        Ok(()) // This shouldn't be reachable but the compiler is complaining
+    } // _ => {
+      //     return Err(Box::new(e));
+      // }
 }
 
 #[poise::command(context_menu_command = "Set Spell Message")]
@@ -1510,15 +1489,15 @@ pub async fn set_spells(ctx: Context<'_>, msg: crate::serenity::Message) -> Resu
     let author = &ctx.author();
     let user_id = author.id.get();
     let db_connection = &mut db::establish_connection();
-    let user = db::users::get_or_create(db_connection, user_id)?;
+    let user = db::users::get_or_create(user_id)?;
 
     if let Some(character_id) = user.selected_character {
-        let mut character = db::characters::get(db_connection, character_id)?;
+        let mut character = db::characters::get(character_id)?;
 
         character.spell_block_message_id = Some(msg.id.to_string());
         character.spell_block_channel_id = Some(msg.channel_id.to_string());
 
-        db::characters::update(db_connection, &character)?;
+        db::characters::update(&character)?;
 
         placeholder
             .edit(
@@ -1540,7 +1519,7 @@ pub async fn characters(ctx: Context<'_>) -> Result<(), Error> {
     let author = &ctx.author();
     let user_id = author.id.get();
 
-    let characters = db::characters::get_from_user_id(db_connection, user_id)?;
+    let characters = db::characters::get_from_user_id(user_id)?;
 
     let num_characters = characters.len();
     let mut character_messages: Vec<String> = vec![];
@@ -1559,7 +1538,7 @@ pub async fn characters(ctx: Context<'_>) -> Result<(), Error> {
 
     let rows = vec![
         // CreateActionRow::SelectMenu(select_menu),
-        character_select_dropdown(db_connection, ctx.author().id.get()).await?,
+        character_select_dropdown(ctx.author().id.get()).await?,
     ];
 
     let character_list_message = "Characters:\n".to_string() + &character_messages.join("\n\n");
@@ -1676,11 +1655,8 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
     return Ok(());
 }
 
-pub fn get_roll_channel(
-    db_connection: &mut SqliteConnection,
-    guild: &GuildId,
-) -> Result<Option<ChannelId>, Error> {
-    let server = db::servers::get_or_create(db_connection, guild.get())?;
+pub fn get_roll_channel(guild: &GuildId) -> Result<Option<ChannelId>, Error> {
+    let server = db::servers::get_or_create(guild.get())?;
 
     let channel_id = server
         .default_roll_channel
@@ -1695,9 +1671,9 @@ pub async fn set_roll_channel(ctx: Context<'_>) -> Result<(), Error> {
         if let Some(perms) = common::get_author_perms(ctx).await {
             if perms.manage_channels() {
                 let db_connection = &mut db::establish_connection();
-                let mut server = db::servers::get_or_create(db_connection, guild.id.get())?;
+                let mut server = db::servers::get_or_create(guild.id.get())?;
                 server.default_roll_channel = Some(ctx.channel_id().get().to_string());
-                db::servers::update(db_connection, &server)?;
+                db::servers::update(&server)?;
 
                 ctx.reply("Set the roll channel successfully").await?;
             } else {
@@ -1715,9 +1691,9 @@ pub async fn unset_roll_channel(ctx: Context<'_>) -> Result<(), Error> {
             if perms.manage_channels() {
                 let db_connection = &mut db::establish_connection();
 
-                let mut server = db::servers::get_or_create(db_connection, guild.id.get())?;
+                let mut server = db::servers::get_or_create(guild.id.get())?;
                 server.default_roll_channel = None;
-                db::servers::update(db_connection, &server)?;
+                db::servers::update(&server)?;
 
                 ctx.reply("Unset the roll channel successfully").await?;
             } else {
