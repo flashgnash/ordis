@@ -452,13 +452,15 @@ lazy_static! {
         m.insert("str", ("💪", 1));
         m.insert("agl", ("🐇", 2));
         m.insert("con", ("🛡️", 3));
-        m.insert("kno", ("🧠", 4));
-        m.insert("cha", ("💬", 5));
+        m.insert("kno", ("📚", 4));
+        m.insert("int", ("🧠", 5));
+        m.insert("wis", ("🦉", 6));
+        m.insert("cha", ("💬", 7));
 
-        m.insert("body", ("🧍‍♂️ Body", 6));
-        m.insert("mobility", ("👟 Mobility", 7));
-        m.insert("intuition", ("🔎 Intuition", 8));
-        m.insert("arcane", ("🪄 Arcane", 9));
+        m.insert("body", ("🧍‍♂️ Body", 8));
+        m.insert("mobility", ("👟 Mobility", 9));
+        m.insert("intuition", ("🔎 Intuition", 10));
+        m.insert("arcane", ("🪄 Arcane", 11));
         m
     };
 }
@@ -476,7 +478,7 @@ pub fn stat_roll_buttons(
     base_dice_string: &str,
     character_id: i32,
     stat_block: Option<serde_json::Value>,
-) -> CreateActionRow {
+) -> Vec<CreateActionRow> {
     let mut stat_keys = if let Some(Value::Object(map)) = stat_block {
         map.into_iter()
             .filter_map(|(key, value)| (value != Value::Null).then(|| key))
@@ -496,7 +498,7 @@ pub fn stat_roll_buttons(
             .unwrap_or(255)
     });
 
-    let buttons = stat_keys
+    let buttons: Vec<_> = stat_keys
         .iter()
         .map(|stat| {
             let emoji = ROLL_EMOJIS
@@ -507,7 +509,20 @@ pub fn stat_roll_buttons(
         })
         .collect();
 
-    CreateActionRow::Buttons(buttons)
+    let row_count = (buttons.len() + 4) / 5; // max 5 per row
+    let mut rows = Vec::new();
+    let mut start = 0;
+
+    for i in 0..row_count {
+        let remaining = buttons.len() - start;
+        let per_row = (remaining + row_count - i - 1) / (row_count - i); // balance evenly
+        rows.push(CreateActionRow::Buttons(
+            buttons[start..start + per_row].to_vec(),
+        ));
+        start += per_row;
+    }
+
+    rows
 }
 pub async fn character_select_dropdown(user_id: u64) -> Result<CreateActionRow, Error> {
     let characters = db::characters::get_from_user_id(user_id)?;
@@ -551,8 +566,6 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
 
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let db_connection = &mut db::establish_connection();
-
     println!("Get user char");
     let character = get_user_character(&ctx)
         .await?
@@ -576,8 +589,11 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
     let mut rows = vec![
         // CreateActionRow::SelectMenu(select_menu),
         advantage_roll_buttons(default_roll, character_id),
-        stat_roll_buttons(default_roll, character_id, stats_dict),
     ];
+
+    if !ephemeral {
+        rows.extend(stat_roll_buttons(default_roll, character_id, stats_dict));
+    }
 
     if ephemeral {
         rows.push(character_select_dropdown(ctx.author().id.get()).await?);
@@ -637,8 +653,6 @@ pub async fn get_mana(ctx: Context<'_>) -> Result<(), Error> {
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn set_mana(ctx: Context<'_>, mana: i32) -> Result<(), Error> {
-    let db_connection = &mut db::establish_connection();
-
     let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
@@ -711,8 +725,6 @@ pub async fn add_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let db_connection = &mut db::establish_connection();
-
     let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
@@ -746,8 +758,6 @@ pub async fn sub_mana(ctx: Context<'_>, modifier: i32) -> Result<(), Error> {
         .content("*Thinking, please wait...*")
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
-
-    let db_connection = &mut db::establish_connection();
 
     let character = get_user_character(&ctx)
         .await?
