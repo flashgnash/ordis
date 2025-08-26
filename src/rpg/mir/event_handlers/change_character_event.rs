@@ -1,21 +1,16 @@
-use poise::serenity_prelude::ButtonStyle;
-use poise::serenity_prelude::CreateButton;
-use poise::serenity_prelude::CreateInteractionResponseMessage;
 use poise::serenity_prelude::CreateSelectMenuOption;
-use poise::serenity_prelude::CustomMessage;
 use serde::Serialize;
 
 use crate::common;
 use crate::common::Error;
-use crate::create_button_with_callback;
-use crate::create_select_option_with_callback;
 use crate::db;
 use crate::rpg::mir::stat_block::StatBlock;
 
 use super::super::RpgError;
 
+use crate::create_select_option_with_callback;
+
 use poise::serenity_prelude::CreateInteractionResponseFollowup;
-use poise::serenity_prelude::CreateMessage;
 use serde_json::Value;
 
 use poise::async_trait;
@@ -48,103 +43,102 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
         params: &common::ButtonParams,
     ) {
         println!("Hello world {:?}", params);
-        if let Some(Value::Number(char_id)) = params.get("character_id") {
-            if let Some(Value::Number(user_id)) = params.get("user_id") {
-                let db_connection = &mut db::establish_connection();
 
-                println!("Hello world {user_id} {char_id}");
+        if let (Some(Value::Number(char_id)), Some(Value::Number(user_id))) =
+            (params.get("character_id"), params.get("user_id"))
+        {
+            println!("Hello world {user_id} {char_id}");
 
-                let waiting_message_id = interaction
-                    .create_followup(
-                        ctx,
-                        CreateInteractionResponseFollowup::default()
-                            .ephemeral(true)
-                            .content("Thinking... please wait"),
-                    )
-                    .await
-                    .expect("AAA");
-
-                let char = db::characters::get(
-                    char_id
-                        .as_i64()
-                        .ok_or(RpgError::TestingError)
-                        .expect("Really gotta make these return result") as i32,
+            let waiting_message_id = interaction
+                .create_followup(
+                    ctx,
+                    CreateInteractionResponseFollowup::default()
+                        .ephemeral(true)
+                        .content("Thinking... please wait"),
                 )
-                .expect("Remove this expect later");
+                .await
+                .expect("AAA");
 
-                let mut user =
-                    db::users::get_or_create(user_id.as_u64().expect("ddd")).expect("asdasd");
+            let char = db::characters::get(
+                char_id
+                    .as_i64()
+                    .ok_or(RpgError::TestingError)
+                    .expect("Really gotta make these return result") as i32,
+            )
+            .expect("Remove this expect later");
 
-                let comparison_user_id = interaction.user.id;
+            let mut user =
+                db::users::get_or_create(user_id.as_u64().expect("ddd")).expect("asdasd");
 
-                if let Some(user_id) = char.user_id.clone() {
-                    if &user_id.to_string() == &comparison_user_id.to_string() {
-                        user.selected_character = Some(char_id.as_i64().expect("asdasd") as i32);
-                        db::users::update(&user).expect("I hate this system");
-                        println!("aaa {char_id}");
+            let comparison_user_id = interaction.user.id;
 
-                        let embed = super::super::generate_status_embed(ctx, &char)
+            if let Some(user_id) = char.user_id.clone() {
+                if &user_id.to_string() == &comparison_user_id.to_string() {
+                    user.selected_character = Some(char_id.as_i64().expect("asdasd") as i32);
+                    db::users::update(&user).expect("I hate this system");
+                    println!("aaa {char_id}");
+
+                    let embed = super::super::generate_status_embed(ctx, &char)
+                        .await
+                        .expect("Ffs");
+
+                    let char_id_i32 = char_id.as_i64().expect("Wrong char id") as i32;
+
+                    let char = db::characters::get(char_id_i32)
+                        .expect("Character should exist when switching");
+
+                    let stat_block: StatBlock = crate::rpg::get_sheet(&ctx, &char)
+                        .await
+                        .expect("No stat block?");
+
+                    let default_roll = &stat_block.default_roll.unwrap_or("1d100".to_string());
+
+                    let mut rows = vec![
+                        // CreateActionRow::SelectMenu(select_menu),
+                        super::super::advantage_roll_buttons(default_roll, char_id_i32),
+                    ];
+
+                    let stat_roll_buttons = super::super::stat_roll_buttons(
+                        default_roll,
+                        char_id_i32,
+                        stat_block.stats,
+                    );
+
+                    let char_select_dropdown =
+                        super::super::character_select_dropdown(user_id.parse().unwrap())
                             .await
-                            .expect("Ffs");
+                            .expect("asda");
 
-                        let char_id_i32 = char_id.as_i64().expect("Wrong char id") as i32;
+                    rows.extend(stat_roll_buttons);
 
-                        let char = db::characters::get(char_id_i32)
-                            .expect("Character should exist when switching");
+                    rows.push(char_select_dropdown);
 
-                        let stat_block: StatBlock = crate::rpg::get_sheet(&ctx, &char)
-                            .await
-                            .expect("No stat block?");
-
-                        let default_roll = &stat_block.default_roll.unwrap_or("1d100".to_string());
-
-                        let mut rows = vec![
-                            // CreateActionRow::SelectMenu(select_menu),
-                            super::super::advantage_roll_buttons(default_roll, char_id_i32),
-                        ];
-
-                        let stat_roll_buttons = super::super::stat_roll_buttons(
-                            default_roll,
-                            char_id_i32,
-                            stat_block.stats,
-                        );
-
-                        let char_select_dropdown =
-                            super::super::character_select_dropdown(user_id.parse().unwrap())
-                                .await
-                                .expect("asda");
-
-                        rows.extend(stat_roll_buttons);
-
-                        rows.push(char_select_dropdown);
-
-                        interaction
-                            .edit_followup(
-                                ctx,
-                                waiting_message_id,
-                                CreateInteractionResponseFollowup::default()
-                                    .embed(embed)
-                                    .content("Switched character. Current status:")
-                                    .ephemeral(true)
-                                    .components(rows),
-                            )
-                            .await
-                            .expect("AAA");
-                    }
+                    interaction
+                        .edit_followup(
+                            ctx,
+                            waiting_message_id,
+                            CreateInteractionResponseFollowup::default()
+                                .embed(embed)
+                                .content("Switched character. Current status:")
+                                .ephemeral(true)
+                                .components(rows),
+                        )
+                        .await
+                        .expect("AAA");
                 }
-
-                // interaction
-                //     .channel_id
-                //     .send_message(
-                //         ctx,
-                //         CreateMessage::default().content("Hello"), // CreateMessage::default().content(format!(
-                //                                                    // "Rolling for {}:\n {}",
-                //                                                    // interaction.user.name, result
-                //                                                    // )),
-                //     )
-                //     .await
-                //     .expect("AAA");
             }
+
+            // interaction
+            //     .channel_id
+            //     .send_message(
+            //         ctx,
+            //         CreateMessage::default().content("Hello"), // CreateMessage::default().content(format!(
+            //                                                    // "Rolling for {}:\n {}",
+            //                                                    // interaction.user.name, result
+            //                                                    // )),
+            //     )
+            //     .await
+            //     .expect("AAA");
         }
     }
 }

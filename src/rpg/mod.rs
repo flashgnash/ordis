@@ -278,7 +278,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
     }
     async fn from_character_database(
-        ctx: &poise::serenity_prelude::Context,
+        ctx: Option<&poise::serenity_prelude::Context>,
         character: &Character,
     ) -> Result<Self, Error> {
 
@@ -287,21 +287,25 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
         let mut sheet: Self;
 
-        let stat_message = Self::get_sheet_message(ctx, &character).await?;
+        if let Some(ctx) = ctx {
             
-        if let Some(prev_block) = previous_block {
+            let stat_message = Self::get_sheet_message(ctx, &character).await?;
 
-
+            if let Some(prev_block) = previous_block {
 
                     
-            sheet = Self::from_json(
-                Some(&stat_message.content), //FUCK
-                &prev_block
-            )?;
-        }
+                sheet = Self::from_json(
+                    Some(&stat_message.content),
+                    &prev_block
+                )?;
+            }
 
+            else {
+                sheet = Self::from_string(&stat_message.content).await?
+            }
+        }
         else {
-            sheet = Self::from_string(&stat_message.content).await?
+            sheet = Self::from_json(None,&character.stat_block.clone().ok_or(RpgError::NoCharacterSheet)?)?;
         }
 
         let sheet_info = sheet.mut_sheet_info();
@@ -350,8 +354,6 @@ pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<
 }
 pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_prelude::Context,character: &Character) -> Result<T, Error> {
 
-    let db_connection = &mut db::establish_connection();
-
     let mut cache = SHEET_CACHE.lock().await;
 
 
@@ -371,7 +373,7 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_pr
 
         println!("Not cached - generating");
         
-        let sheet = T::from_character_database(ctx, &character).await?;
+       let sheet = T::from_character_database(Some(ctx), &character).await?;
         cache.insert(key,Box::new(sheet));       
     }
 

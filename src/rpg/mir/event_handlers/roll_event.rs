@@ -51,79 +51,73 @@ impl common::EventHandlerTrait for RollEvent {
         interaction: &poise::serenity_prelude::ComponentInteraction,
         params: &common::ButtonParams,
     ) {
-        if let Some(Value::Number(char_id)) = params.get("character_id") {
-            if let Some(Value::String(dice_string)) = params.get("dice_string") {
-                println!("Event received with param: {}", dice_string);
+        if let (Some(Value::Number(char_id)), Some(Value::String(dice_string))) =
+            (params.get("character_id"), params.get("dice_string"))
+        {
+            let char = db::characters::get(
+                char_id
+                    .as_i64()
+                    .expect("Really gotta make these return result") as i32,
+            )
+            .expect("Remove this expect later");
 
-                let char = db::characters::get(
-                    char_id
-                        .as_i64()
-                        .ok_or(RpgError::TestingError)
-                        .expect("Really gotta make these return result") as i32,
-                )
-                .expect("Remove this expect later");
+            let result_or_err =
+                crate::rpg::mir::roll_with_char_sheet(ctx, Some(dice_string.to_string()), &char)
+                    .await;
 
-                let result_or_err =
-                    super::super::roll_with_char_sheet(ctx, Some(dice_string.to_string()), &char)
-                        .await;
-
-                let result = match result_or_err {
-                    Ok(v) => v,
-                    Err(e) => {
-                        interaction
-                            .channel_id
-                            .send_message(ctx, CreateMessage::default().content(format!("{}", e)))
-                            .await
-                            .expect("I give up");
-                        return;
-                    }
-                };
-
-                let colour =
-                    crate::common::get_user_colour(ctx, interaction.guild_id, interaction.user.id)
-                        .await
-                        .expect("I really have to fix this");
-
-                let embed = crate::dice::generate_roll_embed(
-                    result,
-                    &char.name.unwrap_or("Test".to_string()),
-                    colour,
-                )
-                .await
-                .expect("Why did I design the event system this way");
-
-                // ctx.send(embed).await?;
-
-                let channel;
-                if let Some(guild_id) = interaction.guild_id {
-                    channel = get_roll_channel(&guild_id).expect("woohoo");
-                } else {
-                    channel = None;
-                }
-
-                if let Some(channel_id) = channel {
-                    channel_id
-                        .send_message(ctx, CreateMessage::default().embed(embed.clone()))
-                        .await
-                        .expect("AAA");
-
-                    interaction
-                        .create_followup(
-                            ctx,
-                            CreateInteractionResponseFollowup::default()
-                                .content(format!("(sent your roll to <#{channel_id}>) for you"))
-                                .ephemeral(true)
-                                .embed(embed),
-                        )
-                        .await
-                        .expect("AAA");
-                } else {
+            let result = match result_or_err {
+                Ok(v) => v,
+                Err(e) => {
                     interaction
                         .channel_id
-                        .send_message(ctx, CreateMessage::default().embed(embed))
+                        .send_message(ctx, CreateMessage::default().content(format!("{}", e)))
                         .await
-                        .expect("AAA");
+                        .expect("I give up");
+                    return;
                 }
+            };
+
+            let colour =
+                crate::common::get_user_colour(ctx, interaction.guild_id, interaction.user.id)
+                    .await
+                    .expect("I really have to fix this");
+
+            let embed = crate::dice::generate_roll_embed(
+                result,
+                &char.name.unwrap_or("Unknown character name".to_string()),
+                colour,
+            )
+            .await
+            .expect("Why did I design the event system this way");
+
+            let channel = if let Some(guild_id) = interaction.guild_id {
+                get_roll_channel(&guild_id).expect("woohoo")
+            } else {
+                None
+            };
+
+            if let Some(channel_id) = channel {
+                channel_id
+                    .send_message(ctx, CreateMessage::default().embed(embed.clone()))
+                    .await
+                    .expect("AAA");
+
+                interaction
+                    .create_followup(
+                        ctx,
+                        CreateInteractionResponseFollowup::default()
+                            .content(format!("(sent your roll to <#{channel_id}>) for you"))
+                            .ephemeral(true)
+                            .embed(embed),
+                    )
+                    .await
+                    .expect("AAA");
+            } else {
+                interaction
+                    .channel_id
+                    .send_message(ctx, CreateMessage::default().embed(embed))
+                    .await
+                    .expect("AAA");
             }
         }
     }
