@@ -59,9 +59,12 @@ impl common::EventHandlerTrait for RollEvent {
             )
             .expect("Remove this expect later");
 
-            let result_or_err =
-                crate::rpg::mir::roll_with_char_sheet(ctx, Some(dice_string.to_string()), &char)
-                    .await;
+            let result_or_err = crate::rpg::mir::roll_with_char_sheet(
+                Some(ctx),
+                Some(dice_string.to_string()),
+                &char,
+            )
+            .await;
 
             let result = match result_or_err {
                 Ok(v) => v,

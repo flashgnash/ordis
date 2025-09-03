@@ -3,8 +3,6 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 use std::{borrow::Cow, collections::HashMap};
 
-pub const ROLL_SERVER_TAG: &str = "rollServer";
-
 use poise::serenity_prelude::{
     Colour, Emoji, GuildChannel, GuildId, Message, PartialGuild, PartialMember, Permissions, UserId,
 };
@@ -132,7 +130,16 @@ pub fn get_channel_tags(channel: &GuildChannel) -> HashMap<String, Vec<String>> 
     HashMap::new()
 }
 
-pub fn get_server_tags_id(guild_id: GuildId) {}
+// Why does rust not allow function overloads
+// This is so ugly
+pub async fn get_server_tags_from_id<T: Into<GuildId>>(
+    ctx: &Context<'_>,
+    guild_id: T,
+) -> Result<HashMap<String, Vec<String>>, Error> {
+    let guild = guild_id.into().to_partial_guild(ctx).await?;
+
+    Ok(get_server_tags(&guild))
+}
 
 pub fn get_server_tags(guild: &PartialGuild) -> HashMap<String, Vec<String>> {
     if let Some(description) = &guild.description {

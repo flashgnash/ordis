@@ -87,7 +87,7 @@ impl common::EventHandlerTrait for ChangeCharacterEvent {
                     let char = db::characters::get(char_id_i32)
                         .expect("Character should exist when switching");
 
-                    let stat_block: StatBlock = crate::rpg::get_sheet(&ctx, &char)
+                    let stat_block: StatBlock = crate::rpg::get_sheet(Some(&ctx), &char)
                         .await
                         .expect("No stat block?");
 

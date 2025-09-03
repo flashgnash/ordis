@@ -1,5 +1,6 @@
 pub mod spell_sheet;
 pub mod stat_block;
+pub mod web;
 
 use lazy_static::lazy_static;
 use poise::serenity_prelude::ButtonStyle;
@@ -10,10 +11,7 @@ use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
 use poise::serenity_prelude::CreateSelectMenu;
 use poise::serenity_prelude::CreateSelectMenuOption;
-use poise::serenity_prelude::Guild;
 use poise::serenity_prelude::GuildId;
-use poise::serenity_prelude::Member;
-use poise::serenity_prelude::PartialMember;
 use poise::Command;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
@@ -119,7 +117,7 @@ pub async fn generate_status_embed(
         .unwrap_or("".to_string());
 
     println!("Get stat block");
-    let stat_block: StatBlock = super::get_sheet(&ctx, character).await?;
+    let stat_block: StatBlock = super::get_sheet(Some(&ctx), character).await?;
     let mana_message_content = get_mana_bar_message(&stat_block, &character, None);
 
     let max_health = stat_block.max_hp;
@@ -1115,11 +1113,11 @@ lazy_static! {
 }
 
 pub async fn roll_with_char_sheet(
-    ctx: &poise::serenity_prelude::Context,
+    ctx: Option<&poise::serenity_prelude::Context>,
     dice_expression: Option<String>,
     character: &Character,
 ) -> Result<(String, f64), Error> {
-    let stat_block_result: Result<StatBlock, Error> = super::get_sheet(&ctx, &character).await;
+    let stat_block_result: Result<StatBlock, Error> = super::get_sheet(ctx, &character).await;
 
     let mut dice = stat_block_result
         .as_ref()
@@ -1162,7 +1160,6 @@ pub async fn roll_with_char_sheet(
                         };
 
                         str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
-                        println!("replaced string {str_replaced}");
                     }
                 }
             }
@@ -1190,6 +1187,7 @@ pub async fn roll_with_char_sheet(
 }
 
 static ROLL_CHANNEL_FLAG: &str = "rollChannel";
+static ROLL_SERVER_ID_FLAG: &str = "rollServer";
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(), Error> {
@@ -1208,27 +1206,11 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         true
     };
 
-    let channel;
-    if use_roll_channel {
-        if let Some(guild) = ctx.guild() {
-            channel = get_roll_channel(&guild.id)?;
-        } else {
-            channel = None;
-        };
-    } else {
-        println!("Ignoring dedicated roll channel because this channel is whitelisted");
-        channel = None; //I hate this duplication, next rust version I can use && in the if let Some statement
-    }
-
-    // ctx.reply(format!("{}", channel.get())).await?;
-
     let mut nick = format!("{}\n(no character)", author.name.to_string());
 
-    let result: (String, f64);
+    let char_maybe = get_user_character(&ctx).await?;
 
-    if let Some(character) = get_user_character(&ctx).await? {
-        result = roll_with_char_sheet(ctx.serenity_context(), dice_expression, &character).await?;
-
+    let result: (String, f64) = if let Some(character) = char_maybe {
         if let Some(char_name) = &character.name {
             nick = char_name.to_string();
         } else if let Some(guild_id) = ctx.guild_id() {
@@ -1238,10 +1220,47 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
                 nick = author_nick;
             }
         }
+
+        roll_with_char_sheet(Some(ctx.serenity_context()), dice_expression, &character).await?
     } else {
-        result =
-            crate::dice::roll_internal(&dice_expression.unwrap_or("1d100".to_string())).await?;
-    }
+        crate::dice::roll_internal(&dice_expression.unwrap_or("1d100".to_string())).await?
+    };
+
+    let channel = if let Some(guild_id) = ctx.guild().map(|g| g.id) {
+        let tags = crate::common::get_server_tags_from_id(&ctx, guild_id).await?;
+
+        let target_guild = if let Some(server_id_flag) = tags.get(ROLL_SERVER_ID_FLAG) {
+            if let Some(server_id) = server_id_flag.first() {
+                GuildId::new(server_id.parse()?)
+            } else {
+                guild_id
+            }
+        } else {
+            guild_id
+        };
+
+        if let Some(mut character) = get_user_character(&ctx).await? {
+            character.roll_server_id = Some(target_guild.to_string());
+
+            println!(
+                "Set character {:#?}'s roll ID to {:#?}",
+                character.id, character.roll_server_id
+            );
+
+            crate::db::characters::update(&character)?;
+        }
+
+        if use_roll_channel {
+            let channel = get_roll_channel(&target_guild)?;
+
+            channel
+        } else {
+            println!("Ignoring dedicated roll channel because this channel is whitelisted");
+            None
+        }
+    } else {
+        None
+    };
 
     dice::output_roll_message(ctx, result, nick, channel).await?;
 
@@ -1328,7 +1347,7 @@ pub async fn create_character(
 
             let tags = crate::common::get_server_tags(&guild);
 
-            if let Some(tag) = tags.get("rollServer") {
+            if let Some(tag) = tags.get(ROLL_SERVER_ID_FLAG) {
                 if let Some(tag_value) = tag.first() {
                     Some(tag_value.to_string())
                 } else {
@@ -1699,8 +1718,9 @@ pub async fn set_roll_channel(ctx: Context<'_>) -> Result<(), Error> {
             let mut server = db::servers::get_or_create(guild.id.get())?;
             server.default_roll_channel = Some(ctx.channel_id().get().to_string());
 
+            //Not actually using this - no point in removing it though
             if let Some(tag) = crate::common::get_server_tags(&guild)
-                .get(crate::common::ROLL_SERVER_TAG)
+                .get(ROLL_SERVER_ID_FLAG)
                 .and_then(|x| x.first())
             {
                 server.default_roll_server = Some(tag.to_string());

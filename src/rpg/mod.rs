@@ -344,7 +344,7 @@ pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<
     if let Some(character) =  &get_user_character(ctx).await? {
         
         let sheet = get_sheet(
-          ctx.serenity_context(),
+          Some(ctx.serenity_context()),
           character
         ).await?; 
 
@@ -352,7 +352,7 @@ pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<
     }
     Ok(None)
 }
-pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_prelude::Context,character: &Character) -> Result<T, Error> {
+pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: Option<&poise::serenity_prelude::Context>,character: &Character) -> Result<T, Error> {
 
     let mut cache = SHEET_CACHE.lock().await;
 
@@ -362,18 +362,19 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_pr
     
 
     if cache.contains_key(&key) {
-        if T::message_changed(ctx, &character).await? {
-            println!("Fetching from cache");
+        if let Some(ctx) = ctx {
+            if T::message_changed(ctx, &character).await? {
+                println!("Fetching from cache");
 
-            let sheet = T::from_character_openai(ctx, &character).await?;
-            cache.insert(key,Box::new(sheet));       
+                let sheet = T::from_character_openai(ctx, &character).await?;
+                cache.insert(key,Box::new(sheet));       
+            }
         }
     }
     else {
-
-        println!("Not cached - generating");
+       println!("Not cached - generating");
         
-       let sheet = T::from_character_database(Some(ctx), &character).await?;
+       let sheet = T::from_character_database(ctx, &character).await?;
         cache.insert(key,Box::new(sheet));       
     }
 
