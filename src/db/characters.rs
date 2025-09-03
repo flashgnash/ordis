@@ -2,7 +2,6 @@ use crate::common::Error;
 use crate::db::DbError;
 use crate::db::*;
 use diesel::prelude::*;
-use diesel::sqlite::SqliteConnection;
 
 #[allow(dead_code)]
 pub fn create(character: &Character) -> Result<(), Error> {

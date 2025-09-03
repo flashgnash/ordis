@@ -268,7 +268,6 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
     let placeholder = CreateReply::default().content("*Thinking, please wait...*");
 
     let placeholder_message = ctx.send(placeholder).await?;
-    let db_connection = &mut db::establish_connection();
 
     let character = db::characters::get(character_id)?;
 
@@ -849,7 +848,6 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
         .ephemeral(true);
     let placeholder_message = ctx.send(placeholder).await?;
 
-    let db_connection = &mut db::establish_connection();
     let character = get_user_character(&ctx)
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
@@ -1325,16 +1323,37 @@ pub async fn create_character(
             .expect("Character name was not a string?!")
             .to_string();
 
+        let roll_server_id = if let Some(guild_id) = msg.guild_id {
+            let guild = guild_id.to_partial_guild(ctx).await?;
+
+            let tags = crate::common::get_server_tags(&guild);
+
+            if let Some(tag) = tags.get("rollServer") {
+                if let Some(tag_value) = tag.first() {
+                    Some(tag_value.to_string())
+                } else {
+                    Some(guild.id.to_string())
+                }
+            } else {
+                Some(guild.id.to_string())
+            }
+        } else {
+            None
+        };
+
         let new_character = Character {
             name: Some(character_name_stringified.clone()),
             id: None,
             user_id: Some(user_id.to_string()),
+            roll_server_id: roll_server_id,
 
             stat_block: None,
             stat_block_hash: None,
 
             stat_block_message_id: Some(msg.id.to_string()),
             stat_block_channel_id: Some(msg.channel_id.to_string()),
+
+            stat_block_server_id: msg.guild_id.map(|id| id.to_string()),
 
             spell_block: None,
             spell_block_hash: None,
@@ -1398,10 +1417,10 @@ pub async fn delete_character(ctx: Context<'_>, character_id: i32) -> Result<(),
     .await;
 
     if is_admin {
-        db::characters::delete_global(character_id)?; //TODO if the bot goes public, this needs to also filter by guild
-                                                      // (don't let people delete other guilds' characters just because they're admin in their own one.)
-                                                      // This could even be done via the check admin function, if provided with the guild ID the character belongs to instead
-                                                      // of the current guild ID (not currently an issue as I whitelist which guilds the bot can join anyway)
+        db::characters::delete_global(character_id)??; //TODO if the bot goes public, this needs to also filter by guild
+                                                       // (don't let people delete other guilds' characters just because they're admin in their own one.)
+                                                       // This could even be done via the check admin function, if provided with the guild ID the character belongs to instead
+                                                       // of the current guild ID (not currently an issue as I whitelist which guilds the bot can join anyway)
     } else {
         db::characters::delete(character_id, user_id)?;
     }
@@ -1422,8 +1441,6 @@ pub async fn select_character(ctx: Context<'_>, character_id: i32) -> Result<(),
                 .ephemeral(true),
         )
         .await?;
-
-    let db_connection = &mut db::establish_connection();
 
     let author = &ctx.author();
     let user_id = author.id.get();
@@ -1498,7 +1515,6 @@ pub async fn set_spells(ctx: Context<'_>, msg: crate::serenity::Message) -> Resu
 
     let author = &ctx.author();
     let user_id = author.id.get();
-    let db_connection = &mut db::establish_connection();
     let user = db::users::get_or_create(user_id)?;
 
     if let Some(character_id) = user.selected_character {
@@ -1524,8 +1540,6 @@ pub async fn set_spells(ctx: Context<'_>, msg: crate::serenity::Message) -> Resu
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn characters(ctx: Context<'_>) -> Result<(), Error> {
-    let db_connection = &mut db::establish_connection();
-
     let author = &ctx.author();
     let user_id = author.id.get();
 
@@ -1677,18 +1691,26 @@ pub fn get_roll_channel(guild: &GuildId) -> Result<Option<ChannelId>, Error> {
 
 #[poise::command(slash_command)]
 pub async fn set_roll_channel(ctx: Context<'_>) -> Result<(), Error> {
-    if let Some(guild) = ctx.partial_guild().await {
-        if let Some(perms) = common::get_author_perms(ctx).await {
-            if perms.manage_channels() {
-                let db_connection = &mut db::establish_connection();
-                let mut server = db::servers::get_or_create(guild.id.get())?;
-                server.default_roll_channel = Some(ctx.channel_id().get().to_string());
-                db::servers::update(&server)?;
+    if let (Some(guild), Some(perms)) = (
+        ctx.partial_guild().await,
+        common::get_author_perms(ctx).await,
+    ) {
+        if perms.manage_channels() {
+            let mut server = db::servers::get_or_create(guild.id.get())?;
+            server.default_roll_channel = Some(ctx.channel_id().get().to_string());
 
-                ctx.reply("Set the roll channel successfully").await?;
-            } else {
-                ctx.reply("I'm sorry Dave, I can't let you do that").await?;
+            if let Some(tag) = crate::common::get_server_tags(&guild)
+                .get(crate::common::ROLL_SERVER_TAG)
+                .and_then(|x| x.first())
+            {
+                server.default_roll_server = Some(tag.to_string());
             }
+
+            db::servers::update(&server)?;
+
+            ctx.reply("Set the roll channel successfully").await?;
+        } else {
+            ctx.reply("I'm sorry Dave, I can't let you do that").await?;
         }
     }
     Ok(())
@@ -1699,8 +1721,6 @@ pub async fn unset_roll_channel(ctx: Context<'_>) -> Result<(), Error> {
     if let Some(guild) = ctx.partial_guild().await {
         if let Some(perms) = common::get_author_perms(ctx).await {
             if perms.manage_channels() {
-                let db_connection = &mut db::establish_connection();
-
                 let mut server = db::servers::get_or_create(guild.id.get())?;
                 server.default_roll_channel = None;
                 db::servers::update(&server)?;

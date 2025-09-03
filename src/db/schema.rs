@@ -16,6 +16,8 @@ diesel::table! {
         mana -> Nullable<Integer>,
         mana_readout_channel_id -> Nullable<Text>,
         mana_readout_message_id -> Nullable<Text>,
+        stat_block_server_id -> Nullable<Text>,
+        roll_server_id -> Nullable<Text>,
     }
 }
 
@@ -23,6 +25,7 @@ diesel::table! {
     servers (id) {
         id -> Text,
         default_roll_channel -> Nullable<Text>,
+        default_roll_server -> Nullable<Text>,
     }
 }
 

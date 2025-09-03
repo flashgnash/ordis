@@ -207,8 +207,6 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
     let author = &ctx.author();
 
-    let db_connection = &mut db::establish_connection();
-
     let user_id = author.id.get();
 
     let mut user = db::users::get_or_create(user_id).unwrap();

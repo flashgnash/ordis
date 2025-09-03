@@ -3,14 +3,15 @@ pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 use std::{borrow::Cow, collections::HashMap};
 
+pub const ROLL_SERVER_TAG: &str = "rollServer";
+
 use poise::serenity_prelude::{
-    Colour, Emoji, GuildChannel, GuildId, Message, PartialMember, Permissions, UserId,
+    Colour, Emoji, GuildChannel, GuildId, Message, PartialGuild, PartialMember, Permissions, UserId,
 };
 use serde::Deserialize;
 use serde_json::{from_str, Value};
 
 use crate::db;
-use diesel::sqlite::SqliteConnection;
 
 use poise::serenity_prelude as serenity;
 
@@ -107,22 +108,35 @@ impl ButtonEventSystem {
     }
 }
 
+pub fn get_string_tags(text: &str) -> HashMap<String, Vec<String>> {
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+
+    for line in text.lines() {
+        let mut parts = line.trim().splitn(2, ' ');
+        let key = parts.next().unwrap().trim_start_matches('-').to_string();
+        let values = parts
+            .next()
+            .map(|v| v.split(',').map(str::to_string).collect())
+            .unwrap_or_else(Vec::new);
+        map.insert(key, values);
+    }
+
+    map
+}
+
 pub fn get_channel_tags(channel: &GuildChannel) -> HashMap<String, Vec<String>> {
     if let Some(topic) = &channel.topic {
-        // println!("{topic}");
-        let mut map: HashMap<String, Vec<String>> = HashMap::new();
+        return get_string_tags(topic);
+    }
 
-        for line in topic.lines() {
-            let mut parts = line.trim().splitn(2, ' ');
-            let key = parts.next().unwrap().trim_start_matches('-').to_string();
-            let values = parts
-                .next()
-                .map(|v| v.split(',').map(str::to_string).collect())
-                .unwrap_or_else(Vec::new);
-            map.insert(key, values);
-        }
+    HashMap::new()
+}
 
-        return map;
+pub fn get_server_tags_id(guild_id: GuildId) {}
+
+pub fn get_server_tags(guild: &PartialGuild) -> HashMap<String, Vec<String>> {
+    if let Some(description) = &guild.description {
+        return get_string_tags(description);
     }
 
     HashMap::new()

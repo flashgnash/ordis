@@ -43,6 +43,7 @@ pub fn get_or_create(server_id: u64) -> Result<Server, Error> {
             let new_server = Server {
                 id: server_id.to_string(),
                 default_roll_channel: None,
+                default_roll_server: None,
             };
             let _ = servers::create(connection, &new_server);
             Ok(new_server)

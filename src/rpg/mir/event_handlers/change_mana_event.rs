@@ -45,7 +45,6 @@ impl common::EventHandlerTrait for ChangeManaEvent {
         interaction: &poise::serenity_prelude::ComponentInteraction,
         params: &common::ButtonParams,
     ) {
-        println!("Test");
         if let Some(Value::Number(char_id)) = params.get("character_id") {
             if let Some(Value::Number(mana_change)) = params.get("mana_change") {
                 let channel_id = interaction.message.channel_id;
@@ -62,8 +61,6 @@ impl common::EventHandlerTrait for ChangeManaEvent {
                     )
                     .await
                     .expect("I am so tired");
-
-                let db_connection = &mut db::establish_connection();
 
                 let mut char = db::characters::get(
                     char_id

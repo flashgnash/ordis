@@ -11,8 +11,6 @@ use crate::create_select_option_with_callback;
 use crate::db;
 use crate::rpg::mir::get_roll_channel;
 
-use super::super::RpgError;
-
 use poise::serenity_prelude::CreateMessage;
 use serde_json::Value;
 
