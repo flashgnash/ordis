@@ -38,11 +38,12 @@ impl Character {
     }
 }
 
-#[derive(Queryable, Selectable, AsChangeset)]
+#[derive(Queryable, Selectable, AsChangeset, Debug)]
 #[diesel(table_name = schema::characters)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 #[derive(Insertable, Clone)]
 #[diesel(belongs_to(User))]
+#[derive(serde::Deserialize)]
 pub struct Character {
     pub id: Option<i32>,
     pub user_id: Option<String>,

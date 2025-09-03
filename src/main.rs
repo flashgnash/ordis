@@ -1,5 +1,8 @@
 use std::env;
 
+use axum::{routing::post, Json, Router};
+use std::net::SocketAddr;
+
 use common::ButtonEventSystem;
 use meval::eval_str;
 
@@ -270,6 +273,12 @@ async fn main() {
     let mut event_system = EVENT_SYSTEM.lock().await;
 
     rpg::mir::register_events(&mut event_system);
+
+    let app = Router::new().route("/roll", post(crate::rpg::mir::web::roll_for));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
+        .await
+        .unwrap();
 
     // crate::rpg::register_events(&mut event_system);
 
