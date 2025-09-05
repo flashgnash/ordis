@@ -8,10 +8,20 @@ pub struct RollRequest {
 }
 
 pub async fn roll_for(Json(req): Json<RollRequest>) -> Result<Json<(String, f64)>, StatusCode> {
-    println!("{:#?}", &req.character);
+    // println!("{:#?}", &req.character);
 
-    match super::roll_with_char_sheet(None, req.dice_expression, &req.character).await {
-        Ok(res) => Ok(Json(res)),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    if let Some(char_id) = req.character.id {
+        println!("ID: {char_id}");
+
+        if let Ok(char) = crate::db::characters::get(char_id) {
+            match super::roll_with_char_sheet(None, req.dice_expression, &char).await {
+                Ok(res) => Ok(Json(res)),
+                Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        } else {
+            Err(StatusCode::NOT_FOUND)
+        }
+    } else {
+        Err(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
