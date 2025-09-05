@@ -274,7 +274,24 @@ async fn main() {
 
     rpg::mir::register_events(&mut event_system);
 
-    let app = Router::new().route("/roll", post(crate::rpg::mir::web::roll_for));
+    let app = Router::new()
+        .route(
+            "/roll/{char_id}/{roll_expression}",
+            post(crate::rpg::mir::web::roll_for),
+        )
+        .route(
+            "/roll/{char_id}/{roll_expression}/",
+            post(crate::rpg::mir::web::roll_for),
+        )
+        .route(
+            "/roll/{char_id}",
+            post(crate::rpg::mir::web::roll_default_for),
+        )
+        .route(
+            "/roll/{char_id}/",
+            post(crate::rpg::mir::web::roll_default_for),
+        );
+
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
         .await

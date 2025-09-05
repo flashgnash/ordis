@@ -1,27 +1,33 @@
-use axum::{http::StatusCode, Json};
-use serde::Deserialize;
+use axum::{extract::Path, http::StatusCode, Json};
 
-#[derive(Deserialize)]
-pub struct RollRequest {
-    dice_expression: Option<String>,
-    character: crate::db::models::Character,
-}
+pub async fn roll_for_internal(
+    char_id: i32,
+    roll_expression: Option<String>,
+) -> Result<Json<(String, f64)>, StatusCode> {
+    println!(
+        "Roll request received for: {}, roll: {:#?}",
+        char_id, roll_expression
+    );
 
-pub async fn roll_for(Json(req): Json<RollRequest>) -> Result<Json<(String, f64)>, StatusCode> {
-    // println!("{:#?}", &req.character);
-
-    if let Some(char_id) = req.character.id {
-        println!("ID: {char_id}");
-
-        if let Ok(char) = crate::db::characters::get(char_id) {
-            match super::roll_with_char_sheet(None, req.dice_expression, &char).await {
-                Ok(res) => Ok(Json(res)),
-                Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-            }
-        } else {
-            Err(StatusCode::NOT_FOUND)
+    if let Ok(char) = crate::db::characters::get(char_id) {
+        match super::roll_with_char_sheet(None, roll_expression, &char).await {
+            Ok(res) => Ok(Json(res)),
+            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
         }
     } else {
-        Err(StatusCode::INTERNAL_SERVER_ERROR)
+        Err(StatusCode::NOT_FOUND)
     }
+}
+
+// Axum does not allow using Option<> for optional parameters.
+// the only way I can achieve this is with two separate handler methods
+
+pub async fn roll_default_for(Path(char_id): Path<i32>) -> Result<Json<(String, f64)>, StatusCode> {
+    roll_for_internal(char_id, None).await
+}
+
+pub async fn roll_for(
+    Path(params): Path<(i32, String)>,
+) -> Result<Json<(String, f64)>, StatusCode> {
+    roll_for_internal(params.0, Some(params.1)).await
 }
