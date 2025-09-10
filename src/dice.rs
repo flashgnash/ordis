@@ -1,12 +1,11 @@
+use crate::common::Context;
+use crate::common::Error;
 use poise::serenity_prelude::ChannelId;
 use poise::serenity_prelude::Colour;
 use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateMessage;
 use poise::CreateReply;
 use rand::prelude::*;
-
-use crate::common::Context;
-use crate::common::Error;
 
 use crate::common::safe_to_number;
 
@@ -17,7 +16,13 @@ use meval::eval_str;
 
 extern crate regex;
 use regex::Regex;
+use std::collections::HashMap;
 use std::fmt;
+
+pub struct Roll {
+    pub result: i32,
+    pub expression: String,
+}
 
 #[derive(Debug)]
 pub enum DiceError {
@@ -34,7 +39,7 @@ impl fmt::Display for DiceError {
 
 impl std::error::Error for DiceError {}
 
-pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
+pub fn roll_dice_string(instance: &str) -> Result<Vec<Roll>, DiceError> {
     let mut number_of_dice = 1;
     let faces_of_die;
 
@@ -60,55 +65,92 @@ pub fn roll_one_instance(instance: &str) -> Result<(i32, Vec<i32>), DiceError> {
 
     let dice_rolls = generate_randoms(number_of_dice, faces_of_die);
 
-    Ok((sum_array(&dice_rolls), dice_rolls))
+    Ok(dice_rolls)
 }
 
-fn roll_matches(input: &str, pattern: &Regex) -> Result<(String, String), DiceError> {
+pub fn join_rolls_to_string(rolls: &[Roll], separator: &str) -> String {
+    let s: String = rolls
+        .iter()
+        .map(|i| i.result.to_string())
+        .collect::<Vec<String>>()
+        .join(separator);
+    return s;
+}
+
+pub fn sum_roll_array(arr: &Vec<Roll>) -> i32 {
+    let mut result = 0;
+
+    for num in arr {
+        result = result + num.result;
+    }
+    return result;
+}
+pub fn roll_replace(input: &str) -> Result<(String, Vec<Roll>), DiceError> {
+    let pattern = Regex::new(r"\d+d\d+").unwrap(); // This regex pattern matches three-letter words
+
     let mut result = input.to_string();
 
-    let mut message = "".to_string();
+    let mut all_rolls: Vec<Roll> = vec![];
 
     for mat in pattern.find_iter(input) {
-        let (processed, rolls) = roll_one_instance(mat.as_str())?;
+        // Has to be mutable to go into mutable array
+        // Probably a better way but I have no net connection to check
+        let mut rolls = roll_dice_string(mat.as_str())?;
 
         let mat_str = mat.as_str();
 
-        message = format!("{message}\n- {mat_str}: [{}] ", join_to_string(&rolls, ","));
-        result = result.replacen(mat_str, &processed.to_string(), 1);
+        result = result.replacen(mat_str, &sum_roll_array(&rolls).to_string(), 1);
+
+        all_rolls.append(&mut rolls);
     }
-    Ok((result, message))
+
+    Ok((result, all_rolls))
 }
 
-pub fn roll_replace(text: &str) -> Result<(String, String), DiceError> {
-    //Change name later this is terrible
-
-    let regex_string = r"\d+d\d+";
-
-    let regex = Regex::new(regex_string).unwrap(); // This regex pattern matches three-letter words
-
-    let (result, message) = roll_matches(&text, &regex)?;
-
-    return Ok((result, message));
-}
-
-fn generate_randoms(count: i32, faces: i32) -> Vec<i32> {
+fn generate_randoms(count: i32, faces: i32) -> Vec<Roll> {
     let mut rng = rand::thread_rng();
 
-    let mut rolls: Vec<i32> = vec![];
+    let mut rolls: Vec<Roll> = vec![];
 
     for _i in 0..count {
-        rolls.push(rng.gen_range(1..faces + 1));
+        rolls.push(Roll {
+            result: rng.gen_range(1..faces + 1),
+            expression: format!("{count}d{faces}"),
+        });
     }
 
     return rolls;
 }
 
+fn group_rolls(rolls: Vec<Roll>) -> HashMap<String, Vec<Roll>> {
+    let mut map: HashMap<String, Vec<Roll>> = HashMap::new();
+    for r in rolls {
+        map.entry(r.expression.clone()).or_default().push(r);
+    }
+    map
+}
+
+fn format_rolls(rolls: Vec<Roll>) -> String {
+    let groups = group_rolls(rolls);
+
+    groups
+        .into_iter()
+        .map(|(expr, rs)| {
+            let results: Vec<i32> = rs.into_iter().map(|r| r.result).collect();
+            format!("- {}: {:?} ({})", expr, results, sum_array(&results))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub async fn roll_internal(dice: &String) -> Result<(String, f64), Error> {
-    let (replaced, messages) = roll_replace(dice)?;
+    let (replaced, dice_rolls) = roll_replace(dice)?;
 
     let calc_result = eval_str(&replaced)?;
 
-    let message = format!("{dice} {messages}\n\n Result: __{calc_result}__");
+    let rolls_message = format_rolls(dice_rolls);
+
+    let message = format!("{dice} \n{rolls_message}\n\n Result: __{calc_result}__");
 
     let result = (message, calc_result);
 

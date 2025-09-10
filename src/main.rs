@@ -293,9 +293,12 @@ async fn main() {
         );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
-        .await
-        .unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
+            .await
+            .unwrap();
+    });
 
     // crate::rpg::register_events(&mut event_system);
 
