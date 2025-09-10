@@ -6,6 +6,7 @@ use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateMessage;
 use poise::CreateReply;
 use rand::prelude::*;
+use serde::Serialize;
 
 use crate::common::safe_to_number;
 
@@ -19,6 +20,14 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::fmt;
 
+#[derive(Serialize)]
+pub struct RollResult {
+    pub message: String,
+    pub result: f64,
+    pub rolls: Vec<Roll>,
+}
+
+#[derive(Serialize)]
 pub struct Roll {
     pub result: i32,
     pub expression: String,
@@ -85,10 +94,10 @@ pub fn sum_roll_array(arr: &Vec<Roll>) -> i32 {
     }
     return result;
 }
-pub fn roll_replace(input: &str) -> Result<(String, Vec<Roll>), DiceError> {
+pub fn eval_roll(input: &str) -> Result<RollResult, Error> {
     let pattern = Regex::new(r"\d+d\d+").unwrap(); // This regex pattern matches three-letter words
 
-    let mut result = input.to_string();
+    let mut replaced = input.to_string();
 
     let mut all_rolls: Vec<Roll> = vec![];
 
@@ -99,12 +108,22 @@ pub fn roll_replace(input: &str) -> Result<(String, Vec<Roll>), DiceError> {
 
         let mat_str = mat.as_str();
 
-        result = result.replacen(mat_str, &sum_roll_array(&rolls).to_string(), 1);
+        replaced = replaced.replacen(mat_str, &sum_roll_array(&rolls).to_string(), 1);
 
         all_rolls.append(&mut rolls);
     }
 
-    Ok((result, all_rolls))
+    let calc_result = eval_str(&replaced)?;
+
+    let rolls_message = format_rolls(&all_rolls);
+
+    let message = format!("{input} \n{rolls_message}\n\n Result: __{calc_result}__");
+
+    Ok(RollResult {
+        message: message,
+        result: calc_result,
+        rolls: all_rolls,
+    })
 }
 
 fn generate_randoms(count: i32, faces: i32) -> Vec<Roll> {
@@ -122,15 +141,15 @@ fn generate_randoms(count: i32, faces: i32) -> Vec<Roll> {
     return rolls;
 }
 
-fn group_rolls(rolls: Vec<Roll>) -> HashMap<String, Vec<Roll>> {
-    let mut map: HashMap<String, Vec<Roll>> = HashMap::new();
+fn group_rolls(rolls: &Vec<Roll>) -> HashMap<String, Vec<&Roll>> {
+    let mut map: HashMap<String, Vec<&Roll>> = HashMap::new();
     for r in rolls {
         map.entry(r.expression.clone()).or_default().push(r);
     }
     map
 }
 
-fn format_rolls(rolls: Vec<Roll>) -> String {
+fn format_rolls(rolls: &Vec<Roll>) -> String {
     let groups = group_rolls(rolls);
 
     groups
@@ -143,29 +162,28 @@ fn format_rolls(rolls: Vec<Roll>) -> String {
         .join("\n")
 }
 
-pub async fn roll_internal(dice: &String) -> Result<(String, f64), Error> {
-    let (replaced, dice_rolls) = roll_replace(dice)?;
+pub async fn generate_roll_embed(
+    roll_message: String,
+    name: &str,
+    colour: Colour,
+) -> Result<CreateEmbed, Error> {
+    let embed = CreateEmbed::default()
+        .title(format!("Rolling for {name}..."))
+        .colour(colour)
+        .description(format!("\n​\n{roll_message}"));
 
-    let calc_result = eval_str(&replaced)?;
-
-    let rolls_message = format_rolls(dice_rolls);
-
-    let message = format!("{dice} \n{rolls_message}\n\n Result: __{calc_result}__");
-
-    let result = (message, calc_result);
-
-    Ok(result)
+    Ok(embed)
 }
 
 pub async fn output_roll_message(
     ctx: Context<'_>,
-    roll: (String, f64),
+    roll_message: String,
     username: String,
     channel: Option<ChannelId>,
 ) -> Result<(), Error> {
     let colour = crate::common::get_author_colour(ctx).await?;
 
-    let embed = generate_roll_embed(roll, &username, colour).await?;
+    let embed = generate_roll_embed(roll_message, &username, colour).await?;
 
     if let Some(channel) = channel {
         if channel != ctx.channel_id() {
@@ -189,28 +207,13 @@ pub async fn output_roll_message(
     Ok(())
 }
 
-pub async fn generate_roll_embed(
-    roll: (String, f64),
-    name: &str,
-    colour: Colour,
-) -> Result<CreateEmbed, Error> {
-    let (message, _) = roll;
-
-    let embed = CreateEmbed::default()
-        .title(format!("Rolling for {name}..."))
-        .colour(colour)
-        .description(format!("\n​\n{message}"));
-
-    Ok(embed)
-}
-
 #[poise::command(slash_command, prefix_command)]
 pub async fn roll(ctx: Context<'_>, dice: String) -> Result<(), Error> {
-    let results = roll_internal(&dice).await?;
+    let result = eval_roll(&dice)?;
 
     output_roll_message(
         ctx,
-        results,
+        result.message,
         ctx.author()
             .nick_in(
                 ctx,

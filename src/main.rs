@@ -72,6 +72,11 @@ impl EventHandler for Handler {
         }
     }
 
+    // This absolutely needs to go
+    //
+    // My homemade jury rigged event handler system
+    // is crap and completely eclipsed by the built in one
+    // But when will I bother to do it...
     async fn interaction_create(
         &self,
         ctx: poise::serenity_prelude::Context,

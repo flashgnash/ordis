@@ -27,6 +27,7 @@ use stat_block::StatBlock;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::f64;
 
 use crate::common;
 use crate::common::safe_to_number;
@@ -1116,7 +1117,7 @@ pub async fn roll_with_char_sheet(
     ctx: Option<&poise::serenity_prelude::Context>,
     dice_expression: Option<String>,
     character: &Character,
-) -> Result<(String, f64), Error> {
+) -> Result<crate::dice::RollResult, Error> {
     let stat_block_result: Result<StatBlock, Error> = super::get_sheet(ctx, &character).await;
 
     let mut dice = stat_block_result
@@ -1183,7 +1184,7 @@ pub async fn roll_with_char_sheet(
         }
     }
 
-    Ok(dice::roll_internal(&str_replaced).await?)
+    Ok(dice::eval_roll(&str_replaced)?)
 }
 
 static ROLL_CHANNEL_FLAG: &str = "rollChannel";
@@ -1210,7 +1211,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
     let char_maybe = get_user_character(&ctx).await?;
 
-    let result: (String, f64) = if let Some(character) = char_maybe {
+    let result = if let Some(character) = char_maybe {
         if let Some(char_name) = &character.name {
             nick = char_name.to_string();
         } else if let Some(guild_id) = ctx.guild_id() {
@@ -1223,7 +1224,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
 
         roll_with_char_sheet(Some(ctx.serenity_context()), dice_expression, &character).await?
     } else {
-        crate::dice::roll_internal(&dice_expression.unwrap_or("1d100".to_string())).await?
+        crate::dice::eval_roll(&dice_expression.unwrap_or("1d100".to_string()))?
     };
 
     let channel = if let Some(guild_id) = ctx.guild().map(|g| g.id) {
@@ -1262,7 +1263,7 @@ pub async fn roll(ctx: Context<'_>, dice_expression: Option<String>) -> Result<(
         None
     };
 
-    dice::output_roll_message(ctx, result, nick, channel).await?;
+    dice::output_roll_message(ctx, result.message, nick, channel).await?;
 
     Ok(())
 }
@@ -1646,22 +1647,22 @@ pub async fn level_up(ctx: Context<'_>, num_levels: i32) -> Result<(), Error> {
         .ok_or(RpgError::NoTrainingDie)?
         .to_string();
 
-    let mut energy_die_sum: i32 = 0;
-    let mut magic_die_sum: i32 = 0;
-    let mut training_die_sum: i32 = 0;
+    let mut energy_die_sum: f64 = 0.0;
+    let mut magic_die_sum: f64 = 0.0;
+    let mut training_die_sum: f64 = 0.0;
 
     let mut message = format!(
         "Per Level: \nEnergy: {energy_die} \\| Magic: {magic_die} \\| Training: {training_die}\n\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\nRolls:"
     );
 
     for i in 1..num_levels + 1 {
-        let (energy_die_result, _) = dice::roll_replace(&energy_die.as_str())?;
-        let (magic_die_result, _) = dice::roll_replace(&magic_die.as_str())?;
-        let (training_die_result, _) = dice::roll_replace(&training_die.as_str())?;
+        let energy_die_result = dice::eval_roll(&energy_die.as_str())?.result;
+        let magic_die_result = dice::eval_roll(&magic_die.as_str())?.result;
+        let training_die_result = dice::eval_roll(&training_die.as_str())?.result;
 
-        energy_die_sum = energy_die_sum + safe_to_number(&energy_die_result);
-        magic_die_sum = magic_die_sum + safe_to_number(&magic_die_result);
-        training_die_sum = training_die_sum + safe_to_number(&training_die_result);
+        energy_die_sum = energy_die_sum + &energy_die_result;
+        magic_die_sum = magic_die_sum + &magic_die_result;
+        training_die_sum = training_die_sum + &training_die_result;
 
         message = format!(
             "{message}\n{i}.  ⚡️ {energy_die_result}    🐇 {magic_die_result}    🏋 {training_die_result}"

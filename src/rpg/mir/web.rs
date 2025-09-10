@@ -1,9 +1,10 @@
+use crate::dice::RollResult;
 use axum::{extract::Path, http::StatusCode, Json};
 
 pub async fn roll_for_internal(
     char_id: i32,
     roll_expression: Option<String>,
-) -> Result<Json<(String, f64)>, StatusCode> {
+) -> Result<Json<RollResult>, StatusCode> {
     println!(
         "Roll request received for: {}, roll: {:#?}",
         char_id, roll_expression
@@ -22,12 +23,10 @@ pub async fn roll_for_internal(
 // Axum does not allow using Option<> for optional parameters.
 // the only way I can achieve this is with two separate handler methods
 
-pub async fn roll_default_for(Path(char_id): Path<i32>) -> Result<Json<(String, f64)>, StatusCode> {
+pub async fn roll_default_for(Path(char_id): Path<i32>) -> Result<Json<RollResult>, StatusCode> {
     roll_for_internal(char_id, None).await
 }
 
-pub async fn roll_for(
-    Path(params): Path<(i32, String)>,
-) -> Result<Json<(String, f64)>, StatusCode> {
+pub async fn roll_for(Path(params): Path<(i32, String)>) -> Result<Json<RollResult>, StatusCode> {
     roll_for_internal(params.0, Some(params.1)).await
 }

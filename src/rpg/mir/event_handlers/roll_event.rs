@@ -41,6 +41,10 @@ impl RollEvent {
     }
 }
 
+// I need to bin this entire event handler system
+// It sucks and there's a built in method I didn't notice when I wrote this
+// (I have used it in other areas like the auto react)
+
 #[async_trait]
 impl common::EventHandlerTrait for RollEvent {
     async fn run(
@@ -84,7 +88,7 @@ impl common::EventHandlerTrait for RollEvent {
                     .expect("I really have to fix this");
 
             let embed = crate::dice::generate_roll_embed(
-                result,
+                result.message,
                 &char.name.unwrap_or("Unknown character name".to_string()),
                 colour,
             )
