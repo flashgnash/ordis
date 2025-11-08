@@ -1215,6 +1215,18 @@ pub async fn roll_with_char_sheet(
 
     match stat_block_result {
         Ok(stat_block) => {
+            if let Some(custom_rolls) = &character.saved_rolls {
+                let custom_roll_map: std::collections::HashMap<_, _> = custom_rolls
+                    .lines()
+                    .filter_map(|line| line.split_once(':'))
+                    .map(|(k, v)| (k.trim(), v.trim()))
+                    .collect();
+
+                for (key, value) in &custom_roll_map {
+                    str_replaced = str_replaced.replace(key, &value.to_string());
+                }
+            }
+
             if let Some(stats_object) = stat_block
                 .stats
                 .as_ref()
@@ -1246,9 +1258,9 @@ pub async fn roll_with_char_sheet(
                     str_replaced = str_replaced.replace(special_stat, &value.to_string());
                     println!("special stat replaced: {special_stat}: {value}")
                 }
-            } else {
-                println!("No special stats??");
             }
+
+            println!("{}", str_replaced);
         }
 
         Err(e) => {
