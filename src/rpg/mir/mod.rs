@@ -1,6 +1,9 @@
+pub mod saved_rolls;
 pub mod spell_sheet;
 pub mod stat_block;
 pub mod web;
+
+use crate::common::Data;
 
 use lazy_static::lazy_static;
 use poise::serenity_prelude::ButtonStyle;
@@ -11,8 +14,10 @@ use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
 use poise::serenity_prelude::CreateSelectMenu;
 use poise::serenity_prelude::CreateSelectMenuOption;
+use poise::serenity_prelude::EditMessage;
 use poise::serenity_prelude::GuildId;
 use poise::Command;
+use poise::Modal;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
@@ -25,20 +30,15 @@ use super::spells::SpellType;
 use spell_sheet::SpellSheet;
 use stat_block::StatBlock;
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::f64;
 
 use crate::common;
-use crate::common::safe_to_number;
 use crate::common::ButtonEventSystem;
 use crate::common::Context;
 use crate::common::Error;
 use crate::db;
 use crate::db::models::Character;
-use crate::db::DbError;
-
-use diesel::SqliteConnection;
 
 use super::get_user_character;
 use super::CharacterSheetable;
@@ -64,6 +64,8 @@ use event_handlers::UpdateStatusEventParams;
 
 use event_handlers::ChangeManaEvent;
 use event_handlers::ChangeManaEventParams;
+
+type ApplicationContext<'a> = poise::ApplicationContext<'a, Data, Error>;
 
 pub fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
     event_system.register_handler(RollEvent);
@@ -100,6 +102,46 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
             .await?;
     } else {
         return Err(Box::new(RpgError::NoSpellSheet));
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Modal)]
+#[name = "Edit Message"] // Struct name by default
+struct EditMessageModal {
+    #[name = "Message content:"]
+    #[paragraph]
+    message: String, // Option means optional input
+}
+
+#[derive(Debug, Modal)]
+#[name = "Edit Saved Rolls"] // Struct name by default
+struct EditSavedRolls {
+    #[name = "Saved Rolls"]
+    #[paragraph]
+    message: String, // Option means optional input
+}
+
+#[poise::command(context_menu_command = "Edit message")]
+pub async fn edit_character(
+    ctx: ApplicationContext<'_>,
+
+    msg: crate::serenity::Message,
+) -> Result<(), Error> {
+    let content = &msg.content;
+
+    let message_modal = EditMessageModal {
+        message: content.clone(),
+    };
+
+    let data = Modal::execute_with_defaults(ctx, message_modal).await?;
+    if let Some(data) = data {
+        if &data.message != content {
+            msg.clone()
+                .edit(ctx, EditMessage::default().content(&data.message))
+                .await?;
+        }
     }
 
     Ok(())
@@ -1825,5 +1867,6 @@ pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
         set_spells(),
         level_up(),
         roll(),
+        edit_character(),
     ];
 }
