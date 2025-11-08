@@ -18,6 +18,8 @@ impl Character {
             user_id: None,
             name: None,
 
+            saved_rolls: None,
+
             roll_server_id: None,
 
             stat_block: None,
@@ -48,6 +50,8 @@ pub struct Character {
     pub id: Option<i32>,
     pub user_id: Option<String>,
     pub name: Option<String>,
+
+    pub saved_rolls: Option<String>,
 
     pub stat_block: Option<String>,
     pub stat_block_hash: Option<String>,

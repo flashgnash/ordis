@@ -18,6 +18,7 @@ diesel::table! {
         mana_readout_message_id -> Nullable<Text>,
         stat_block_server_id -> Nullable<Text>,
         roll_server_id -> Nullable<Text>,
+        saved_rolls -> Nullable<Text>,
     }
 }
 

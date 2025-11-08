@@ -117,10 +117,40 @@ struct EditMessageModal {
 
 #[derive(Debug, Modal)]
 #[name = "Edit Saved Rolls"] // Struct name by default
-struct EditSavedRolls {
+struct EditSavedRollsModal {
     #[name = "Saved Rolls"]
     #[paragraph]
-    message: String, // Option means optional input
+    message: Option<String>, // Option means optional input
+}
+
+#[poise::command(slash_command)]
+pub async fn edit_saved_rolls(ctx: ApplicationContext<'_>) -> Result<(), Error> {
+    let author = &ctx.author();
+
+    let user_id = author.id.get();
+
+    let user = db::users::get_or_create(user_id)?;
+
+    let mut char = if let Some(character_id) = user.selected_character {
+        Some(db::characters::get(character_id)?)
+    } else {
+        None
+    }
+    .ok_or(RpgError::NoCharacterSelected)?;
+
+    // let char = get_user_character(ctx.serenity_context());
+
+    let message_modal = EditSavedRollsModal {
+        message: char.saved_rolls,
+    };
+
+    let data = Modal::execute_with_defaults(ctx, message_modal).await?;
+    if let Some(data) = data {
+        char.saved_rolls = data.message;
+        db::characters::update(&char)?;
+    }
+
+    Ok(())
 }
 
 #[poise::command(context_menu_command = "Edit message")]
@@ -1422,6 +1452,8 @@ pub async fn create_character(
             user_id: Some(user_id.to_string()),
             roll_server_id: roll_server_id,
 
+            saved_rolls: None,
+
             stat_block: None,
             stat_block_hash: None,
 
@@ -1868,5 +1900,6 @@ pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
         level_up(),
         roll(),
         edit_character(),
+        edit_saved_rolls(),
     ];
 }
