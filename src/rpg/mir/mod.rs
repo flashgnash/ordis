@@ -1164,6 +1164,19 @@ pub async fn roll_with_char_sheet(
                     }
                 }
             }
+            if let Some(special_stats_object) = stat_block
+                .special_stats
+                .as_ref()
+                .and_then(|special_stats| special_stats.as_object())
+            {
+                println!("Testing");
+                for (special_stat, value) in special_stats_object {
+                    str_replaced = str_replaced.replace(special_stat, &value.to_string());
+                    println!("special stat replaced: {special_stat}: {value}")
+                }
+            } else {
+                println!("No special stats??");
+            }
         }
 
         Err(e) => {
@@ -1688,12 +1701,16 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
-    let reply = CreateReply::default().content(
-        stat_block
-            .sheet_info
-            .jsonified_message
-            .expect("Stat block should always generate json"),
-    );
+    let json = stat_block
+        .sheet_info
+        .jsonified_message
+        .expect("Stat block should always generate json");
+
+    let pretty_json =
+        serde_json::to_string_pretty(&serde_json::from_str::<serde_json::Value>(&json).unwrap())
+            .unwrap();
+
+    let reply = CreateReply::default().content(pretty_json);
     msg.edit(ctx, reply).await?;
 
     return Ok(());
