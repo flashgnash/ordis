@@ -1,5 +1,8 @@
 use std::env;
 
+use axum::{routing::post, Json, Router};
+use std::net::SocketAddr;
+
 use common::ButtonEventSystem;
 use meval::eval_str;
 
@@ -69,6 +72,11 @@ impl EventHandler for Handler {
         }
     }
 
+    // This absolutely needs to go
+    //
+    // My homemade jury rigged event handler system
+    // is crap and completely eclipsed by the built in one
+    // But when will I bother to do it...
     async fn interaction_create(
         &self,
         ctx: poise::serenity_prelude::Context,
@@ -207,20 +215,18 @@ async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
     let author = &ctx.author();
 
-    let db_connection = &mut db::establish_connection();
-
     let user_id = author.id.get();
 
-    let mut user = db::users::get_or_create(db_connection, user_id).unwrap();
+    let mut user = db::users::get_or_create(user_id).unwrap();
 
-    let characters = db::characters::get_from_user_id(db_connection, user_id)?;
+    let characters = db::characters::get_from_user_id(user_id)?;
 
     for character in characters {
         println!("{}", character.name.expect("Character has no name"));
     }
 
     user.count = Some(user.count.unwrap_or(0) + 1);
-    let _ = db::users::update(db_connection, &user);
+    let _ = db::users::update(&user);
     let count;
 
     match user.count {
@@ -272,6 +278,32 @@ async fn main() {
     let mut event_system = EVENT_SYSTEM.lock().await;
 
     rpg::mir::register_events(&mut event_system);
+
+    let app = Router::new()
+        .route(
+            "/roll/{char_id}/{roll_expression}",
+            post(crate::rpg::mir::web::roll_for),
+        )
+        .route(
+            "/roll/{char_id}/{roll_expression}/",
+            post(crate::rpg::mir::web::roll_for),
+        )
+        .route(
+            "/roll/{char_id}",
+            post(crate::rpg::mir::web::roll_default_for),
+        )
+        .route(
+            "/roll/{char_id}/",
+            post(crate::rpg::mir::web::roll_default_for),
+        );
+
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+
+    tokio::spawn(async move {
+        axum::serve(tokio::net::TcpListener::bind(addr).await.unwrap(), app)
+            .await
+            .unwrap();
+    });
 
     // crate::rpg::register_events(&mut event_system);
 

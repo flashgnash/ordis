@@ -4,13 +4,12 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 use std::{borrow::Cow, collections::HashMap};
 
 use poise::serenity_prelude::{
-    Colour, Emoji, GuildChannel, GuildId, Message, PartialMember, Permissions, UserId,
+    Colour, Emoji, GuildChannel, GuildId, Message, PartialGuild, PartialMember, Permissions, UserId,
 };
 use serde::Deserialize;
 use serde_json::{from_str, Value};
 
 use crate::db;
-use diesel::sqlite::SqliteConnection;
 
 use poise::serenity_prelude as serenity;
 
@@ -107,22 +106,44 @@ impl ButtonEventSystem {
     }
 }
 
+pub fn get_string_tags(text: &str) -> HashMap<String, Vec<String>> {
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+
+    for line in text.lines() {
+        let mut parts = line.trim().splitn(2, ' ');
+        let key = parts.next().unwrap().trim_start_matches('-').to_string();
+        let values = parts
+            .next()
+            .map(|v| v.split(',').map(str::to_string).collect())
+            .unwrap_or_else(Vec::new);
+        map.insert(key, values);
+    }
+
+    map
+}
+
 pub fn get_channel_tags(channel: &GuildChannel) -> HashMap<String, Vec<String>> {
     if let Some(topic) = &channel.topic {
-        // println!("{topic}");
-        let mut map: HashMap<String, Vec<String>> = HashMap::new();
+        return get_string_tags(topic);
+    }
 
-        for line in topic.lines() {
-            let mut parts = line.trim().splitn(2, ' ');
-            let key = parts.next().unwrap().trim_start_matches('-').to_string();
-            let values = parts
-                .next()
-                .map(|v| v.split(',').map(str::to_string).collect())
-                .unwrap_or_else(Vec::new);
-            map.insert(key, values);
-        }
+    HashMap::new()
+}
 
-        return map;
+// Why does rust not allow function overloads
+// This is so ugly
+pub async fn get_server_tags_from_id<T: Into<GuildId>>(
+    ctx: &Context<'_>,
+    guild_id: T,
+) -> Result<HashMap<String, Vec<String>>, Error> {
+    let guild = guild_id.into().to_partial_guild(ctx).await?;
+
+    Ok(get_server_tags(&guild))
+}
+
+pub fn get_server_tags(guild: &PartialGuild) -> HashMap<String, Vec<String>> {
+    if let Some(description) = &guild.description {
+        return get_string_tags(description);
     }
 
     HashMap::new()
@@ -237,15 +258,12 @@ pub fn draw_bar(
         + &background.repeat(length - current_length.clamp(0, length));
 }
 
-pub async fn get_user(
-    ctx: &Context<'_>,
-    db_connection: &mut SqliteConnection,
-) -> Result<db::models::User, Error> {
+pub async fn get_user(ctx: &Context<'_>) -> Result<db::models::User, Error> {
     let author = &ctx.author();
 
     let user_id = author.id.get();
 
-    Ok(db::users::get_or_create(db_connection, user_id)?)
+    Ok(db::users::get_or_create(user_id)?)
 }
 
 pub fn hash(content: &str) -> String {

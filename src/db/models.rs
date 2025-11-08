@@ -18,9 +18,12 @@ impl Character {
             user_id: None,
             name: None,
 
+            roll_server_id: None,
+
             stat_block: None,
             stat_block_hash: None,
             stat_block_message_id: None,
+            stat_block_server_id: None,
             stat_block_channel_id: None,
 
             spell_block: None,
@@ -35,11 +38,12 @@ impl Character {
     }
 }
 
-#[derive(Queryable, Selectable, AsChangeset)]
+#[derive(Queryable, Selectable, AsChangeset, Debug)]
 #[diesel(table_name = schema::characters)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 #[derive(Insertable, Clone)]
 #[diesel(belongs_to(User))]
+#[derive(serde::Deserialize)]
 pub struct Character {
     pub id: Option<i32>,
     pub user_id: Option<String>,
@@ -47,6 +51,9 @@ pub struct Character {
 
     pub stat_block: Option<String>,
     pub stat_block_hash: Option<String>,
+
+    pub stat_block_server_id: Option<String>,
+    pub roll_server_id: Option<String>,
 
     pub stat_block_message_id: Option<String>,
     pub stat_block_channel_id: Option<String>,
@@ -69,4 +76,5 @@ pub struct Character {
 pub struct Server {
     pub id: String,
     pub default_roll_channel: Option<String>,
+    pub default_roll_server: Option<String>,
 }

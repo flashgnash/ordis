@@ -58,10 +58,7 @@ impl common::EventHandlerTrait for UpdateStatusEvent {
                 .await
                 .expect("I am so tired");
 
-            let db_connection = &mut db::establish_connection();
-
             let char = db::characters::get(
-                db_connection,
                 char_id
                     .as_i64()
                     .ok_or(RpgError::TestingError)

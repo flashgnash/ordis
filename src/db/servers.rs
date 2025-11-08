@@ -1,7 +1,7 @@
+use crate::common::Error;
+use crate::db::*;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
-
-use crate::db::*;
 
 #[allow(dead_code)]
 pub fn create(connection: &mut SqliteConnection, server: &Server) -> Result<(), DbError> {
@@ -33,7 +33,8 @@ pub fn get(connection: &mut SqliteConnection, server_id: u64) -> Result<Option<S
     }
 }
 
-pub fn get_or_create(connection: &mut SqliteConnection, server_id: u64) -> Result<Server, DbError> {
+pub fn get_or_create(server_id: u64) -> Result<Server, Error> {
+    let connection = &mut crate::db::POOL.get()?;
     let server_result = get(connection, server_id);
 
     match server_result? {
@@ -42,6 +43,7 @@ pub fn get_or_create(connection: &mut SqliteConnection, server_id: u64) -> Resul
             let new_server = Server {
                 id: server_id.to_string(),
                 default_roll_channel: None,
+                default_roll_server: None,
             };
             let _ = servers::create(connection, &new_server);
             Ok(new_server)
@@ -50,8 +52,9 @@ pub fn get_or_create(connection: &mut SqliteConnection, server_id: u64) -> Resul
 }
 
 #[allow(dead_code)]
-pub fn update(connection: &mut SqliteConnection, server: &Server) -> Result<(), DbError> {
+pub fn update(server: &Server) -> Result<(), Error> {
     use self::schema::servers::dsl::*;
+    let connection = &mut crate::db::POOL.get()?;
 
     let server_id = &server.id.to_string();
 

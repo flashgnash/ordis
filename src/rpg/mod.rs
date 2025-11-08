@@ -65,6 +65,8 @@ pub enum RpgError {
 
     JsonNotInitialised,
     TestingError,
+
+    InvalidCharacterError
 }
 
 impl fmt::Display for RpgError {
@@ -276,7 +278,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
     }
     async fn from_character_database(
-        ctx: &poise::serenity_prelude::Context,
+        ctx: Option<&poise::serenity_prelude::Context>,
         character: &Character,
     ) -> Result<Self, Error> {
 
@@ -285,21 +287,25 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
         let mut sheet: Self;
 
-        let stat_message = Self::get_sheet_message(ctx, &character).await?;
+        if let Some(ctx) = ctx {
             
-        if let Some(prev_block) = previous_block {
+            let stat_message = Self::get_sheet_message(ctx, &character).await?;
 
-
+            if let Some(prev_block) = previous_block {
 
                     
-            sheet = Self::from_json(
-                Some(&stat_message.content), //FUCK
-                &prev_block
-            )?;
-        }
+                sheet = Self::from_json(
+                    Some(&stat_message.content),
+                    &prev_block
+                )?;
+            }
 
+            else {
+                sheet = Self::from_string(&stat_message.content).await?
+            }
+        }
         else {
-            sheet = Self::from_string(&stat_message.content).await?
+            sheet = Self::from_json(None,&character.stat_block.clone().ok_or(RpgError::NoCharacterSheet)?)?;
         }
 
         let sheet_info = sheet.mut_sheet_info();
@@ -315,13 +321,12 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
 
 }
 pub async fn get_user_character(
-    ctx: &Context<'_>,
-    db_connection: &mut SqliteConnection,
+    ctx: &Context<'_>
 ) -> Result<Option<db::models::Character>, Error> {
-    let user = crate::common::get_user(ctx, db_connection).await?;
+    let user = crate::common::get_user(ctx ).await?;
 
     if let Some(character_id) = user.selected_character {
-        return Ok(Some(db::characters::get(db_connection, character_id)?));
+        return Ok(Some(db::characters::get(character_id)?));
     }
 
     Ok(None)
@@ -336,12 +341,10 @@ lazy_static! {
 
 pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<'_>) -> Result<Option<T>,Error> {
 
-    let db_connection = &mut db::establish_connection();
-
-    if let Some(character) =  &get_user_character(ctx,db_connection).await? {
+    if let Some(character) =  &get_user_character(ctx).await? {
         
         let sheet = get_sheet(
-          ctx.serenity_context(),
+          Some(ctx.serenity_context()),
           character
         ).await?; 
 
@@ -349,9 +352,7 @@ pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<
     }
     Ok(None)
 }
-pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_prelude::Context,character: &Character) -> Result<T, Error> {
-
-    let db_connection = &mut db::establish_connection();
+pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: Option<&poise::serenity_prelude::Context>,character: &Character) -> Result<T, Error> {
 
     let mut cache = SHEET_CACHE.lock().await;
 
@@ -361,18 +362,19 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_pr
     
 
     if cache.contains_key(&key) {
-        if T::message_changed(ctx, &character).await? {
-            println!("Fetching from cache");
+        if let Some(ctx) = ctx {
+            if T::message_changed(ctx, &character).await? {
+                println!("Fetching from cache");
 
-            let sheet = T::from_character_openai(ctx, &character).await?;
-            cache.insert(key,Box::new(sheet));       
+                let sheet = T::from_character_openai(ctx, &character).await?;
+                cache.insert(key,Box::new(sheet));       
+            }
         }
     }
     else {
-
-        println!("Not cached - generating");
+       println!("Not cached - generating");
         
-        let sheet = T::from_character_database(ctx, &character).await?;
+       let sheet = T::from_character_database(ctx, &character).await?;
         cache.insert(key,Box::new(sheet));       
     }
 
@@ -386,7 +388,7 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: &poise::serenity_pr
             .clone()
             .expect("Tried to update a non existent character?!");
 
-        let _ = db::characters::update(db_connection, &new_char);
+        let _ = db::characters::update(&new_char);
     }
 
     Ok(character_sheet.clone())

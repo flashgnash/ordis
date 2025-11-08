@@ -1,7 +1,6 @@
 pub struct Handler;
 use poise::async_trait;
 use poise::serenity_prelude::CreateThread;
-use poise::serenity_prelude::GuildChannel;
 
 // use poise::serenity_prelude::model::channel::Channel;
 
