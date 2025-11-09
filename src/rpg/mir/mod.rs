@@ -1911,7 +1911,7 @@ pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
         set_spells(),
         level_up(),
         roll(),
-        edit_character(),
+        // edit_character(),
         edit_saved_rolls(),
     ];
 }
