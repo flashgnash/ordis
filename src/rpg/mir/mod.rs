@@ -153,29 +153,29 @@ pub async fn edit_saved_rolls(ctx: ApplicationContext<'_>) -> Result<(), Error> 
     Ok(())
 }
 
-#[poise::command(context_menu_command = "Edit message")]
-pub async fn edit_character(
-    ctx: ApplicationContext<'_>,
+// #[poise::command(context_menu_command = "Edit message")]
+// pub async fn edit_character(
+//     ctx: ApplicationContext<'_>,
 
-    msg: crate::serenity::Message,
-) -> Result<(), Error> {
-    let content = &msg.content;
+//     msg: crate::serenity::Message,
+// ) -> Result<(), Error> {
+//     let content = &msg.content;
 
-    let message_modal = EditMessageModal {
-        message: content.clone(),
-    };
+//     let message_modal = EditMessageModal {
+//         message: content.clone(),
+//     };
 
-    let data = Modal::execute_with_defaults(ctx, message_modal).await?;
-    if let Some(data) = data {
-        if &data.message != content {
-            msg.clone()
-                .edit(ctx, EditMessage::default().content(&data.message))
-                .await?;
-        }
-    }
+//     let data = Modal::execute_with_defaults(ctx, message_modal).await?;
+//     if let Some(data) = data {
+//         if &data.message != content {
+//             msg.clone()
+//                 .edit(ctx, EditMessage::default().content(&data.message))
+//                 .await?;
+//         }
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 static BAR_LENGTH: i32 = 16;
 
