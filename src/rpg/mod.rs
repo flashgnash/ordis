@@ -350,7 +350,7 @@ pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: Option<&poise::sere
     let mut cache = SHEET_CACHE.lock().await;
 
 
-    let key = (TypeId::of::<T>(),character.id.expect("Char ID should not be null"));
+    let key = (TypeId::of::<T>(),character.id);
 
     
 

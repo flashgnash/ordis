@@ -14,7 +14,7 @@ pub struct User {
 impl Character {
     pub fn new_empty() -> Character {
         Character {
-            id: None,
+            id: 0,
             user_id: None,
             name: None,
 
@@ -47,7 +47,7 @@ impl Character {
 #[diesel(belongs_to(User))]
 #[derive(serde::Deserialize)]
 pub struct Character {
-    pub id: Option<i32>,
+    pub id: i32,
     pub user_id: Option<String>,
     pub name: Option<String>,
 

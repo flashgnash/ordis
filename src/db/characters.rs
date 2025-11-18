@@ -88,7 +88,7 @@ pub fn get(character_id: i32) -> Result<Character, Error> {
     let connection = &mut crate::db::POOL.get()?;
 
     let mut characters_result = characters
-        .filter(id.eq(Some(character_id)))
+        .filter(id.eq(character_id))
         .limit(1)
         .select(Character::as_select())
         .load(connection)
@@ -128,9 +128,7 @@ pub fn update(character: &Character) -> Result<(), Error> {
 
     let connection = &mut crate::db::POOL.get()?;
 
-    let character_id = &character
-        .id
-        .expect("No character ID provided to update method");
+    let character_id = &character.id;
 
     println!("Updating character {character_id}");
 

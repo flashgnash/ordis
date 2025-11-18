@@ -262,9 +262,7 @@ pub async fn generate_status_embed(
 
     let active_spells_map = ACTIVE_SPELLS.lock().await;
 
-    if let Some(active_spells) =
-        active_spells_map.get(&character.id.expect("Character ID should never be null"))
-    {
+    if let Some(active_spells) = active_spells_map.get(&character.id) {
         active_spells_content = "Active Spells:\n".to_string();
 
         let mut total_mana_diff: ManaSpellResource = ManaSpellResource { mana: 0 };
@@ -347,7 +345,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄-50",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: -50,
                 },
                 ButtonStyle::Secondary,
@@ -356,7 +354,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄-25",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: -25,
                 },
                 ButtonStyle::Secondary,
@@ -374,7 +372,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄+25",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: 25,
                 },
                 ButtonStyle::Secondary,
@@ -383,7 +381,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄+50",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: 50,
                 },
                 ButtonStyle::Secondary,
@@ -394,7 +392,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄-200",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: -200,
                 },
                 ButtonStyle::Secondary,
@@ -403,7 +401,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄-100",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: -100,
                 },
                 ButtonStyle::Secondary,
@@ -421,7 +419,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄+100",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: 100,
                 },
                 ButtonStyle::Secondary,
@@ -430,7 +428,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄+200",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: 200,
                 },
                 ButtonStyle::Secondary,
@@ -443,7 +441,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
         UpdateStatusEvent::create_button(
             " Refresh ",
             &UpdateStatusEventParams {
-                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                character_id: character.id,
             },
         )
         .expect("How fail"),
@@ -611,7 +609,7 @@ pub async fn character_select_dropdown(user_id: u64) -> Result<CreateActionRow, 
                 )
                 .parse()
                 .unwrap(),
-            character.id.expect("Character should have id"),
+            character.id,
         ));
     }
 
@@ -641,7 +639,7 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
         .await?
         .ok_or(RpgError::NoCharacterSelected)?;
 
-    let character_id = character.id.ok_or(RpgError::NoCharacterSheet)?;
+    let character_id = character.id;
 
     println!("Get sheet of sender");
     let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
@@ -672,7 +670,7 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
             UpdateStatusEvent::create_button(
                 "♻️",
                 &UpdateStatusEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                 },
             )?,
             event_handlers::DeleteMessageEvent::create_button(
@@ -925,9 +923,7 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
 
     let active_spells_map = ACTIVE_SPELLS.lock().await;
 
-    if let Some(active_spells) =
-        active_spells_map.get(&character.id.expect("Character ID should never be null"))
-    {
+    if let Some(active_spells) = active_spells_map.get(&character.id) {
         let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
             .await?
             .ok_or(RpgError::NoCharacterSheet)?;
@@ -1067,7 +1063,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
             SpellType::Toggle => {
                 let mut active_spells_map = ACTIVE_SPELLS.lock().await;
 
-                let character_id = character.id.expect("Character ID should never be null");
+                let character_id = character.id;
 
                 if !active_spells_map.contains_key(&character_id) {
                     println!("Inserting new active spell list for {}", ctx.author().name);
@@ -1076,9 +1072,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
 
                 let mut is_spell_active: bool = false;
 
-                let active_spells = active_spells_map
-                    .get(&character.id.expect("Character ID should never be null"))
-                    .expect("Just set this");
+                let active_spells = active_spells_map.get(&character.id).expect("Just set this");
 
                 for active_spell in active_spells {
                     if &spell.name == &active_spell.name {
@@ -1095,7 +1089,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
 
                 if !is_spell_active {
                     let active_spells_mut = active_spells_map
-                        .get_mut(&character.id.expect("Character ID should never be null"))
+                        .get_mut(&character.id)
                         .expect("Just set this");
 
                     active_spells_mut.push((*spell).clone());
@@ -1387,7 +1381,7 @@ pub async fn create_character(
     match result {
         Ok(character) => {
             let character_name = character.name.unwrap_or("No Name".to_string());
-            let character_id = character.id.unwrap_or(-1);
+            let character_id = character.id;
 
             placeholder_message
                 .edit(
@@ -1460,7 +1454,7 @@ pub async fn create_character(
 
         let new_character = Character {
             name: Some(character_name_stringified.clone()),
-            id: None,
+            id: 0,
             user_id: Some(user_id.to_string()),
             roll_server_id: roll_server_id,
 
@@ -1493,7 +1487,7 @@ pub async fn create_character(
         let mut extra_text: &str = "";
 
         if user.selected_character == None {
-            user.selected_character = new_character.id;
+            user.selected_character = Some(new_character.id);
             db::users::update(&user)?;
 
             extra_text = "(and selected as default)";
@@ -1669,7 +1663,7 @@ pub async fn characters(ctx: Context<'_>) -> Result<(), Error> {
 
     for character in characters {
         let character_name = character.name.unwrap_or("No name provided".to_string());
-        let character_id = character.id.unwrap_or(-1).to_string();
+        let character_id = character.id.to_string();
         let channel_id = character
             .stat_block_channel_id
             .unwrap_or("No channel ID".to_string());
