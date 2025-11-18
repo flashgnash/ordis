@@ -10,12 +10,7 @@ use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Duration;
-
-
-// use crate::db;
 use crate::db::models::Character;
-// use crate::db::models::User;
-// use diesel::sqlite::SqliteConnection;
 
 use serde_json::Value;
 
@@ -30,8 +25,6 @@ use crate::llm::Message;
 use crate::llm::Role;
 
 use crate::db;
-
-use diesel::sqlite::SqliteConnection;
 
 #[derive(Clone)]
 pub struct SheetInfo {

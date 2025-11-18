@@ -1,10 +1,9 @@
 use crate::common::Error;
 use crate::db::*;
 use diesel::prelude::*;
-use diesel::sqlite::SqliteConnection;
 
 #[allow(dead_code)]
-pub fn create(connection: &mut SqliteConnection, server: &Server) -> Result<(), DbError> {
+pub fn create(connection: &mut PgConnection, server: &Server) -> Result<(), DbError> {
     println!("Creating server");
 
     let _ = diesel::insert_into(schema::servers::table)
@@ -15,7 +14,7 @@ pub fn create(connection: &mut SqliteConnection, server: &Server) -> Result<(), 
 }
 
 #[allow(dead_code)]
-pub fn get(connection: &mut SqliteConnection, server_id: u64) -> Result<Option<Server>, DbError> {
+pub fn get(connection: &mut PgConnection, server_id: u64) -> Result<Option<Server>, DbError> {
     use self::schema::servers::dsl::*;
 
     let mut servers_result = servers
