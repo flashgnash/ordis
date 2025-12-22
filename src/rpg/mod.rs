@@ -275,7 +275,7 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
         character: &Character,
     ) -> Result<Self, Error> {
 
-
+        println!("Hi");
         let (_previous_hash, previous_block) = Self::get_previous_block(character);
 
         let mut sheet: Self;
@@ -325,10 +325,10 @@ pub async fn get_user_character(
     Ok(None)
 }
 
-lazy_static! {
-    static ref SHEET_CACHE: Mutex<HashMap<(TypeId,i32), Box<dyn Any + Send + Sync>>> =
-        Mutex::new(HashMap::new());
-}
+// lazy_static! {
+//     static ref SHEET_CACHE: Mutex<HashMap<(TypeId,i32), Box<dyn Any + Send + Sync>>> =
+//         Mutex::new(HashMap::new());
+// }
 
 
 
@@ -347,31 +347,31 @@ pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<
 }
 pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: Option<&poise::serenity_prelude::Context>,character: &Character) -> Result<T, Error> {
 
-    let mut cache = SHEET_CACHE.lock().await;
+    // let mut cache = SHEET_CACHE.lock().await;
 
 
     let key = (TypeId::of::<T>(),character.id);
 
     
 
-    if cache.contains_key(&key) {
-        if let Some(ctx) = ctx {
-            if T::message_changed(ctx, &character).await? {
-                println!("Fetching from cache");
+    // if cache.contains_key(&key) {
+    //     if let Some(ctx) = ctx {
+    //         if T::message_changed(ctx, &character).await? {
+    //             println!("Fetching from cache");
 
-                let sheet = T::from_character_openai(ctx, &character).await?;
-                cache.insert(key,Box::new(sheet));       
-            }
-        }
-    }
-    else {
-       println!("Not cached - generating");
+    //             let sheet = T::from_character_openai(ctx, &character).await?;
+    //             // cache.insert(key,Box::new(sheet));       
+    //         }
+    //     }
+    // }
+    // else {
+    //    println!("Not cached - generating");
         
-       let sheet = T::from_character_database(ctx, &character).await?;
-        cache.insert(key,Box::new(sheet));       
-    }
+       let character_sheet = T::from_character_database(ctx, &character).await?;
+        // cache.insert(key,Box::new(sheet));       
+    // }
 
-    let character_sheet = cache.get(&key).and_then(|a| a.downcast_ref::<T>()).ok_or(RpgError::NoCharacterSheet)?; 
+    // let character_sheet = cache.get(&key).and_then(|a| a.downcast_ref::<T>()).ok_or(RpgError::NoCharacterSheet)?; 
 
     let sheet_info = character_sheet.sheet_info();
 
