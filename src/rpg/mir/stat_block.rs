@@ -172,8 +172,8 @@ impl CharacterSheetable for StatBlock {
             character.stat_block_channel_id.clone(),
             character.stat_block_message_id.clone(),
         ) {
-            let channel_id = channel_id_u64.parse().expect("Invalid channel ID");
-            let message_id = message_id_u64.parse().expect("Invalid message ID");
+            let channel_id = channel_id_u64.parse().map_err(|_| Box::new(RpgError::NoCharacterSheet) as Box<dyn std::error::Error + Send + Sync>)?;
+            let message_id = message_id_u64.parse().map_err(|_| Box::new(RpgError::NoCharacterSheet) as Box<dyn std::error::Error + Send + Sync>)?;
 
             let message = crate::common::fetch_message(&ctx, channel_id, message_id).await?;
 

@@ -144,8 +144,8 @@ impl CharacterSheetable for SpellSheet {
             character.spell_block_channel_id.clone(),
             character.spell_block_message_id.clone(),
         ) {
-            let channel_id = channel_id_u64.parse().expect("Invalid channel ID");
-            let message_id = message_id_u64.parse().expect("Invalid message ID");
+            let channel_id = channel_id_u64.parse().map_err(|_| Box::new(RpgError::NoSpellSheet) as Box<dyn std::error::Error + Send + Sync>)?;
+            let message_id = message_id_u64.parse().map_err(|_| Box::new(RpgError::NoSpellSheet) as Box<dyn std::error::Error + Send + Sync>)?;
 
             let message = crate::common::fetch_message(&ctx, channel_id, message_id).await?;
 
