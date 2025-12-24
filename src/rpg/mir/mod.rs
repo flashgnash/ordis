@@ -191,71 +191,28 @@ pub async fn generate_status_embed(
 
     println!("Get stat block");
     let stat_block: StatBlock = super::get_sheet(Some(&ctx), character).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &character, None);
 
-    let max_health = stat_block.max_hp;
-    let health = stat_block.hp;
+    // Fetch gauges from database
+    let gauges = db::gauges::get_for_character(character.id).unwrap_or_default();
 
-    let mut health_message_content = "Current health unknown.".to_string();
-
-    if let Some(max_health) = max_health {
-        let health = health.unwrap_or(max_health);
-        health_message_content = format!(
-            "♥️ {} ``{health} / {max_health}\n\n``",
-            crate::common::draw_bar(
-                health as i32,
-                max_health as i32,
-                BAR_LENGTH as usize,
-                "🟥",
-                "⬛"
-            )
+    // Build gauge bars dynamically
+    let mut gauge_bars = String::new();
+    println!("{} gauges for {}", gauges.iter().count(), character.id);
+    for gauge in gauges {
+        println!("Gauge {}", gauge.name);
+        // Use icon for the bar color, or default to a colored square
+        let bar_emoji = gauge.icon.as_deref().unwrap_or("🟦");
+        let bar = crate::common::draw_bar(
+            gauge.value,
+            gauge.max,
+            BAR_LENGTH as usize,
+            bar_emoji,
+            "⬛",
         );
-    }
-
-    let mut hunger_message_content = "".to_string();
-    if let Some(hunger) = stat_block.hunger {
-        hunger_message_content = format!(
-            "🍖 {} ``{hunger} / 10\n\n``",
-            crate::common::draw_bar(hunger as i32, 10, BAR_LENGTH as usize, "🟨", "⬛")
-        );
-    }
-
-    let max_armour = stat_block.max_armour;
-    let armour = stat_block.armour;
-
-    let mut armour_message_content = "".to_string();
-
-    if let Some(max_armour) = max_armour {
-        let armour = armour.unwrap_or(max_armour);
-        armour_message_content = format!(
-            "🛡️ {} ``{armour} / {max_armour}\n\n``",
-            crate::common::draw_bar(
-                armour as i32,
-                max_armour as i32,
-                BAR_LENGTH as usize,
-                "⬜",
-                "⬛"
-            )
-        );
-    }
-
-    let max_soul = stat_block.max_soul;
-    let soul = stat_block.soul;
-
-    let mut soul_message_content = "".to_string();
-
-    if let Some(max_soul) = max_soul {
-        let soul = soul.unwrap_or(max_soul);
-        soul_message_content = format!(
-            "👻 {} ``{soul} / {max_soul}\n\n``",
-            crate::common::draw_bar(
-                soul as i32,
-                max_soul as i32,
-                BAR_LENGTH as usize,
-                "🟪",
-                "⬛"
-            )
-        );
+        gauge_bars.push_str(&format!(
+            "{} {} ``{} / {}\n\n``",
+            bar_emoji, bar, gauge.value, gauge.max
+        ));
     }
 
     let mut active_spells_content: String = "".to_string();
@@ -322,8 +279,8 @@ pub async fn generate_status_embed(
         ))
         .description(format!(
             "{invisible_char}
-{health_message_content}{mana_message_content}{hunger_message_content}{invisible_char}{armour_message_content}{soul_message_content}
-                
+{gauge_bars}
+
 {active_spells_content}
                 "
         ))

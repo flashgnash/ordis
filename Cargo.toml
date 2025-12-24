@@ -16,8 +16,9 @@ serde_json = "1.0.116"
 chrono = "0.4.38"
 regex = "1.10.4"
 meval = "0.2.0"
-diesel = { version = "2.1.0", features = ["sqlite", "r2d2", "postgres"]}
+diesel = { version = "2.1.0", features = ["sqlite", "r2d2", "postgres", "uuid"]}
 sha2 = "0.10.8"
+uuid = { version = "1.0", features = ["v4"] }
 dotenv = "0.15.0"
 songbird = { version = "0.4.3", features = ["builtin-queue"] }
 symphonia = { version = "0.5.4", features = ["aac", "mp3", "isomp4", "alac"] }

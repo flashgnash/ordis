@@ -629,6 +629,7 @@ dependencies = [
  "r2d2",
  "sqlite-wasm-rs",
  "time",
+ "uuid",
 ]
 
 [[package]]
@@ -1752,6 +1753,7 @@ dependencies = [
  "songbird",
  "symphonia",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

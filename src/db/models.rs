@@ -82,3 +82,26 @@ pub struct Server {
     pub default_roll_channel: Option<String>,
     pub default_roll_server: Option<String>,
 }
+
+#[derive(Queryable, Selectable, Debug, Clone)]
+#[diesel(table_name = schema::Gauges)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(belongs_to(Character, foreign_key = PlayerCharacterId))]
+pub struct Gauge {
+    #[diesel(column_name = Id)]
+    pub id: uuid::Uuid,
+    #[diesel(column_name = Icon)]
+    pub icon: Option<String>,
+    #[diesel(column_name = Name)]
+    pub name: String,
+    #[diesel(column_name = Value)]
+    pub value: i32,
+    #[diesel(column_name = Max)]
+    pub max: i32,
+    #[diesel(column_name = PlayerCharacterId)]
+    pub player_character_id: i32,
+    #[diesel(column_name = GaugeType)]
+    pub gauge_type: i32,
+    #[diesel(column_name = Colour)]
+    pub colour: Option<String>,
+}
