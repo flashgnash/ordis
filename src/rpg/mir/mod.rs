@@ -1140,6 +1140,20 @@ lazy_static! {
         m
     };
 }
+fn replace_stat(s: &str, stat: &str, stat_mod: &str) -> String {
+    if s.contains(stat) {
+        s.replace(stat, stat_mod)
+    } else {
+        let lower = stat.to_lowercase();
+        if s.contains(&lower) {
+            s.replace(&lower, stat_mod)
+        } else if lower.len() >= 3 {
+            s.replace(&lower[..3], stat_mod)
+        } else {
+            s.to_string()
+        }
+    }
+}
 
 pub async fn roll_with_char_sheet(
     ctx: Option<&poise::serenity_prelude::Context>,
@@ -1200,7 +1214,8 @@ pub async fn roll_with_char_sheet(
                             (int_value / 10).to_string()
                         };
 
-                        str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
+                        // str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
+                        str_replaced = replace_stat(&str_replaced, stat, &stat_mod.to_string());
                     }
                 }
             }
@@ -1209,10 +1224,9 @@ pub async fn roll_with_char_sheet(
                 .as_ref()
                 .and_then(|special_stats| special_stats.as_object())
             {
-                println!("Testing");
                 for (special_stat, value) in special_stats_object {
-                    str_replaced = str_replaced.replace(special_stat, &value.to_string());
-                    println!("special stat replaced: {special_stat}: {value}")
+                    str_replaced = replace_stat(&str_replaced, special_stat, &value.to_string());
+                    // println!("special stat replaced: {special_stat}: {value}")
                 }
             }
 
