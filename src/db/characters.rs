@@ -9,8 +9,10 @@ pub fn create(character: &Character) -> Result<(), Error> {
 
     let connection = &mut crate::db::POOL.get()?;
 
+    let new_character = models::NewCharacter::from(character);
+
     let _ = diesel::insert_into(schema::characters::table)
-        .values(character)
+        .values(&new_character)
         .execute(connection);
 
     return Ok(());

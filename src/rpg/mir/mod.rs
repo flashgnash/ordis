@@ -512,38 +512,96 @@ lazy_static! {
         m
     };
 }
+
+/// Normalize stat names to match ROLL_EMOJIS keys
+/// e.g. "Strength" -> "str", "STR" -> "str", "agility" -> "agl"
+fn normalize_stat_name(stat: &str) -> String {
+    let lower = stat.to_lowercase();
+
+    // Check if it's already a known key
+    if ROLL_EMOJIS.contains_key(lower.as_str()) {
+        return lower;
+    }
+
+    // Map common full names to abbreviations
+    let mappings = [
+        ("strength", "str"),
+        ("agility", "agl"),
+        ("constitution", "con"),
+        ("knowledge", "kno"),
+        ("intelligence", "int"),
+        ("wisdom", "wis"),
+        ("charisma", "cha"),
+        ("body", "body"),
+        ("mobility", "mobility"),
+        ("intuition", "intuition"),
+        ("arcane", "arcane"),
+    ];
+
+    for (full_name, abbrev) in mappings.iter() {
+        if lower.starts_with(full_name) {
+            return abbrev.to_string();
+        }
+    }
+
+    // If it's at least 3 characters, try using the first 3 as abbreviation
+    if lower.len() >= 3 {
+        let abbrev = &lower[..3];
+        if ROLL_EMOJIS.contains_key(abbrev) {
+            return abbrev.to_string();
+        }
+    }
+
+    // Return original lowercase if no match
+    lower
+}
+
 pub fn stat_roll_buttons(
     base_dice_string: &str,
     character_id: i32,
     stat_block: Option<serde_json::Value>,
 ) -> Vec<CreateActionRow> {
-    let mut stat_keys = if let Some(Value::Object(map)) = stat_block {
+    // Collect (original_key, normalized_key) pairs
+    let mut stat_pairs: Vec<(String, String)> = if let Some(Value::Object(map)) = stat_block {
         map.into_iter()
-            .filter_map(|(key, value)| (value != Value::Null).then(|| key))
-            .collect::<Vec<_>>()
-    } else {
-        vec!["str", "agl", "con", "kno", "cha"]
-            .into_iter()
-            .map(String::from)
+            .filter_map(|(key, value)| {
+                if value != Value::Null {
+                    let normalized = normalize_stat_name(&key);
+                    Some((key, normalized))
+                } else {
+                    None
+                }
+            })
             .collect()
+    } else {
+        // No stats available, return empty vector
+        vec![]
     };
 
-    println!("stat keys: {stat_keys:#?}");
-    stat_keys.sort_by_key(|k| {
+    println!("stat pairs: {stat_pairs:#?}");
+
+    // If no stats, return empty rows
+    if stat_pairs.is_empty() {
+        return vec![];
+    }
+
+    // Sort by normalized key using ROLL_EMOJIS order
+    stat_pairs.sort_by_key(|(_, normalized)| {
         ROLL_EMOJIS
-            .get(k.as_str())
+            .get(normalized.as_str())
             .map(|(_, order)| *order)
             .unwrap_or(255)
     });
 
-    let buttons: Vec<_> = stat_keys
+    let buttons: Vec<_> = stat_pairs
         .iter()
-        .map(|stat| {
+        .map(|(original, normalized)| {
             let emoji = ROLL_EMOJIS
-                .get(stat.as_str())
+                .get(normalized.as_str())
                 .map(|(e, _)| *e)
                 .unwrap_or("🎲");
-            roll_button(emoji, &format!("{base_dice_string}+{stat}"), character_id)
+            // Use original key in the button formula so it matches what's in the stat block
+            roll_button(emoji, &format!("{base_dice_string}+{original}"), character_id)
         })
         .collect();
 
@@ -1437,29 +1495,30 @@ pub async fn create_character(
         };
 
         let new_character = Character {
-            name: Some(character_name_stringified.clone()),
             id: 0,
             user_id: Some(user_id.to_string()),
+            name: Some(character_name_stringified.clone()),
+
             roll_server_id: roll_server_id,
 
-            saved_rolls: None,
-
-            stat_block: None,
             stat_block_hash: None,
-
+            stat_block: None,
             stat_block_message_id: Some(msg.id.to_string()),
             stat_block_channel_id: Some(msg.channel_id.to_string()),
 
-            stat_block_server_id: msg.guild_id.map(|id| id.to_string()),
-
+            spell_block_channel_id: None,
+            spell_block_message_id: None,
             spell_block: None,
             spell_block_hash: None,
-            spell_block_message_id: None,
-            spell_block_channel_id: None,
 
             mana: None,
             mana_readout_channel_id: None,
             mana_readout_message_id: None,
+
+            saved_rolls: None,
+            stat_block_server_id: msg.guild_id.map(|id| id.to_string()),
+
+            campaign_id: None,
         };
 
         let _ = db::characters::create(&new_character)?;
