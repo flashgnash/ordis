@@ -2,6 +2,7 @@ pub mod saved_rolls;
 pub mod spell_sheet;
 pub mod stat_block;
 pub mod web;
+mod color_matcher;
 
 use crate::common::Data;
 
@@ -200,8 +201,9 @@ pub async fn generate_status_embed(
     println!("{} gauges for {}", gauges.iter().count(), character.id);
     for gauge in gauges {
         println!("Gauge {}", gauge.name);
-        // Use icon for the bar color, or default to a colored square
-        let bar_emoji = gauge.icon.as_deref().unwrap_or("🟦");
+        // Match the color from the Colour field to find the closest emoji
+        let bar_emoji = color_matcher::get_closest_color_emoji(gauge.colour.as_deref());
+
         let bar = crate::common::draw_bar(
             gauge.value,
             gauge.max,
@@ -209,9 +211,12 @@ pub async fn generate_status_embed(
             bar_emoji,
             "⬛",
         );
+
+        // Display icon if available, otherwise just show the bar
+        let display_icon = gauge.icon.as_deref().unwrap_or("");
         gauge_bars.push_str(&format!(
             "{} {} ``{} / {}\n\n``",
-            bar_emoji, bar, gauge.value, gauge.max
+            display_icon, bar, gauge.value, gauge.max
         ));
     }
 
