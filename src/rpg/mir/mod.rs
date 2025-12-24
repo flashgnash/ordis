@@ -1,8 +1,8 @@
+mod color_matcher;
 pub mod saved_rolls;
 pub mod spell_sheet;
 pub mod stat_block;
 pub mod web;
-mod color_matcher;
 
 use crate::common::Data;
 
@@ -185,10 +185,22 @@ pub async fn generate_status_embed(
     character: &Character,
 ) -> Result<CreateEmbed, Error> {
     let character_name = character.name.clone().unwrap_or("No name?".to_string());
-    let character_channel = character
-        .stat_block_channel_id
-        .clone()
-        .unwrap_or("".to_string());
+
+    let web_domain =
+        std::env::var("WEB_DOMAIN").unwrap_or_else(|_| "http://localhost:3000".to_string());
+
+    let site_url = format!("[View on OW3N]({}/characters/{})", web_domain, character.id);
+
+    // Determine the link to show based on whether Discord IDs are present
+    let character_link = if let (Some(channel_id), Some(_message_id)) = (
+        &character.stat_block_channel_id,
+        &character.stat_block_message_id,
+    ) {
+        // Discord channel link
+        format!("{site_url} | <#{}>", channel_id)
+    } else {
+        site_url
+    };
 
     println!("Get stat block");
     let stat_block: StatBlock = super::get_sheet(Some(&ctx), character).await?;
@@ -204,13 +216,8 @@ pub async fn generate_status_embed(
         // Match the color from the Colour field to find the closest emoji
         let bar_emoji = color_matcher::get_closest_color_emoji(gauge.colour.as_deref());
 
-        let bar = crate::common::draw_bar(
-            gauge.value,
-            gauge.max,
-            BAR_LENGTH as usize,
-            bar_emoji,
-            "⬛",
-        );
+        let bar =
+            crate::common::draw_bar(gauge.value, gauge.max, BAR_LENGTH as usize, bar_emoji, "⬛");
 
         // Display icon if available, otherwise just show the bar
         let display_icon = gauge.icon.as_deref().unwrap_or("");
@@ -279,11 +286,12 @@ pub async fn generate_status_embed(
         .title(format!(
             "
             {character_name}
-<#{character_channel}>
             "
         ))
         .description(format!(
-            "{invisible_char}
+            "{character_link}
+{invisible_char}
+
 {gauge_bars}
 
 {active_spells_content}
