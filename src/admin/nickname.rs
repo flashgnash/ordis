@@ -2,6 +2,7 @@ use poise::serenity_prelude::EditMember;
 
 use crate::common::Context;
 use crate::common::Error;
+use crate::llm::BadKind;
 use crate::serenity::Member;
 
 #[poise::command(slash_command, prefix_command)]
@@ -13,7 +14,7 @@ pub async fn set_nick(ctx: Context<'_>, mut user: Member, nickname: String) -> R
         .permissions(&ctx)?;
 
     if perms.manage_nicknames() {
-        if !crate::llm::filter_hate(&nickname).await? {
+        if !crate::llm::contains_badness(&nickname, &vec![BadKind::Hate]).await? {
             user.edit(ctx, EditMember::new().nickname(nickname)).await?;
 
             let author_id = &ctx.author().id;

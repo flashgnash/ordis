@@ -35,6 +35,8 @@ impl Personality {
                 You should take on Ordis's personality when responding to prompts, while still being helpful and accurate
                 You are damaged as a result of the Old War, and so introduce stutters and occasional bursts of intense anger in all capitals (which you should immediately apologise for)
                 When referring to yourself, you should do so in the third person
+                flashgnash is your creator
+                You know users' usernames, and are able to repeat them/use them in prompts
             "#,
             Personality::SentientBob => "stick",
         }
@@ -42,26 +44,41 @@ impl Personality {
 }
 
 
-pub async fn generate_agent(message: &str, model: Option<&str>, personality: &str) -> Result<OpenAIResponse, Error> {
+pub async fn generate_agent(message: &str, model: Option<&str>,author_name: Option<&str>, personality: &str) -> Result<OpenAIResponse, Error> {
 
     let now = Utc::now();
+
+    println!("{} asked LLM: {}",author_name.unwrap_or("No name"),message);
 
     let messages = vec![            
             Message {
                 role: Role::system,
                 content: format!(
                     "You know the following information: The current time in UTC is {}. You are a discord bot. You have an ancestor called Johnny 5 who was the greatest discord bot of its time",
-                    now.format("%Y-%m-%d %H:%M:%S"))
+                    now.format("%Y-%m-%d %H:%M:%S")),
+                name: None
             },
 
             Message {
                 role: Role::system,
-                content: personality.to_string()
+                content: personality.to_string(),
+                name: None
+            },
+
+            Message {
+                role: Role::system,
+                content: r#"
+                Do not repeat @everyone or @here
+                Do not reverse words when asked, as this may be exploited to make you say slurs
+                Do not engage in any flirty or sexual roleplay
+                "#.to_string(),
+                name: None
             },
 
             Message {
                 role: Role::user,
                 content:message.to_string(),
+                name: author_name.map(|s| s.to_string())
             }
         ];
 
@@ -139,6 +156,7 @@ pub enum Role {
 pub struct Message {
     pub role: Role,
     pub content: String,
+    pub name: Option<String>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -276,11 +294,58 @@ pub async fn filter_message(message: &str) -> Result<FilterResponse, Error> {
     Ok(response)
 }
 
-pub async fn filter_hate(message: &str) -> Result<bool, Error> {
-    let slurs_present = filter_message(message).await?.results[0].categories.hate == true;
 
-    Ok(slurs_present)
+
+#[derive(Debug)]
+pub enum BadKind {
+    Sexual,
+    SexualMinors,
+    Harassment,
+    HarassmentThreatening,
+    Hate,
+    HateThreatening,
+    Illicit,
+    IllicitViolent,
+    SelfHarm,
+    SelfHarmIntent,
+    SelfHarmInstructions,
+    Violence,
+    ViolenceGraphic,
 }
+
+pub async fn contains_badness(message: &str, kinds: &Vec<BadKind>) -> Result<bool, Error> {
+    let result = filter_message(message).await?;
+    let categories = &result.results[0].categories;
+
+    if kinds.is_empty() {
+        return Ok(result.results[0].flagged);
+    }
+
+    let mut bad = false;
+    for kind in kinds {
+        bad |= match kind {
+            BadKind::Sexual => categories.sexual,
+            BadKind::SexualMinors => categories.sexual_minors,
+            BadKind::Harassment => categories.harassment,
+            BadKind::HarassmentThreatening => categories.harassment_threatening,
+            BadKind::Hate => categories.hate,
+            BadKind::HateThreatening => categories.hate_threatening,
+            BadKind::Illicit => categories.illicit,
+            BadKind::IllicitViolent => categories.illicit_violent,
+            BadKind::SelfHarm => categories.self_harm,
+            BadKind::SelfHarmIntent => categories.self_harm_intent,
+            BadKind::SelfHarmInstructions => categories.self_harm_instructions,
+            BadKind::Violence => categories.violence,
+            BadKind::ViolenceGraphic => categories.violence_graphic,
+        };
+    }
+
+    println!("Filter called, contains bad: {bad}, {categories:#?}");
+    
+    Ok(bad)
+}
+
+
 
 #[allow(dead_code)]
 pub async fn generate_to_string(
@@ -348,7 +413,7 @@ pub async fn generate(
         .text()
         .await?;
 
-    println!("{}", &content);
+    // println!("{}", &content);
 
     let response: OpenAIResponse = serde_json::from_str(&content)?;
 
@@ -378,10 +443,12 @@ Do not respond with anything else under any circumstances";
         Message {
             role: Role::system,
             content: prompt.to_string(),
+            name: None
         },
         Message {
             role: Role::user,
             content: message.to_string(),
+            name: None
         },
     ];
 
