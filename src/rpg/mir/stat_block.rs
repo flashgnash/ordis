@@ -14,6 +14,7 @@ use poise::serenity_prelude::Message;
 pub struct StatBlock {
     pub sheet_info: SheetInfo,
     pub stats: Option<serde_json::Value>,
+    pub special_stats: Option<serde_json::Value>,
     pub energy_pool: Option<i64>,
     pub hp: Option<i64>,
     pub max_hp: Option<i64>,
@@ -56,6 +57,7 @@ impl CharacterSheetable for StatBlock {
             },
 
             stats: None,
+            special_stats: None,
             energy_pool: None,
 
             max_hp: None,
@@ -83,6 +85,10 @@ impl CharacterSheetable for StatBlock {
 
         if let Some(stats) = deserialized_message.get("stats") {
             self.stats = Some(stats.clone());
+        }
+
+        if let Some(special_stats) = deserialized_message.get("special_stats") {
+            self.special_stats = Some(special_stats.clone());
         }
 
         self.energy_pool = deserialized_message
@@ -166,8 +172,8 @@ impl CharacterSheetable for StatBlock {
             character.stat_block_channel_id.clone(),
             character.stat_block_message_id.clone(),
         ) {
-            let channel_id = channel_id_u64.parse().expect("Invalid channel ID");
-            let message_id = message_id_u64.parse().expect("Invalid message ID");
+            let channel_id = channel_id_u64.parse().map_err(|_| Box::new(RpgError::NoCharacterSheet) as Box<dyn std::error::Error + Send + Sync>)?;
+            let message_id = message_id_u64.parse().map_err(|_| Box::new(RpgError::NoCharacterSheet) as Box<dyn std::error::Error + Send + Sync>)?;
 
             let message = crate::common::fetch_message(&ctx, channel_id, message_id).await?;
 
@@ -211,6 +217,8 @@ impl CharacterSheetable for StatBlock {
             "magic_die_per_level": (number)d(number),
             "training_die_per_level": (number)d(number),
 
+            "special_stats": {
+            },
     
             "stats": {
                 "str": (number),
@@ -226,9 +234,12 @@ impl CharacterSheetable for StatBlock {
                 "arcane": (number),
                 "intuition": (number),
             }
-        }    
-        If there are missing values, ignore them (don't make a key for them)
-        Particularly with stats it is IMPERATIVE that keys are not included if not present in the sheet
+        }
+
+        every value that is a number on the character sheet should be put in special_stats
+        the key should be the label in the message, except lowercase with underscores instead of spaces and special characters stripped
+            
+        In stats it is IMPERATIVE that keys are not included if not present in the sheet
         You should translate these stats into a minified json dictionary.
         All keys should be lower case and spell corrected. Respond with only valid, minified json
 

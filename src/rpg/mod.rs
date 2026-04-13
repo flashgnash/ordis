@@ -10,12 +10,7 @@ use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Duration;
-
-
-// use crate::db;
 use crate::db::models::Character;
-// use crate::db::models::User;
-// use diesel::sqlite::SqliteConnection;
 
 use serde_json::Value;
 
@@ -30,8 +25,6 @@ use crate::llm::Message;
 use crate::llm::Role;
 
 use crate::db;
-
-use diesel::sqlite::SqliteConnection;
 
 #[derive(Clone)]
 pub struct SheetInfo {
@@ -51,9 +44,11 @@ pub enum RpgError {
     NoGuildId,
 
     NoCharacterSheet,
+    NoCharacterSheetData,
     NoCharacterSelected,
 
     NoSpellSheet,
+    NoSpellSheetData,
     SpellNotFound,
     NoSpellCost,
     NoMaxEnergy,
@@ -76,10 +71,16 @@ impl fmt::Display for RpgError {
             RpgError::NoCharacterSheet => {
                 write!(f, "Character sheet is missing - Was it deleted?")
             }
-            RpgError::NoCharacterSelected => write!(f, 
+            RpgError::NoCharacterSheetData => {
+                write!(f, "No character sheet data found. Either set Discord message IDs or populate the stat_block field in the database with JSON.")
+            }
+            RpgError::NoCharacterSelected => write!(f,
                 "No character selected (please select one with /characters and /select_character (id))"
             ),
             RpgError::NoSpellSheet => write!(f, "Spell sheet is missing - please set one with the Set Spell Message button"),
+            RpgError::NoSpellSheetData => {
+                write!(f, "No spell sheet data found. Either set Discord message IDs or populate the spell_block field in the database with JSON.")
+            }
             RpgError::SpellNotFound => write!(f, "Spell not found"),
             RpgError::NoSpellCost => write!(f, "Spell cost appears to be missing from your spell block"),
             RpgError::NoMaxEnergy => write!(f, "Energy pool appears to be missing from your stat block"),
@@ -231,21 +232,25 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
         character: &Character,
     ) -> Result<bool, Error> {
 
-        let stat_message = Self::get_sheet_message(ctx, &character).await?;
+        // If we can't get the sheet message (e.g., IDs are missing), assume it hasn't changed
+        let stat_message = match Self::get_sheet_message(ctx, &character).await {
+            Ok(msg) => msg,
+            Err(_) => return Ok(false), // No message to check, so consider it unchanged
+        };
 
         let hash_hex = crate::common::hash(&stat_message.content);
 
         let (previous_hash, _) = Self::get_previous_block(character);
 
         // if let Some(prev) = &previous_hash {
-            
+
         //     println!("Prev: {prev}\n Current:{hash_hex}");
         // }
         // else{
-        //    println!("No prev hash") 
+        //    println!("No prev hash")
         // }
 
-        
+
         Ok(match previous_hash {
             Some(value) => value != hash_hex,
             None => true,
@@ -258,10 +263,18 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
         character: &Character,
     ) -> Result<Self, Error> {
 
-        let stat_message = Self::get_sheet_message(ctx, &character).await?;
+        // If message IDs are missing, we can't fetch the message to regenerate JSON
+        // Fall back to database JSON instead
+        let stat_message = match Self::get_sheet_message(ctx, &character).await {
+            Ok(msg) => msg,
+            Err(_) => {
+                println!("Cannot regenerate JSON without Discord message, using database version");
+                return Self::from_character_database(Some(ctx), character).await;
+            }
+        };
 
         // let generate_new_json = Self::message_changed(ctx,character).await?;
-        
+
         println!("Generating new json via openai");
         let mut sheet = Self::from_string(&stat_message.content).await?;
         let sheet_info = sheet.mut_sheet_info();
@@ -284,30 +297,37 @@ pub trait CharacterSheetable: Sized + std::fmt::Display + Send + Sync + Clone {
         character: &Character,
     ) -> Result<Self, Error> {
 
-
+        println!("Hi");
         let (_previous_hash, previous_block) = Self::get_previous_block(character);
 
         let mut sheet: Self;
 
         if let Some(ctx) = ctx {
-            
-            let stat_message = Self::get_sheet_message(ctx, &character).await?;
 
-            if let Some(prev_block) = previous_block {
-
-                    
-                sheet = Self::from_json(
-                    Some(&stat_message.content),
-                    &prev_block
-                )?;
-            }
-
-            else {
-                sheet = Self::from_string(&stat_message.content).await?
+            // Try to get the sheet message, but if it fails (e.g., IDs are missing), fall back to database JSON
+            match Self::get_sheet_message(ctx, &character).await {
+                Ok(stat_message) => {
+                    if let Some(prev_block) = previous_block {
+                        sheet = Self::from_json(
+                            Some(&stat_message.content),
+                            &prev_block
+                        )?;
+                    } else {
+                        sheet = Self::from_string(&stat_message.content).await?
+                    }
+                }
+                Err(_) => {
+                    // Message IDs are missing, use the JSON from the database
+                    println!("Discord message IDs missing, using JSON from database");
+                    let prev_block = previous_block.ok_or_else(|| {
+                        Box::new(RpgError::NoCharacterSheetData) as Box<dyn std::error::Error + Send + Sync>
+                    })?;
+                    sheet = Self::from_json(None, &prev_block)?;
+                }
             }
         }
         else {
-            sheet = Self::from_json(None,&character.stat_block.clone().ok_or(RpgError::NoCharacterSheet)?)?;
+            sheet = Self::from_json(None,&character.stat_block.clone().ok_or(RpgError::NoCharacterSheetData)?)?;
         }
 
         let sheet_info = sheet.mut_sheet_info();
@@ -334,10 +354,10 @@ pub async fn get_user_character(
     Ok(None)
 }
 
-lazy_static! {
-    static ref SHEET_CACHE: Mutex<HashMap<(TypeId,i32), Box<dyn Any + Send + Sync>>> =
-        Mutex::new(HashMap::new());
-}
+// lazy_static! {
+//     static ref SHEET_CACHE: Mutex<HashMap<(TypeId,i32), Box<dyn Any + Send + Sync>>> =
+//         Mutex::new(HashMap::new());
+// }
 
 
 
@@ -356,31 +376,31 @@ pub async fn get_sheet_of_sender<T: CharacterSheetable + 'static>(ctx: &Context<
 }
 pub async fn get_sheet<T: CharacterSheetable + 'static>(ctx: Option<&poise::serenity_prelude::Context>,character: &Character) -> Result<T, Error> {
 
-    let mut cache = SHEET_CACHE.lock().await;
+    // let mut cache = SHEET_CACHE.lock().await;
 
 
-    let key = (TypeId::of::<T>(),character.id.expect("Char ID should not be null"));
+    let key = (TypeId::of::<T>(),character.id);
 
     
 
-    if cache.contains_key(&key) {
-        if let Some(ctx) = ctx {
-            if T::message_changed(ctx, &character).await? {
-                println!("Fetching from cache");
+    // if cache.contains_key(&key) {
+    //     if let Some(ctx) = ctx {
+    //         if T::message_changed(ctx, &character).await? {
+    //             println!("Fetching from cache");
 
-                let sheet = T::from_character_openai(ctx, &character).await?;
-                cache.insert(key,Box::new(sheet));       
-            }
-        }
-    }
-    else {
-       println!("Not cached - generating");
+    //             let sheet = T::from_character_openai(ctx, &character).await?;
+    //             // cache.insert(key,Box::new(sheet));       
+    //         }
+    //     }
+    // }
+    // else {
+    //    println!("Not cached - generating");
         
-       let sheet = T::from_character_database(ctx, &character).await?;
-        cache.insert(key,Box::new(sheet));       
-    }
+       let character_sheet = T::from_character_database(ctx, &character).await?;
+        // cache.insert(key,Box::new(sheet));       
+    // }
 
-    let character_sheet = cache.get(&key).and_then(|a| a.downcast_ref::<T>()).ok_or(RpgError::NoCharacterSheet)?; 
+    // let character_sheet = cache.get(&key).and_then(|a| a.downcast_ref::<T>()).ok_or(RpgError::NoCharacterSheet)?; 
 
     let sheet_info = character_sheet.sheet_info();
 

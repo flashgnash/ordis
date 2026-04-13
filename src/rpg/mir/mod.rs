@@ -1,6 +1,10 @@
+mod color_matcher;
+pub mod saved_rolls;
 pub mod spell_sheet;
 pub mod stat_block;
 pub mod web;
+
+use crate::common::Data;
 
 use lazy_static::lazy_static;
 use poise::serenity_prelude::ButtonStyle;
@@ -11,8 +15,10 @@ use poise::serenity_prelude::CreateEmbed;
 use poise::serenity_prelude::CreateEmbedFooter;
 use poise::serenity_prelude::CreateSelectMenu;
 use poise::serenity_prelude::CreateSelectMenuOption;
+use poise::serenity_prelude::EditMessage;
 use poise::serenity_prelude::GuildId;
 use poise::Command;
+use poise::Modal;
 use tokio::sync::Mutex;
 use tokio::sync::MutexGuard;
 
@@ -25,20 +31,15 @@ use super::spells::SpellType;
 use spell_sheet::SpellSheet;
 use stat_block::StatBlock;
 
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::f64;
 
 use crate::common;
-use crate::common::safe_to_number;
 use crate::common::ButtonEventSystem;
 use crate::common::Context;
 use crate::common::Error;
 use crate::db;
 use crate::db::models::Character;
-use crate::db::DbError;
-
-use diesel::SqliteConnection;
 
 use super::get_user_character;
 use super::CharacterSheetable;
@@ -64,6 +65,8 @@ use event_handlers::UpdateStatusEventParams;
 
 use event_handlers::ChangeManaEvent;
 use event_handlers::ChangeManaEventParams;
+
+type ApplicationContext<'a> = poise::ApplicationContext<'a, Data, Error>;
 
 pub fn register_events(event_system: &mut MutexGuard<ButtonEventSystem>) {
     event_system.register_handler(RollEvent);
@@ -105,6 +108,76 @@ pub async fn pull_spellsheet(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+#[derive(Debug, Modal)]
+#[name = "Edit Message"] // Struct name by default
+struct EditMessageModal {
+    #[name = "Message content:"]
+    #[paragraph]
+    message: String, // Option means optional input
+}
+
+#[derive(Debug, Modal)]
+#[name = "Edit Saved Rolls"] // Struct name by default
+struct EditSavedRollsModal {
+    #[name = "Saved Rolls"]
+    #[paragraph]
+    message: Option<String>, // Option means optional input
+}
+
+#[poise::command(slash_command)]
+pub async fn edit_saved_rolls(ctx: ApplicationContext<'_>) -> Result<(), Error> {
+    let author = &ctx.author();
+
+    let user_id = author.id.get();
+
+    let user = db::users::get_or_create(user_id)?;
+
+    let mut char = if let Some(character_id) = user.selected_character {
+        Some(db::characters::get(character_id)?)
+    } else {
+        None
+    }
+    .ok_or(RpgError::NoCharacterSelected)?;
+
+    // let char = get_user_character(ctx.serenity_context());
+
+    let message_modal = EditSavedRollsModal {
+        message: char.saved_rolls,
+    };
+
+    let data = Modal::execute_with_defaults(ctx, message_modal).await?;
+    if let Some(data) = data {
+        char.saved_rolls = data.message;
+        db::characters::update(&char)?;
+    }
+
+    Ok(())
+}
+
+// #[poise::command(context_menu_command = "Edit message")]
+// pub async fn edit_character(
+//     ctx: ApplicationContext<'_>,
+
+//     msg: crate::serenity::Message,
+// ) -> Result<(), Error> {
+//     let content = &msg.content;
+
+//     let message_modal = EditMessageModal {
+//         message: content.clone(),
+//     };
+
+//     let data = Modal::execute_with_defaults(ctx, message_modal).await?;
+//     if let Some(data) = data {
+//         if &data.message != content {
+//             msg.clone()
+//                 .edit(ctx, EditMessage::default().content(&data.message))
+//                 .await?;
+//         }
+//     }
+
+//     Ok(())
+// }
+
 static BAR_LENGTH: i32 = 16;
 
 pub async fn generate_status_embed(
@@ -112,87 +185,53 @@ pub async fn generate_status_embed(
     character: &Character,
 ) -> Result<CreateEmbed, Error> {
     let character_name = character.name.clone().unwrap_or("No name?".to_string());
-    let character_channel = character
-        .stat_block_channel_id
-        .clone()
-        .unwrap_or("".to_string());
+
+    let web_domain =
+        std::env::var("WEB_DOMAIN").unwrap_or_else(|_| "http://localhost:3000".to_string());
+
+    let site_url = format!("[View on OW3N]({}/characters/{})", web_domain, character.id);
+
+    // Determine the link to show based on whether Discord IDs are present
+    let character_link = if let (Some(channel_id), Some(_message_id)) = (
+        &character.stat_block_channel_id,
+        &character.stat_block_message_id,
+    ) {
+        // Discord channel link
+        format!("{site_url} | <#{}>", channel_id)
+    } else {
+        site_url
+    };
 
     println!("Get stat block");
     let stat_block: StatBlock = super::get_sheet(Some(&ctx), character).await?;
-    let mana_message_content = get_mana_bar_message(&stat_block, &character, None);
 
-    let max_health = stat_block.max_hp;
-    let health = stat_block.hp;
+    // Fetch gauges from database
+    let gauges = db::gauges::get_for_character(character.id).unwrap_or_default();
 
-    let mut health_message_content = "Current health unknown.".to_string();
+    // Build gauge bars dynamically
+    let mut gauge_bars = String::new();
+    println!("{} gauges for {}", gauges.iter().count(), character.id);
+    for gauge in gauges {
+        println!("Gauge {}", gauge.name);
+        // Match the color from the Colour field to find the closest emoji
+        let bar_emoji = color_matcher::get_closest_color_emoji(gauge.colour.as_deref());
 
-    if let Some(max_health) = max_health {
-        let health = health.unwrap_or(max_health);
-        health_message_content = format!(
-            "♥️ {} ``{health} / {max_health}\n\n``",
-            crate::common::draw_bar(
-                health as i32,
-                max_health as i32,
-                BAR_LENGTH as usize,
-                "🟥",
-                "⬛"
-            )
-        );
-    }
+        let bar =
+            crate::common::draw_bar(gauge.value, gauge.max, BAR_LENGTH as usize, bar_emoji, "⬛");
 
-    let mut hunger_message_content = "".to_string();
-    if let Some(hunger) = stat_block.hunger {
-        hunger_message_content = format!(
-            "🍖 {} ``{hunger} / 10\n\n``",
-            crate::common::draw_bar(hunger as i32, 10, BAR_LENGTH as usize, "🟨", "⬛")
-        );
-    }
-
-    let max_armour = stat_block.max_armour;
-    let armour = stat_block.armour;
-
-    let mut armour_message_content = "".to_string();
-
-    if let Some(max_armour) = max_armour {
-        let armour = armour.unwrap_or(max_armour);
-        armour_message_content = format!(
-            "🛡️ {} ``{armour} / {max_armour}\n\n``",
-            crate::common::draw_bar(
-                armour as i32,
-                max_armour as i32,
-                BAR_LENGTH as usize,
-                "⬜",
-                "⬛"
-            )
-        );
-    }
-
-    let max_soul = stat_block.max_soul;
-    let soul = stat_block.soul;
-
-    let mut soul_message_content = "".to_string();
-
-    if let Some(max_soul) = max_soul {
-        let soul = soul.unwrap_or(max_soul);
-        soul_message_content = format!(
-            "👻 {} ``{soul} / {max_soul}\n\n``",
-            crate::common::draw_bar(
-                soul as i32,
-                max_soul as i32,
-                BAR_LENGTH as usize,
-                "🟪",
-                "⬛"
-            )
-        );
+        // Display icon if available, otherwise just show the bar
+        let display_icon = gauge.icon.as_deref().unwrap_or("");
+        gauge_bars.push_str(&format!(
+            "{} {} ``{} / {}\n\n``",
+            display_icon, bar, gauge.value, gauge.max
+        ));
     }
 
     let mut active_spells_content: String = "".to_string();
 
     let active_spells_map = ACTIVE_SPELLS.lock().await;
 
-    if let Some(active_spells) =
-        active_spells_map.get(&character.id.expect("Character ID should never be null"))
-    {
+    if let Some(active_spells) = active_spells_map.get(&character.id) {
         active_spells_content = "Active Spells:\n".to_string();
 
         let mut total_mana_diff: ManaSpellResource = ManaSpellResource { mana: 0 };
@@ -247,13 +286,14 @@ pub async fn generate_status_embed(
         .title(format!(
             "
             {character_name}
-<#{character_channel}>
             "
         ))
         .description(format!(
-            "{invisible_char}
-{health_message_content}{mana_message_content}{hunger_message_content}{invisible_char}{armour_message_content}{soul_message_content}
-                
+            "{character_link}
+{invisible_char}
+
+{gauge_bars}
+
 {active_spells_content}
                 "
         ))
@@ -275,7 +315,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄-50",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: -50,
                 },
                 ButtonStyle::Secondary,
@@ -284,7 +324,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄-25",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: -25,
                 },
                 ButtonStyle::Secondary,
@@ -302,7 +342,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄+25",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: 25,
                 },
                 ButtonStyle::Secondary,
@@ -311,7 +351,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄+50",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: 50,
                 },
                 ButtonStyle::Secondary,
@@ -322,7 +362,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄-200",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: -200,
                 },
                 ButtonStyle::Secondary,
@@ -331,7 +371,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄-100",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: -100,
                 },
                 ButtonStyle::Secondary,
@@ -349,7 +389,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄+100",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: 100,
                 },
                 ButtonStyle::Secondary,
@@ -358,7 +398,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
             ChangeManaEvent::create_button(
                 "🪄+200",
                 &ChangeManaEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                     mana_change: 200,
                 },
                 ButtonStyle::Secondary,
@@ -371,7 +411,7 @@ pub async fn status_admin(ctx: Context<'_>, character_id: i32) -> Result<(), Err
         UpdateStatusEvent::create_button(
             " Refresh ",
             &UpdateStatusEventParams {
-                character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                character_id: character.id,
             },
         )
         .expect("How fail"),
@@ -472,38 +512,96 @@ lazy_static! {
         m
     };
 }
+
+/// Normalize stat names to match ROLL_EMOJIS keys
+/// e.g. "Strength" -> "str", "STR" -> "str", "agility" -> "agl"
+fn normalize_stat_name(stat: &str) -> String {
+    let lower = stat.to_lowercase();
+
+    // Check if it's already a known key
+    if ROLL_EMOJIS.contains_key(lower.as_str()) {
+        return lower;
+    }
+
+    // Map common full names to abbreviations
+    let mappings = [
+        ("strength", "str"),
+        ("agility", "agl"),
+        ("constitution", "con"),
+        ("knowledge", "kno"),
+        ("intelligence", "int"),
+        ("wisdom", "wis"),
+        ("charisma", "cha"),
+        ("body", "body"),
+        ("mobility", "mobility"),
+        ("intuition", "intuition"),
+        ("arcane", "arcane"),
+    ];
+
+    for (full_name, abbrev) in mappings.iter() {
+        if lower.starts_with(full_name) {
+            return abbrev.to_string();
+        }
+    }
+
+    // If it's at least 3 characters, try using the first 3 as abbreviation
+    if lower.len() >= 3 {
+        let abbrev = &lower[..3];
+        if ROLL_EMOJIS.contains_key(abbrev) {
+            return abbrev.to_string();
+        }
+    }
+
+    // Return original lowercase if no match
+    lower
+}
+
 pub fn stat_roll_buttons(
     base_dice_string: &str,
     character_id: i32,
     stat_block: Option<serde_json::Value>,
 ) -> Vec<CreateActionRow> {
-    let mut stat_keys = if let Some(Value::Object(map)) = stat_block {
+    // Collect (original_key, normalized_key) pairs
+    let mut stat_pairs: Vec<(String, String)> = if let Some(Value::Object(map)) = stat_block {
         map.into_iter()
-            .filter_map(|(key, value)| (value != Value::Null).then(|| key))
-            .collect::<Vec<_>>()
-    } else {
-        vec!["str", "agl", "con", "kno", "cha"]
-            .into_iter()
-            .map(String::from)
+            .filter_map(|(key, value)| {
+                if value != Value::Null {
+                    let normalized = normalize_stat_name(&key);
+                    Some((key, normalized))
+                } else {
+                    None
+                }
+            })
             .collect()
+    } else {
+        // No stats available, return empty vector
+        vec![]
     };
 
-    println!("stat keys: {stat_keys:#?}");
-    stat_keys.sort_by_key(|k| {
+    println!("stat pairs: {stat_pairs:#?}");
+
+    // If no stats, return empty rows
+    if stat_pairs.is_empty() {
+        return vec![];
+    }
+
+    // Sort by normalized key using ROLL_EMOJIS order
+    stat_pairs.sort_by_key(|(_, normalized)| {
         ROLL_EMOJIS
-            .get(k.as_str())
+            .get(normalized.as_str())
             .map(|(_, order)| *order)
             .unwrap_or(255)
     });
 
-    let buttons: Vec<_> = stat_keys
+    let buttons: Vec<_> = stat_pairs
         .iter()
-        .map(|stat| {
+        .map(|(original, normalized)| {
             let emoji = ROLL_EMOJIS
-                .get(stat.as_str())
+                .get(normalized.as_str())
                 .map(|(e, _)| *e)
                 .unwrap_or("🎲");
-            roll_button(emoji, &format!("{base_dice_string}+{stat}"), character_id)
+            // Use original key in the button formula so it matches what's in the stat block
+            roll_button(emoji, &format!("{base_dice_string}+{original}"), character_id)
         })
         .collect();
 
@@ -539,7 +637,7 @@ pub async fn character_select_dropdown(user_id: u64) -> Result<CreateActionRow, 
                 )
                 .parse()
                 .unwrap(),
-            character.id.expect("Character should have id"),
+            character.id,
         ));
     }
 
@@ -569,7 +667,7 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
         .await?
         .ok_or(RpgError::NoCharacterSelected)?;
 
-    let character_id = character.id.ok_or(RpgError::NoCharacterSheet)?;
+    let character_id = character.id;
 
     println!("Get sheet of sender");
     let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
@@ -600,7 +698,7 @@ pub async fn status(ctx: Context<'_>, permanent: Option<bool>) -> Result<(), Err
             UpdateStatusEvent::create_button(
                 "♻️",
                 &UpdateStatusEventParams {
-                    character_id: character.id.ok_or(RpgError::NoCharacterSheet)?,
+                    character_id: character.id,
                 },
             )?,
             event_handlers::DeleteMessageEvent::create_button(
@@ -853,9 +951,7 @@ pub async fn end_turn(ctx: Context<'_>) -> Result<(), Error> {
 
     let active_spells_map = ACTIVE_SPELLS.lock().await;
 
-    if let Some(active_spells) =
-        active_spells_map.get(&character.id.expect("Character ID should never be null"))
-    {
+    if let Some(active_spells) = active_spells_map.get(&character.id) {
         let stat_block: StatBlock = super::get_sheet_of_sender(&ctx)
             .await?
             .ok_or(RpgError::NoCharacterSheet)?;
@@ -995,7 +1091,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
             SpellType::Toggle => {
                 let mut active_spells_map = ACTIVE_SPELLS.lock().await;
 
-                let character_id = character.id.expect("Character ID should never be null");
+                let character_id = character.id;
 
                 if !active_spells_map.contains_key(&character_id) {
                     println!("Inserting new active spell list for {}", ctx.author().name);
@@ -1004,9 +1100,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
 
                 let mut is_spell_active: bool = false;
 
-                let active_spells = active_spells_map
-                    .get(&character.id.expect("Character ID should never be null"))
-                    .expect("Just set this");
+                let active_spells = active_spells_map.get(&character.id).expect("Just set this");
 
                 for active_spell in active_spells {
                     if &spell.name == &active_spell.name {
@@ -1023,7 +1117,7 @@ pub async fn cast_spell(ctx: Context<'_>, spell_name: String) -> Result<(), Erro
 
                 if !is_spell_active {
                     let active_spells_mut = active_spells_map
-                        .get_mut(&character.id.expect("Character ID should never be null"))
+                        .get_mut(&character.id)
                         .expect("Just set this");
 
                     active_spells_mut.push((*spell).clone());
@@ -1112,6 +1206,20 @@ lazy_static! {
         m
     };
 }
+fn replace_stat(s: &str, stat: &str, stat_mod: &str) -> String {
+    if s.contains(stat) {
+        s.replace(stat, stat_mod)
+    } else {
+        let lower = stat.to_lowercase();
+        if s.contains(&lower) {
+            s.replace(&lower, stat_mod)
+        } else if lower.len() >= 3 {
+            s.replace(&lower[..3], stat_mod)
+        } else {
+            s.to_string()
+        }
+    }
+}
 
 pub async fn roll_with_char_sheet(
     ctx: Option<&poise::serenity_prelude::Context>,
@@ -1143,6 +1251,18 @@ pub async fn roll_with_char_sheet(
 
     match stat_block_result {
         Ok(stat_block) => {
+            if let Some(custom_rolls) = &character.saved_rolls {
+                let custom_roll_map: std::collections::HashMap<_, _> = custom_rolls
+                    .lines()
+                    .filter_map(|line| line.split_once(':'))
+                    .map(|(k, v)| (k.trim(), v.trim()))
+                    .collect();
+
+                for (key, value) in &custom_roll_map {
+                    str_replaced = str_replaced.replace(key, &value.to_string());
+                }
+            }
+
             if let Some(stats_object) = stat_block
                 .stats
                 .as_ref()
@@ -1160,10 +1280,23 @@ pub async fn roll_with_char_sheet(
                             (int_value / 10).to_string()
                         };
 
-                        str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
+                        // str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
+                        str_replaced = replace_stat(&str_replaced, stat, &stat_mod.to_string());
                     }
                 }
             }
+            if let Some(special_stats_object) = stat_block
+                .special_stats
+                .as_ref()
+                .and_then(|special_stats| special_stats.as_object())
+            {
+                for (special_stat, value) in special_stats_object {
+                    str_replaced = replace_stat(&str_replaced, special_stat, &value.to_string());
+                    // println!("special stat replaced: {special_stat}: {value}")
+                }
+            }
+
+            println!("{}", str_replaced);
         }
 
         Err(e) => {
@@ -1290,7 +1423,7 @@ pub async fn create_character(
     match result {
         Ok(character) => {
             let character_name = character.name.unwrap_or("No Name".to_string());
-            let character_id = character.id.unwrap_or(-1);
+            let character_id = character.id;
 
             placeholder_message
                 .edit(
@@ -1362,27 +1495,30 @@ pub async fn create_character(
         };
 
         let new_character = Character {
-            name: Some(character_name_stringified.clone()),
-            id: None,
+            id: 0,
             user_id: Some(user_id.to_string()),
+            name: Some(character_name_stringified.clone()),
+
             roll_server_id: roll_server_id,
 
-            stat_block: None,
             stat_block_hash: None,
-
+            stat_block: None,
             stat_block_message_id: Some(msg.id.to_string()),
             stat_block_channel_id: Some(msg.channel_id.to_string()),
 
-            stat_block_server_id: msg.guild_id.map(|id| id.to_string()),
-
+            spell_block_channel_id: None,
+            spell_block_message_id: None,
             spell_block: None,
             spell_block_hash: None,
-            spell_block_message_id: None,
-            spell_block_channel_id: None,
 
             mana: None,
             mana_readout_channel_id: None,
             mana_readout_message_id: None,
+
+            saved_rolls: None,
+            stat_block_server_id: msg.guild_id.map(|id| id.to_string()),
+
+            campaign_id: None,
         };
 
         let _ = db::characters::create(&new_character)?;
@@ -1394,7 +1530,7 @@ pub async fn create_character(
         let mut extra_text: &str = "";
 
         if user.selected_character == None {
-            user.selected_character = new_character.id;
+            user.selected_character = Some(new_character.id);
             db::users::update(&user)?;
 
             extra_text = "(and selected as default)";
@@ -1570,7 +1706,7 @@ pub async fn characters(ctx: Context<'_>) -> Result<(), Error> {
 
     for character in characters {
         let character_name = character.name.unwrap_or("No name provided".to_string());
-        let character_id = character.id.unwrap_or(-1).to_string();
+        let character_id = character.id.to_string();
         let channel_id = character
             .stat_block_channel_id
             .unwrap_or("No channel ID".to_string());
@@ -1688,12 +1824,16 @@ pub async fn pull_stats(ctx: Context<'_>) -> Result<(), Error> {
         .await?
         .ok_or(RpgError::NoCharacterSheet)?;
 
-    let reply = CreateReply::default().content(
-        stat_block
-            .sheet_info
-            .jsonified_message
-            .expect("Stat block should always generate json"),
-    );
+    let json = stat_block
+        .sheet_info
+        .jsonified_message
+        .expect("Stat block should always generate json");
+
+    let pretty_json =
+        serde_json::to_string_pretty(&serde_json::from_str::<serde_json::Value>(&json).unwrap())
+            .unwrap();
+
+    let reply = CreateReply::default().content(pretty_json);
     msg.edit(ctx, reply).await?;
 
     return Ok(());
@@ -1808,5 +1948,7 @@ pub fn commands() -> Vec<Command<crate::common::Data, crate::common::Error>> {
         set_spells(),
         level_up(),
         roll(),
+        // edit_character(),
+        edit_saved_rolls(),
     ];
 }

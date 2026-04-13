@@ -1,10 +1,9 @@
 use crate::common::Error;
 use crate::db::*;
 use diesel::prelude::*;
-use diesel::sqlite::SqliteConnection;
 
 #[allow(dead_code)]
-pub fn create(connection: &mut SqliteConnection, user: &User) -> Result<(), DbError> {
+pub fn create(connection: &mut PgConnection, user: &User) -> Result<(), DbError> {
     println!("Creating user");
 
     let _ = diesel::insert_into(schema::users::table)

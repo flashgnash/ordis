@@ -2,26 +2,25 @@ pub mod models;
 pub mod schema;
 
 pub mod characters;
-
+pub mod gauges;
 pub mod servers;
 pub mod users;
 
 use self::models::*;
 
 use diesel::r2d2::ConnectionManager;
-use diesel::sqlite::SqliteConnection;
 use diesel::{prelude::*, r2d2};
 
 use std::env;
 use std::error::Error;
 use std::fmt;
 
-pub type Pool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
+pub type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
 lazy_static::lazy_static! {
     pub static ref POOL: Pool = {
         let db_url = std::env::var("DATABASE_URL").unwrap();
-        let manager = ConnectionManager::<SqliteConnection>::new(db_url);
+        let manager = ConnectionManager::<PgConnection>::new(db_url);
         Pool::builder().build(manager).unwrap()
     };
 }
@@ -63,8 +62,8 @@ impl Error for DbError {
     // We don't need to implement anything specifically in here, unless we want a custom cause or backtrace.
 }
 
-pub fn establish_connection() -> SqliteConnection {
+pub fn establish_connection() -> PgConnection {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    SqliteConnection::establish(&database_url)
+    PgConnection::establish(&database_url)
         .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }

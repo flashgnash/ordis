@@ -24,8 +24,6 @@
 
         run-migration = pkgs.writeShellScriptBin "run-migration" (''diesel migration run'');
 
-        build-and-debug = pkgs.writeShellScriptBin "build-and-debug" (''cargo run'');
-
         gen-up = pkgs.writeShellApplication {
           name = "gen-up";
 
@@ -87,11 +85,15 @@
             gen-up
             gen-down
 
-            build-and-debug
+            (pkgs.writeShellScriptBin "run" (''cargo run''))
 
             cmake # For songbird build
             libopus # For songbird runtime
             yt-dlp # For songbird youtube interface
+
+            postgresql
+            postgrest
+
           ];
 
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
