@@ -29,6 +29,8 @@ pub struct StatBlock {
 
     pub default_roll: Option<String>,
     pub modifier_formula: Option<String>,
+
+    pub buffs: Vec<serde_json::Value>,
 }
 
 impl fmt::Display for StatBlock {
@@ -73,6 +75,8 @@ impl CharacterSheetable for StatBlock {
 
             default_roll: None,
             modifier_formula: None,
+
+            buffs: vec![],
         };
     }
 
@@ -127,6 +131,12 @@ impl CharacterSheetable for StatBlock {
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string());
+
+        self.buffs = deserialized_message
+            .get("buffs")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
 
         Ok(())
     }

@@ -1,3 +1,4 @@
+mod buff_formula;
 mod color_matcher;
 pub mod saved_rolls;
 pub mod spell_sheet;
@@ -208,22 +209,41 @@ pub async fn generate_status_embed(
     // Fetch gauges from database
     let gauges = db::gauges::get_for_character(character.id).unwrap_or_default();
 
+    let buff_ctx = buff_formula::build_context(
+        stat_block.stats.as_ref(),
+        stat_block.special_stats.as_ref(),
+        &gauges,
+    );
+
     // Build gauge bars dynamically
     let mut gauge_bars = String::new();
     println!("{} gauges for {}", gauges.iter().count(), character.id);
-    for gauge in gauges {
+    for gauge in &gauges {
         println!("Gauge {}", gauge.name);
+        let gauge_name_lower = gauge.name.to_lowercase();
+        let effective_max = buff_formula::compute_effective(
+            &stat_block.buffs,
+            &[gauge_name_lower.as_str(), &format!("{gauge_name_lower}.max")],
+            gauge.max as f64,
+            &buff_ctx,
+        ) as i32;
+
         // Match the color from the Colour field to find the closest emoji
         let bar_emoji = color_matcher::get_closest_color_emoji(gauge.colour.as_deref());
 
-        let bar =
-            crate::common::draw_bar(gauge.value, gauge.max, BAR_LENGTH as usize, bar_emoji, "⬛");
+        let bar = crate::common::draw_bar(
+            gauge.value,
+            effective_max,
+            BAR_LENGTH as usize,
+            bar_emoji,
+            "⬛",
+        );
 
         // Display icon if available, otherwise just show the bar
         let display_icon = gauge.icon.as_deref().unwrap_or("");
         gauge_bars.push_str(&format!(
             "{} {} ``{} / {}\n\n``",
-            display_icon, bar, gauge.value, gauge.max
+            display_icon, bar, gauge.value, effective_max
         ));
     }
 
@@ -1263,6 +1283,13 @@ pub async fn roll_with_char_sheet(
                 }
             }
 
+            let gauges = db::gauges::get_for_character(character.id).unwrap_or_default();
+            let buff_ctx = buff_formula::build_context(
+                stat_block.stats.as_ref(),
+                stat_block.special_stats.as_ref(),
+                &gauges,
+            );
+
             if let Some(stats_object) = stat_block
                 .stats
                 .as_ref()
@@ -1270,17 +1297,23 @@ pub async fn roll_with_char_sheet(
             {
                 for (stat, value) in stats_object {
                     if let Some(int_value) = value.as_i64() {
+                        let buffed = buff_formula::compute_effective(
+                            &stat_block.buffs,
+                            &[stat.as_str()],
+                            int_value as f64,
+                            &buff_ctx,
+                        ) as i64;
+
                         let stat_mod = if let Some(formula) = stat_block.modifier_formula.clone() {
                             let formula_with_presets: String = PRESET_FORMULAS
                                 .iter()
                                 .fold(formula.to_string(), |acc, (k, v)| acc.replace(k, v));
 
-                            formula_with_presets.replace("stat", &(int_value).to_string())
+                            formula_with_presets.replace("stat", &buffed.to_string())
                         } else {
-                            (int_value / 10).to_string()
+                            (buffed / 10).to_string()
                         };
 
-                        // str_replaced = str_replaced.replace(stat, &stat_mod.to_string());
                         str_replaced = replace_stat(&str_replaced, stat, &stat_mod.to_string());
                     }
                 }
@@ -1291,7 +1324,19 @@ pub async fn roll_with_char_sheet(
                 .and_then(|special_stats| special_stats.as_object())
             {
                 for (special_stat, value) in special_stats_object {
-                    str_replaced = replace_stat(&str_replaced, special_stat, &value.to_string());
+                    if let Some(base) = value.as_f64() {
+                        let buffed = buff_formula::compute_effective(
+                            &stat_block.buffs,
+                            &[special_stat.as_str()],
+                            base,
+                            &buff_ctx,
+                        );
+                        str_replaced =
+                            replace_stat(&str_replaced, special_stat, &buffed.to_string());
+                    } else {
+                        str_replaced =
+                            replace_stat(&str_replaced, special_stat, &value.to_string());
+                    }
                     // println!("special stat replaced: {special_stat}: {value}")
                 }
             }
